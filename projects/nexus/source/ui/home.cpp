@@ -66,7 +66,7 @@ namespace nexus {
             BackupDaily(DataFile, date);
         }
         if(safeMode) this->Toast("Abgesicherter Modus: Darstellung auf Standard gesetzt. Bibliothek ist erhalten.");
-        else if(isApplet) this->Toast("Applet-Modus: wenig Speicher. Besser ein Spiel mit gedrückter R-Taste starten.");
+        else if(isApplet && !h) this->Toast("Test-App im Applet-Modus: wenig Speicher. Besser ein Spiel mit gedrückter R-Taste starten.");
         return true;
     }
 

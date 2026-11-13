@@ -5,6 +5,7 @@
 #include <ul/menu/smi/smi_Commands.hpp>
 #include <ul/acc/acc_Accounts.hpp>
 #include <SDL2/SDL_image.h>
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 // NEXUS (Quellcode in projects/nexus/source, gemeinsam mit der Test-App)
@@ -269,7 +270,14 @@ namespace ul::menu::ui {
                 nexus::plat::GetSharedFont(&font, &fontSize);
                 this->gfx.Init(r, font, fontSize);
                 // uMenu läuft als Library-Applet: wenig Speicher -> kleines Texturbudget
-                this->images.Start(24u * 1024 * 1024, 960);
+                // Texturbudget nach tatsächlich freiem Speicher: ein Viertel davon, zwischen 24 und 96 MB
+                u64 total = 0, used = 0;
+                size_t budget = 24u * 1024 * 1024;
+                if(R_SUCCEEDED(svcGetInfo(&total, InfoType_TotalMemorySize, CUR_PROCESS_HANDLE, 0)) && R_SUCCEEDED(svcGetInfo(&used, InfoType_UsedMemorySize, CUR_PROCESS_HANDLE, 0)) && total > used) {
+                    budget = std::clamp<size_t>(static_cast<size_t>((total - used) / 4), 24u * 1024 * 1024, 96u * 1024 * 1024);
+                }
+                nexus::Log("Speicher: gesamt %lu MB, belegt %lu MB, Bildbudget %lu MB", static_cast<unsigned long>(total >> 20), static_cast<unsigned long>(used >> 20), static_cast<unsigned long>(budget >> 20));
+                this->images.Start(budget, budget >= 64u * 1024 * 1024 ? 1280 : 960);
                 this->host.images = &this->images;
                 if(!this->apps.Start(&this->images)) nexus::Log("Titelliste nicht verfügbar: %s", this->apps.Error().c_str());
                 std::string source;
