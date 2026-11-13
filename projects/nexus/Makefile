@@ -32,7 +32,8 @@ CXXFLAGS	:= $(CFLAGS) -std=gnu++20
 ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
-LIBS	:= -lfreetype -lSDL2_ttf -lSDL2_image -lwebp -lpng -ljpeg `sdl2-config --libs` `freetype-config --libs` -lbz2 -lharfbuzz -lz -lnx
+# freetype und harfbuzz hängen gegenseitig voneinander ab -> als Gruppe linken
+LIBS	:= -lSDL2_ttf -lSDL2_image -Wl,--start-group -lharfbuzz -lfreetype -lbz2 -lpng -lz -Wl,--end-group -lwebp -ljpeg `sdl2-config --libs` -lnx
 
 LIBDIRS	:= $(PORTLIBS) $(LIBNX)
 
