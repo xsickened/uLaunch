@@ -10,6 +10,8 @@ namespace nexus {
 
     namespace {
         constexpr double kPi = 3.14159265358979323846;
+        // Erst true, wenn NEXUS innerhalb von uLaunch (uMenu) läuft und über uSystem startet.
+        constexpr bool CanLaunchGames = false;
         const char *SectionName(const std::string &id) {
             if(id == "start") return "Startseite";
             if(id == "all") return "Alle Spiele";
@@ -431,6 +433,14 @@ namespace nexus {
         }
         auto it = this->appMap.find(e.id);
         if(it == this->appMap.end()) return;
+        // Spiele starten ist eine Funktion des HOME-Menüs (bei uLaunch: uSystem als System-Applet).
+        // Aus der Test-App (läuft wie ein Spiel) würde das System NEXUS beim Wechsel abrupt beenden
+        // -> Abstürze 2349-0004 / 2345-0008. Deshalb in der Test-App bewusst abgeschaltet.
+        if(!CanLaunchGames) {
+            Log("Start in Test-App blockiert: %s", e.id.c_str());
+            this->Toast("Spiele starten geht erst, wenn NEXUS das HOME-Menü ist (über uLaunch). In der Test-App ist das abgeschaltet.");
+            return;
+        }
         this->d->library.MarkLaunched(e.id, static_cast<double>(std::time(nullptr)));
         this->Save();
         Log("Startanfrage %s (%s)", e.id.c_str(), e.name.c_str());
@@ -1258,7 +1268,7 @@ namespace nexus {
         else if(this->moving) h = { { "←→", "Verschieben" }, { "A", "Übernehmen" }, { "B", "Verwerfen" } };
         else {
             const bool folder = !this->list.empty() && this->list[this->focus].folder;
-            h = { { "A", folder ? "Öffnen" : "Starten" } };
+            h = { { "A", folder ? "Öffnen" : (CanLaunchGames ? "Starten" : "Starten (später)") } };
             if(!this->openFolder.empty()) h.push_back({ "B", "Zurück" });
             h.push_back({ "X", "Optionen" });
             h.push_back({ "Y", "Favorit" });
