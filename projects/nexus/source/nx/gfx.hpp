@@ -5,6 +5,7 @@
 struct _TTF_Font;
 typedef struct _TTF_Font TTF_Font;
 #include <cstdint>
+#include <functional>
 #include <list>
 #include <map>
 #include <string>
@@ -26,6 +27,9 @@ namespace nexus {
         double cx = 0, cy = 0, w = 0, h = 0, rot = 0, squash = 1, sc = 1;
     };
 
+    // Farbe abhängig von der Bildschirmposition (für Akzent-Verläufe / RGB)
+    using ColFn = std::function<Col(float x, float y)>;
+
     class Gfx {
         public:
             SDL_Renderer *r = nullptr;
@@ -46,6 +50,10 @@ namespace nexus {
             void Shape(const Xf &xf, double rad, bool hex, Col c);
             void ShapeTex(SDL_Texture *tex, const Xf &xf, double rad, bool hex, double alpha, bool cover, double posX, double posY, Col tint = Col{});
             void ShapeRing(const Xf &xf, double rad, bool hex, double t, Col c);
+            // Ring/Fläche/Text mit Farbe pro Eckpunkt (alpha multipliziert)
+            void ShapeRingFn(const Xf &xf, double rad, bool hex, double t, const ColFn &fn, double alpha);
+            void RectFn(double x, double y, double w, double h, const ColFn &fn, double alpha, int segs = 12);
+            int TextFn(const std::string &s, int size, double x, double y, const ColFn &fn, double alpha, int align = 0, bool bold = false);
 
             // Bild in Rechteck (cover = zuschneiden, sonst einpassen)
             void Image(SDL_Texture *tex, double x, double y, double w, double h, double alpha, bool cover, Col tint = Col{});

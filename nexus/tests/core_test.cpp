@@ -1,6 +1,8 @@
 // Host-Tests für den plattformunabhängigen Kern (Schema, Bibliothek, Speichern, Anordnungen).
 // Bauen: g++ -std=gnu++20 -O1 -I<json>/single_include -I../../projects/nexus/source/core core_test.cpp ../../projects/nexus/source/core/*.cpp
 #include "settings.hpp"
+#include "accent.hpp"
+#include "online_parse.hpp"
 #include "library.hpp"
 #include "store.hpp"
 #include "layout.hpp"
@@ -175,6 +177,104 @@ int main() {
         NexusData d; d.settings.data = Settings::Defaults();
         d.library.CreateFolder(bad, 0);
         CHECK(SaveData("/tmp/nexus_test/utf8.json", d));
+    }
+
+    // 7. Akzent: Verläufe und RGB bleiben im Farbraum, Ränder stimmen
+    {
+        Settings st; st.data = Settings::Defaults();
+        AccentParams p = AccentFrom(st);
+        CHECK(p.mode == "solid");
+        Rgb c = AccentAt(p, 0.3, 12.0);
+        CHECK(std::lround(c.r) == 0x3e && std::lround(c.g) == 0xe0 && std::lround(c.b) == 0xc8);
+        st.Set("theme.accentMode", json("gradient"));
+        st.Set("theme.accentAnim", json("none"));
+        p = AccentFrom(st);
+        const Rgb a0 = AccentAt(p, 0, 0), a1 = AccentAt(p, 1, 0);
+        CHECK(std::lround(a0.r) == 0x3e && std::lround(a1.r) == 0xe8 && std::lround(a1.b) == 0xff);
+        CHECK(std::fabs(AccentU(p, 0, 0, 100, 50)) < 1e-9 && std::fabs(AccentU(p, 100, 50, 100, 50) - 1) < 1e-9);
+        for(const char *m: { "gradient", "gradient3", "rainbow", "solid" }) for(const char *an: { "none", "flow", "cycle", "pulse" }) {
+            st.Set("theme.accentMode", json(m)); st.Set("theme.accentAnim", json(an));
+            p = AccentFrom(st);
+            for(int ang = 0; ang < 360; ang += 45) {
+                p.angle = ang;
+                for(double t = -5; t < 40; t += 3.7) for(double u = -0.5; u <= 1.5; u += 0.25) {
+                    const Rgb x = AccentAt(p, AccentU(p, u * 300, u * 200, 300, 200), t);
+                    CHECK(x.r >= 0 && x.r <= 255 && x.g >= 0 && x.g <= 255 && x.b >= 0 && x.b <= 255 && std::isfinite(x.r));
+                }
+            }
+        }
+        st.Set("theme.accentMode", json("rainbow")); st.Set("theme.accentAnim", json("none")); st.Set("theme.accent", json("#ff0000"));
+        p = AccentFrom(st);
+        const Rgb r0 = AccentAt(p, 0, 0);
+        CHECK(r0.r > 250 && r0.g < 60);
+        CHECK(std::isfinite(AccentAt(p, std::nan(""), std::nan("")).r));
+        // ungültige Werte -> Standard
+        json bad = Settings::Defaults(); JSet(bad, "theme.accentMode", json("disco")); JSet(bad, "theme.accentCycle", json(-3));
+        std::vector<std::string> rep; json fixed = Settings::Sanitize(bad, &rep);
+        CHECK(*JGet(fixed, "theme.accentMode") == "solid" && JNum(*JGet(fixed, "theme"), "accentCycle", 0) == 1);
+        // Sperrbildschirm zeigt kein Spielbild mehr: alter Wert "hero" wird ersetzt
+        JSet(bad, "lock.bgType", json("hero"));
+        fixed = Settings::Sanitize(bad, &rep);
+        CHECK(*JGet(fixed, "lock.bgType") == "gradient");
+    }
+
+    // 8. SteamGridDB- und RetroAchievements-Antworten (inkl. kaputter Eingaben)
+    {
+        std::vector<SgdbGame> games; std::string err;
+        CHECK(ParseSgdbGames(R"({"success":true,"data":[{"id":2254,"name":"Half-Life 2","types":["steam"],"verified":true},{"id":0,"name":"x"},{"name":"ohne id"}]})", games, err));
+        CHECK(games.size() == 1 && games[0].id == 2254 && games[0].verified);
+        CHECK(!ParseSgdbGames(R"({"success":false,"errors":["Invalid API key"]})", games, err) && err == "Invalid API key");
+        CHECK(!ParseSgdbGames("<html>", games, err));
+        CHECK(!ParseSgdbGames("", games, err));
+        std::vector<SgdbImage> ims;
+        CHECK(ParseSgdbImages(R"({"success":true,"data":[{"id":5,"url":"https://cdn2.steamgriddb.com/grid/a.png","thumb":"https://cdn2.steamgriddb.com/thumb/a.jpg","mime":"image/png","width":600,"height":900,"style":"alternate"},{"id":6,"url":"http://unsicher/x.png"},{"id":7,"url":"https://x/y z.png"}]})", ims, err));
+        CHECK(ims.size() == 1 && ims[0].w == 600 && ImageExt(ims[0].mime, ims[0].url) == ".png" && ImageExt("", ims[0].thumb) == ".jpg");
+        CHECK(ImageExt("", "https://a/b.WEBP?x=1") == ".webp" && ImageExt("", "https://a/b") == ".jpg");
+        CHECK(UrlEncode("Zelda: Link's Awakening & Co") == "Zelda%3A%20Link%27s%20Awakening%20%26%20Co");
+        CHECK(SearchTerm("  Mario\xE2\x84\xA2   Kart  8 ") == "Mario Kart 8");
+
+        RaProfile pr;
+        CHECK(ParseRaProfile(R"({"User":"Kevin","TotalPoints":12345,"TotalSoftcorePoints":"230","TotalTruePoints":31870})", pr) && pr.hardcore == 12345 && pr.softcore == 230 && pr.retro == 31870);
+        CHECK(!ParseRaProfile("[]", pr));
+        std::vector<RaGame> rg;
+        CHECK(ParseRaCompletion(R"({"Count":2,"Total":2,"Results":[{"GameID":1,"Title":"Pokemon Red Version","ConsoleName":"Game Boy","MaxPossible":40,"NumAwarded":12,"NumAwardedHardcore":10,"MostRecentAwardedDate":"2026-01-02"},{"GameID":2,"Title":"Legend of Zelda, The: A Link to the Past","ConsoleName":"SNES","MaxPossible":"60","NumAwarded":60,"NumAwardedHardcore":60}]})", rg));
+        CHECK(rg.size() == 2 && rg[1].max == 60 && rg[0].gotHard == 10);
+        CHECK(MatchRaGame("Pokémon Red (USA)", rg) == 1);
+        CHECK(MatchRaGame("The Legend of Zelda: A Link to the Past", rg) == 2);
+        CHECK(MatchRaGame("Super Mario Odyssey", rg) == 0);
+        CHECK(MatchRaGame("Po", rg) == 0);
+        CHECK(NormalizeTitle("Ñoño & Friends [Hack] (EU)") == "nonoandfriends");
+        std::vector<RaRecent> rr;
+        CHECK(ParseRaRecent(R"([{"Date":"2026-01-01 10:00:00","HardcoreMode":1,"Title":"Alt","GameTitle":"G","GameID":1,"Points":5},{"Date":"2026-02-01 10:00:00","HardcoreMode":0,"Title":"Neu","GameTitle":"G","GameID":1,"Points":10}])", rr));
+        CHECK(rr.size() == 2 && rr[0].title == "Neu" && rr[1].hardcore);
+        RaGame gp; std::vector<RaAchievement> al;
+        CHECK(ParseRaGameProgress(R"({"ID":14402,"Title":"Dragster","ConsoleName":"Atari 2600","NumAchievements":3,"NumAwardedToUser":1,"NumAwardedToUserHardcore":1,"Achievements":{"9":{"Title":"B","Points":5,"DisplayOrder":2},"8":{"Title":"A","Points":1,"DisplayOrder":1,"DateEarned":"x","DateEarnedHardcore":"x"}}})", gp, al));
+        CHECK(gp.max == 3 && al.size() == 2 && al[0].title == "A" && al[0].hardcore && !al[1].unlocked);
+        // Zufallsmüll darf nie abstürzen
+        std::string junk;
+        for(int i = 0; i < 3000; i++) { junk += static_cast<char>((i * 7919) % 256); if(i % 50 == 0) { ParseSgdbGames(junk, games, err); ParseRaCompletion(junk, rg); ParseRaRecent(junk, rr); ParseRaGameProgress(junk, gp, al); NormalizeTitle(junk); } }
+    }
+
+    // 9. Eigene Bildauswahl wird gespeichert, unsichere Pfade verworfen
+    {
+        NexusData d; d.settings.data = Settings::Defaults();
+        d.library.SetArtOverride("0100000000010000", "hero", "sdmc:/nexus/art/backgrounds/a.jpg");
+        d.library.SetArtOverride("0100000000010000", "logo", "sdmc:/../etc/passwd");
+        d.library.SetArtOverride("0100000000010000", "evil", "sdmc:/x.jpg");
+        d.library.SetRaGameId("0100000000010000", 14402);
+        const auto fid = d.library.CreateFolder("Retro", 0);
+        d.library.SetArtOverride(fid, "grid", "sdmc:/nexus/art/f.png");
+        CHECK(SaveData("/tmp/nexus_test/art.json", d));
+        std::string src; std::vector<std::string> rep2;
+        NexusData e = LoadData("/tmp/nexus_test/art.json", src, rep2);
+        CHECK(e.library.ArtOverride("0100000000010000", "hero") == "sdmc:/nexus/art/backgrounds/a.jpg");
+        CHECK(e.library.ArtOverride("0100000000010000", "logo").empty());
+        CHECK(e.library.RaGameId("0100000000010000") == 14402);
+        CHECK(e.library.ArtOverride(fid, "grid") == "sdmc:/nexus/art/f.png");
+        e.library.SetArtOverride("0100000000010000", "hero", "");
+        CHECK(e.library.ArtOverride("0100000000010000", "hero").empty());
+        e.settings.Set("home.image", json("sdmc:/Nintendo/Album/2026/11/13/x.jpg"));
+        CHECK(e.settings.S("home.image") == "sdmc:/Nintendo/Album/2026/11/13/x.jpg");
     }
 
     std::printf(g_Fail ? "%d Fehler\n" : "Alle Kern-Tests bestanden.\n", g_Fail);

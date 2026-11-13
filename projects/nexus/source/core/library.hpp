@@ -14,7 +14,11 @@ namespace nexus {
         std::vector<std::string> items;
         json tile = json::object();
         std::string sort = "manual";
+        json art = json::object();          // eigene Bildauswahl { grid, hero, logo } -> Pfad
     };
+
+    // Erlaubt nur { grid|hero|logo: "sdmc:/..." } mit vernünftiger Länge
+    json SanitizeArt(const json &a);
 
     inline bool IsFolderId(const std::string &id) { return id.rfind("fld-", 0) == 0; }
 
@@ -42,6 +46,11 @@ namespace nexus {
             std::string CreateFolder(const std::string &name, int insertAt);
             void MarkLaunched(const std::string &tid, double when);
             double Launched(const std::string &tid) const;
+            // Eigene Bildauswahl (kind = grid | hero | logo). Leerer Pfad = Standard (Ordner art/<id>/)
+            std::string ArtOverride(const std::string &id, const std::string &kind);
+            void SetArtOverride(const std::string &id, const std::string &kind, const std::string &path);
+            long long RaGameId(const std::string &tid) const;
+            void SetRaGameId(const std::string &tid, long long gid);
 
         private:
             std::vector<std::string> installedCache;

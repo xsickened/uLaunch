@@ -234,6 +234,7 @@ namespace nexus {
                 else if(e.unit == "deg") std::snprintf(buf, sizeof(buf), "%d\u00b0", static_cast<int>(std::lround(d)));
                 else if(e.unit == "unit") std::snprintf(buf, sizeof(buf), "%d px", static_cast<int>(std::lround(d * 24)));
                 else if(e.unit == "x") std::snprintf(buf, sizeof(buf), "x%.2f", d);
+                else if(e.unit == "s") std::snprintf(buf, sizeof(buf), "%d s", static_cast<int>(std::lround(d)));
                 else if(e.step < 1) std::snprintf(buf, sizeof(buf), "%.2f", d);
                 else std::snprintf(buf, sizeof(buf), "%d", static_cast<int>(std::lround(d)));
                 return buf;

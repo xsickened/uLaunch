@@ -94,6 +94,7 @@ int main(int, char **) {
         }
     }
 
+    home.Shutdown();
     home.Save();
     if(!bootOk) BootGuardOk(BootFile);
     if(frames == 0) Log("Hauptschleife ohne Bild beendet (appletMainLoop=false)");   // sauber beendet zählt ebenfalls als erfolgreich

@@ -44,7 +44,7 @@ LIBNX_EXT		:=	$(CURDIR)/../../libs/libnx-ext/libnx-ext
 LIBNX_IPCEXT	:=	$(CURDIR)/../../libs/libnx-ext/libnx-ipcext
 INCLUDES 		+=	/../../libs/json/single_include/nlohmann /../../libs/json/single_include /../../libs/zip/src ../nexus/source
 
-LIBS	:= -lpu -lfreetype -lSDL2_mixer -lopusfile -lopus -lmodplug -lmpg123 -lvorbisidec -logg -lSDL2_ttf -lSDL2_gfx -lSDL2_image -lSDL2 -lEGL -lGLESv2 -lglapi -ldrm_nouveau -lwebp -lpng -ljpeg `sdl2-config --libs` `freetype-config --libs` -luCommon -lnx-ipcext -lnx-ext -lbz2 -lharfbuzz -lz -lnx
+LIBS	:= -lpu -lcurl -lfreetype -lSDL2_mixer -lopusfile -lopus -lmodplug -lmpg123 -lvorbisidec -logg -lSDL2_ttf -lSDL2_gfx -lSDL2_image -lSDL2 -lEGL -lGLESv2 -lglapi -ldrm_nouveau -lwebp -lpng -ljpeg `sdl2-config --libs` `freetype-config --libs` -luCommon -lnx-ipcext -lnx-ext -lbz2 -lharfbuzz -lz -lnx
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing

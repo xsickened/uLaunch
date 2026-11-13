@@ -12,6 +12,8 @@ namespace ul::menu::ui {
 
     bool IsNexusActive();
     void SetNexusClassicMode(const bool classic);
+    // Sperrbildschirm nach dem Aufwachen: bei aktivem NEXUS zählt dessen Einstellung „lock.enabled“
+    bool NexusLockOnWake();
 
     class NexusElement;
 

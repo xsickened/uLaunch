@@ -1,4 +1,5 @@
 #pragma once
+#include "../core/accent.hpp"
 #include "../core/layout.hpp"
 #include "../core/store.hpp"
 #include "../nx/apps.hpp"
@@ -6,6 +7,7 @@
 #include "../nx/images.hpp"
 #include "../nx/platform.hpp"
 #include "host.hpp"
+#include "online.hpp"
 #include <array>
 #include <functional>
 #include <memory>
@@ -35,6 +37,8 @@ namespace nexus {
         std::function<void(int)> adjust;        // ←/→
         std::function<void()> activate;         // A
         bool head = false;
+        std::string thumb;                      // Bildvorschau (Dialog mit preview)
+        bool dark = false;                      // Vorschau auf dunklem Karo (transparente Logos)
     };
 
     struct Dialog {
@@ -44,6 +48,8 @@ namespace nexus {
         double scroll = 0;
         double x = 0, y = 0, w = 420, h = 0;    // h = 0: automatisch
         bool shade = false, settings = false, wide = false;
+        bool preview = false;                   // rechts großes Vorschaubild der Auswahl
+        std::function<void(int)> onSelect;      // pro Frame mit der aktuellen Auswahl (Vorladen)
         std::vector<std::pair<std::string, std::string>> hints;
         std::function<void()> onB, onX, onY, onClose;
     };
@@ -67,6 +73,9 @@ namespace nexus {
             Screen GetScreen() const { return this->screen; }
             void DrawOnly();        // nur zeichnen (verschachtelte Render-Schleifen von uMenu)
             void OnHome();          // HOME-Taste (über uSystem gemeldet)
+            // Tastatur & Co. außerhalb des Zeichnens ausführen (uMenu ruft das aus der Eingabe-Phase auf)
+            void RunDeferred();
+            void Shutdown();
 
         private:
             SDL_Renderer *r = nullptr;
@@ -83,6 +92,10 @@ namespace nexus {
             double profileT = 0;
             bool pendingAutoSelect = false;
             bool exitRequested = false;   // nach erfolgreicher Startanfrage sofort sauber beenden
+            std::function<void()> deferred;
+            Online online;
+            bool autoArtQueued = false;
+            AccentParams accentP;
 
             // Zustand
             std::string section = "start";
@@ -173,6 +186,24 @@ namespace nexus {
             void Confirm(const std::string &title, const std::string &sub, const std::string &yes, std::function<void()> act);
             void CreateFolderFlow(const std::vector<std::string> &ids);
             bool SettingVisible(const std::string &path) const;
+            void AskText(const std::string &header, const std::string &initial, size_t maxLen, std::function<void(std::string)> done);
+            // Bildauswahl: Quellen (Beschriftung, Ordner), optional Album, Ergebnis "" = kein Bild / Standard
+            void OpenImagePicker(const std::string &title, const std::vector<std::pair<std::string, std::string>> &dirs, bool album, bool dark, std::function<void(const std::string &)> onPick, const std::string &noneLabel);
+            void OpenArtKind(const std::string &id, const std::string &kind);
+            void OpenSgdbFlow(const std::string &id, const std::string &name, const std::string &term);
+            void OpenSgdbKinds(const std::string &id, const SgdbGame &game);
+            void OpenSgdbImages(const std::string &id, const SgdbGame &game, const std::string &kind, const std::string &key);
+            void OpenSgdbKeyMissing();
+            void OpenRaDialog(const std::string &id, const std::string &name);
+            void OpenRaAssign(const std::string &id);
+            void ImportKeys(bool quiet);
+            void QueueMissingArt(bool force);
+            void ArtChanged(const std::string &id);
+            std::vector<Row> SgdbRows();
+            std::vector<Row> RaRows();
+            bool DrawBgImage(const std::string &path, double oy, double alpha);
+            void DrawRaBadge(const Entry &e, const Xf &xf, double w, double h, double op);
+            void DrawRaUnderLogo(const Entry &e, double x, double y, double w, double alpha);
             void ApplyTheme(int idx);
             void CrashReset(const std::string &what);
             bool FrameInner(const plat::Input &in, double dt);
@@ -199,6 +230,8 @@ namespace nexus {
             Col TextCol() const;
             Col MutedCol() const;
             Col Accent() const;
+            Col AccentAtU(double u) const;
+            ColFn AccentFn(double x, double y, double w, double h) const;
             Col UiCol() const;
             bool Light() const;
             double DialogX(double w) const;

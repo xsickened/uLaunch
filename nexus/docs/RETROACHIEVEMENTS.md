@@ -44,6 +44,10 @@
 - Antworten werden unter `sdmc:/nexus/cache/ra/<Spiel-ID>.json` gespeichert. Offline wird der zuletzt bekannte Stand angezeigt.
 - Fehlende Zugangsdaten, kein Netz oder ungültige Antworten blenden die Anzeige einfach aus.
 
-## Umsetzung
+## Umsetzung (v0.2)
 
-Phase 5, zusammen mit SteamGridDB, weil beide denselben HTTPS-Client (curl + mbedTLS) nutzen. Einstellungen und Validierung sind bereits im Schema (`settings-schema.json`) und in der Switch-App enthalten.
+- Netz: `projects/nexus/source/nx/net.cpp` (curl wie in uManager, eigener Thread mit 512 KB Stack, kleine Socket-Puffer für den Applet-Betrieb).
+- Auswertung: `core/online_parse.cpp` (getestet in `nexus/tests/core_test.cpp`, auch mit Zufallsdaten).
+- Ablauf: `ui/online.cpp`. Abgefragt werden `API_GetUserProfile` (TotalPoints, TotalSoftcorePoints, TotalTruePoints), `API_GetUserCompletionProgress` (c=500; Pokalanzahl = Summe NumAwarded bzw. NumAwardedHardcore) und `API_GetUserRecentAchievements` (m=10080). Erfolgsliste beim Öffnen des Dialogs über `API_GetGameInfoAndUserProgress`.
+- Automatische Zuordnung vergleicht mit allen gespielten Spielen aus `API_GetUserCompletionProgress` (nicht nur den letzten 50).
+- Cache: `sdmc:/nexus/cache/ra.json` (gehört genau einem Benutzernamen).

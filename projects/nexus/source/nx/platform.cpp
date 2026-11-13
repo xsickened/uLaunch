@@ -157,6 +157,7 @@ namespace nexus::plat {
     bool Keyboard(const std::string &header, const std::string &initial, size_t maxLen, std::string &out) {
         SwkbdConfig kbd;
         if(R_FAILED(swkbdCreate(&kbd, 0))) return false;
+        if(appletGetAppletType() != AppletType_Application && appletGetAppletType() != AppletType_SystemApplication) appletUpdateCallerAppletCaptureImage();
         swkbdConfigMakePresetDefault(&kbd);
         swkbdConfigSetHeaderText(&kbd, header.c_str());
         swkbdConfigSetInitialText(&kbd, initial.c_str());

@@ -1,0 +1,550 @@
+// NEXUS HOME: Bildauswahl, SteamGridDB, RetroAchievements, Tastatur-Aufschub
+#include "home.hpp"
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <cstdlib>
+#include <cstdio>
+#include <dirent.h>
+#include <sys/stat.h>
+
+namespace nexus {
+
+    namespace {
+
+        bool IsImageFile(const std::string &n) {
+            std::string l = n;
+            for(auto &c: l) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            for(const char *e: { ".jpg", ".jpeg", ".png", ".webp" }) {
+                const std::string x(e);
+                if(l.size() > x.size() && l.compare(l.size() - x.size(), x.size(), x) == 0) return true;
+            }
+            return false;
+        }
+
+        // Einträge eines Ordners (nur Namen), absteigend sortiert = neueste Album-Ordner zuerst
+        std::vector<std::string> ListDir(const std::string &dir, bool wantDirs) {
+            std::vector<std::string> out;
+            DIR *d = opendir(dir.c_str());
+            if(!d) return out;
+            while(dirent *e = readdir(d)) {
+                const std::string n = e->d_name;
+                if(n.empty() || n[0] == '.') continue;
+                bool isDir = false;
+#ifdef DT_DIR
+                if(e->d_type == DT_DIR) isDir = true;
+                else if(e->d_type == DT_UNKNOWN)
+#endif
+                {
+                    struct stat st;
+                    isDir = stat((dir + "/" + n).c_str(), &st) == 0 && S_ISDIR(st.st_mode);
+                }
+                if(isDir == wantDirs && (wantDirs || IsImageFile(n))) out.push_back(n);
+                if(out.size() >= 400) break;
+            }
+            closedir(d);
+            std::sort(out.begin(), out.end(), [](const std::string &a, const std::string &b) { return a > b; });
+            return out;
+        }
+
+        std::string BaseName(const std::string &p) {
+            const auto k = p.find_last_of('/');
+            return k == std::string::npos ? p : p.substr(k + 1);
+        }
+
+        std::string Masked(const std::string &key) {
+            if(key.empty()) return "nicht hinterlegt";
+            return "••••" + key.substr(key.size() > 4 ? key.size() - 4 : 0);
+        }
+
+        std::string Trim(const std::string &s) {
+            size_t a = 0, b = s.size();
+            while(a < b && std::isspace(static_cast<unsigned char>(s[a]))) a++;
+            while(b > a && std::isspace(static_cast<unsigned char>(s[b - 1]))) b--;
+            return s.substr(a, b - a);
+        }
+
+        constexpr char KeysFile[] = "sdmc:/nexus/keys.txt";
+
+    }
+
+    // ------------------------------------------------------------------ Tastatur
+
+    void Home::AskText(const std::string &header, const std::string &initial, size_t maxLen, std::function<void(std::string)> done) {
+        auto run = [this, header, initial, maxLen, done]() {
+            std::string out;
+            if(!plat::Keyboard(header, initial, maxLen, out)) {
+                this->Toast("Tastatur nicht verfügbar. Alternativ Werte in sdmc:/nexus/keys.txt eintragen.");
+                return;
+            }
+            done(Trim(SanitizeUtf8(out)));
+        };
+        // In uMenu nicht mitten im Zeichnen ein Applet öffnen: in der nächsten Eingabe-Phase ausführen
+        if(this->host) this->deferred = run;
+        else run();
+    }
+
+    void Home::RunDeferred() {
+        if(!this->deferred) return;
+        auto f = std::move(this->deferred);
+        this->deferred = nullptr;
+        f();
+    }
+
+    void Home::Shutdown() {
+        this->online.Shutdown();
+        if(this->dirtySave) this->Save();
+    }
+
+    // ------------------------------------------------------------------ Bildauswahl
+
+    void Home::OpenImagePicker(const std::string &title, const std::vector<std::pair<std::string, std::string>> &dirs, bool album, bool dark, std::function<void(const std::string &)> onPick, const std::string &noneLabel) {
+        struct Item { std::string label, path; bool head; };
+        auto items = std::make_shared<std::vector<Item>>();
+        if(!noneLabel.empty()) items->push_back(Item{ noneLabel, "", false });
+        for(const auto &[label, dir]: dirs) {
+            const auto files = ListDir(dir, false);
+            if(files.empty()) continue;
+            items->push_back(Item{ label, "", true });
+            for(const auto &f: files) items->push_back(Item{ f, dir + "/" + f, false });
+        }
+        if(album) {
+            // Screenshots aus dem Album (sdmc:/Nintendo/Album/JJJJ/MM/TT), neueste zuerst
+            const std::string root = "sdmc:/Nintendo/Album";
+            int count = 0;
+            bool head = false;
+            for(const auto &yy: ListDir(root, true)) {
+                for(const auto &mm: ListDir(root + "/" + yy, true)) {
+                    for(const auto &dd: ListDir(root + "/" + yy + "/" + mm, true)) {
+                        const std::string dir = root + "/" + yy + "/" + mm + "/" + dd;
+                        for(const auto &f: ListDir(dir, false)) {
+                            if(!head) { items->push_back(Item{ "Album (Screenshots)", "", true }); head = true; }
+                            items->push_back(Item{ dd + "." + mm + "." + yy + "  ·  " + f.substr(0, 14), dir + "/" + f, false });
+                            if(++count >= 150) break;
+                        }
+                        if(count >= 150) break;
+                    }
+                    if(count >= 150) break;
+                }
+                if(count >= 150) break;
+            }
+        }
+        auto dl = std::make_shared<Dialog>();
+        dl->title = title;
+        const bool empty = items->size() <= (noneLabel.empty() ? 0u : 1u);
+        dl->sub = empty ? "Noch keine Bilder gefunden. Lege JPG- oder PNG-Dateien in sdmc:/nexus/art/backgrounds/ ab (z. B. 1280×720) oder nutze Screenshots aus dem Album."
+                        : "Eigene Bilder: sdmc:/nexus/art/backgrounds/ · A = übernehmen";
+        dl->w = 1000; dl->x = 140; dl->y = 74; dl->shade = true; dl->preview = true;
+        dl->h = ScreenH - dl->y - this->Env().botH - 8;
+        dl->hints = { { "↑↓", "Bild" }, { "A", "Übernehmen" }, { "B", "Abbrechen" } };
+        dl->rows = [this, items, onPick, dark]() {
+            std::vector<Row> rows;
+            for(const auto &it: *items) {
+                Row rw{ it.label, nullptr, nullptr, nullptr, it.head };
+                if(!it.head) {
+                    const std::string path = it.path;
+                    rw.thumb = path;
+                    rw.dark = dark;
+                    rw.activate = [this, path, onPick]() { this->Pop(); onPick(path); this->Toast(path.empty() ? "Bild entfernt." : "Bild übernommen: " + BaseName(path)); };
+                }
+                rows.push_back(rw);
+            }
+            return rows;
+        };
+        this->Push(dl);
+    }
+
+    void Home::OpenArtKind(const std::string &id, const std::string &kind) {
+        const std::string title = kind == "grid" ? "Cover wählen" : kind == "hero" ? "Hintergrund wählen" : "Logo wählen";
+        std::vector<std::pair<std::string, std::string>> dirs = { { "Bilder dieses Titels", std::string(ArtDir) + "/" + id } };
+        if(kind != "logo") dirs.push_back({ "Eigene Hintergründe", std::string(ArtDir) + "/backgrounds" });
+        this->OpenImagePicker(title, dirs, kind == "hero", kind == "logo", [this, id, kind](const std::string &path) {
+            this->d->library.SetArtOverride(id, kind, path);
+            this->ArtChanged(id);
+            this->MarkDirty();
+        }, "Automatisch (grid/hero/logo-Datei im Titelordner)");
+    }
+
+    void Home::ArtChanged(const std::string &id) {
+        auto it = this->art.find(id);
+        if(it != this->art.end()) {
+            for(const auto &k: { it->second.grid, it->second.hero, it->second.logo }) if(!k.empty()) this->img->Invalidate(k);
+            this->art.erase(it);
+        }
+        this->heroA.key.clear();
+        this->heroFor.clear();
+        this->logoId.clear();
+        this->listDirty = true;
+        this->MarkDirty();
+    }
+
+    bool Home::DrawBgImage(const std::string &path, double oy, double alpha) {
+        if(path.empty()) return false;
+        if(this->img->Failed(path)) return false;
+        SDL_Texture *t = this->img->Get(path, 0);
+        if(!t) return false;
+        this->g->Image(t, 0, oy, ScreenW, ScreenH, alpha, true);
+        return true;
+    }
+
+    // ------------------------------------------------------------------ Schlüssel
+
+    void Home::ImportKeys(bool quiet) {
+        std::string txt;
+        if(!ReadFile(KeysFile, txt, 64 * 1024)) {
+            if(!quiet) this->Toast("sdmc:/nexus/keys.txt nicht gefunden.");
+            return;
+        }
+        int n = 0;
+        size_t pos = 0;
+        while(pos < txt.size()) {
+            size_t nl = txt.find('\n', pos);
+            if(nl == std::string::npos) nl = txt.size();
+            const std::string line = Trim(txt.substr(pos, nl - pos));
+            pos = nl + 1;
+            const auto eq = line.find('=');
+            if(line.empty() || line[0] == '#' || eq == std::string::npos) continue;
+            const std::string k = Trim(line.substr(0, eq)), v = SanitizeUtf8(Trim(line.substr(eq + 1)));
+            if(v.empty() || v.size() > 120) continue;
+            if(k == "sgdb" || k == "steamgriddb") { this->d->settings.Set("sgdbKey", json(v)); n++; }
+            else if(k == "ra_user") { this->d->settings.Set("ra.user", json(v.substr(0, 60))); n++; }
+            else if(k == "ra_key") { this->d->settings.Set("ra.key", json(v)); n++; }
+        }
+        // Die Klartext-Datei nach dem Übernehmen entfernen
+        std::remove(KeysFile);
+        this->Save();
+        this->Toast(n > 0 ? std::to_string(n) + " Schlüssel aus keys.txt übernommen (Datei gelöscht)." : "keys.txt enthielt keine gültigen Einträge.");
+    }
+
+    // ------------------------------------------------------------------ SteamGridDB
+
+    std::vector<Row> Home::SgdbRows() {
+        std::vector<Row> rows;
+        rows.push_back(Row{ "SteamGridDB", nullptr, nullptr, nullptr, true });
+        rows.push_back(Row{ "API-Key", [this]() { return Masked(this->d->settings.S("sgdbKey")); }, nullptr, [this]() {
+            this->AskText("SteamGridDB-API-Key (steamgriddb.com → Einstellungen → API)", "", 100, [this](std::string v) {
+                if(v.empty()) return;
+                this->d->settings.Set("sgdbKey", json(v));
+                this->Save();
+                this->Toast("API-Key gespeichert (nur lokal, nie im Log).");
+            });
+        } });
+        rows.push_back(Row{ "Schlüssel aus sdmc:/nexus/keys.txt laden", nullptr, nullptr, [this]() { this->ImportKeys(false); } });
+        rows.push_back(Row{ "Fehlende Bilder jetzt laden", [this]() {
+                const int n = this->online.AutoRemaining();
+                return n > 0 ? std::to_string(n) + " in Arbeit" : std::string();
+            }, nullptr, [this]() { this->QueueMissingArt(true); } });
+        return rows;
+    }
+
+    void Home::QueueMissingArt(bool force) {
+        if(!this->online.HasSgdbKey()) { if(force) this->OpenSgdbKeyMissing(); return; }
+        if(!Online::IsOnline()) { if(force) this->Toast("Keine Internetverbindung."); return; }
+        int n = 0;
+        for(const auto &id: this->installed) {
+            const auto &a = this->Art(id);
+            if(!a.grid.empty() && !a.hero.empty() && !a.logo.empty()) continue;
+            auto it = this->appMap.find(id);
+            if(it == this->appMap.end() || it->second.name.empty()) continue;
+            const int before = this->online.AutoRemaining();
+            this->online.QueueAutoArt(id, it->second.name, a.grid.empty(), a.hero.empty(), a.logo.empty());
+            if(this->online.AutoRemaining() > before) n++;
+        }
+        if(force) this->Toast(n > 0 ? std::to_string(n) + " Titel werden im Hintergrund ergänzt." : "Nichts zu tun: alle Titel haben Bilder (oder wurden schon versucht).");
+        else if(n > 0) Log("SGDB automatisch: %d Titel", n);
+    }
+
+    void Home::OpenSgdbKeyMissing() {
+        auto dl = std::make_shared<Dialog>();
+        dl->title = "SteamGridDB-API-Key fehlt";
+        dl->sub = "Kostenlos auf steamgriddb.com → Einstellungen → API. Eingabe hier oder bequem am PC: Datei sdmc:/nexus/keys.txt mit der Zeile sgdb=DEIN_KEY anlegen.";
+        dl->w = 600; dl->x = 340; dl->y = 180; dl->shade = true;
+        dl->rows = [this]() {
+            return std::vector<Row>{
+                Row{ "API-Key eingeben", nullptr, nullptr, [this]() {
+                    this->Pop();
+                    this->AskText("SteamGridDB-API-Key", "", 100, [this](std::string v) {
+                        if(v.empty()) return;
+                        this->d->settings.Set("sgdbKey", json(v));
+                        this->Save();
+                        this->Toast("API-Key gespeichert.");
+                    });
+                } },
+                Row{ "Aus keys.txt laden", nullptr, nullptr, [this]() { this->Pop(); this->ImportKeys(false); } },
+                Row{ "Abbrechen", nullptr, nullptr, [this]() { this->Pop(); } } };
+        };
+        this->Push(dl);
+    }
+
+    void Home::OpenSgdbFlow(const std::string &id, const std::string &name, const std::string &term) {
+        if(!this->online.HasSgdbKey()) { this->OpenSgdbKeyMissing(); return; }
+        struct St { bool loading = true; std::string err; std::vector<SgdbGame> games; };
+        auto st = std::make_shared<St>();
+        auto dl = std::make_shared<Dialog>();
+        dl->title = "SteamGridDB · " + name;
+        dl->sub = "Suche nach „" + SearchTerm(term) + "“";
+        dl->w = 560; dl->x = 360; dl->y = 90; dl->shade = true;
+        dl->rows = [this, st, id, name]() {
+            std::vector<Row> rows;
+            if(st->loading) rows.push_back(Row{ "Suche läuft …", nullptr, nullptr, nullptr });
+            else if(!st->err.empty()) rows.push_back(Row{ st->err, nullptr, nullptr, nullptr });
+            else if(st->games.empty()) rows.push_back(Row{ "Keine Treffer.", nullptr, nullptr, nullptr });
+            for(const auto &g: st->games) {
+                const SgdbGame game = g;
+                rows.push_back(Row{ g.name, [game]() { return game.verified ? std::string("verifiziert") : std::string(); }, nullptr, [this, id, game]() { this->OpenSgdbKinds(id, game); } });
+            }
+            rows.push_back(Row{ "Anderen Suchbegriff eingeben …", nullptr, nullptr, [this, id, name]() {
+                this->AskText("Suchbegriff für SteamGridDB", SearchTerm(name), 80, [this, id, name](std::string t) {
+                    if(t.empty()) return;
+                    this->Pop();
+                    this->OpenSgdbFlow(id, name, t);
+                });
+            } });
+            return rows;
+        };
+        this->Push(dl);
+        this->online.SgdbSearch(term, [st](std::vector<SgdbGame> games, std::string err) {
+            st->loading = false;
+            st->err = err;
+            st->games = std::move(games);
+        });
+    }
+
+    void Home::OpenSgdbKinds(const std::string &id, const SgdbGame &game) {
+        auto dl = std::make_shared<Dialog>();
+        dl->title = game.name;
+        dl->sub = "Welche Ebene möchtest du ersetzen?";
+        dl->w = 520; dl->x = 380; dl->y = 140; dl->shade = true;
+        dl->rows = [this, id, game]() {
+            return std::vector<Row>{
+                Row{ "Cover (Kachel)", nullptr, nullptr, [this, id, game]() { this->OpenSgdbImages(id, game, "grids", "grid"); } },
+                Row{ "Hintergrund (Hero)", nullptr, nullptr, [this, id, game]() { this->OpenSgdbImages(id, game, "heroes", "hero"); } },
+                Row{ "Logo", nullptr, nullptr, [this, id, game]() { this->OpenSgdbImages(id, game, "logos", "logo"); } },
+                Row{ "Alle drei automatisch (jeweils bestes Ergebnis)", nullptr, nullptr, [this, id, game]() {
+                    this->online.QueueAutoArt(id, game.name, true, true, true, game.id, true);
+                    this->CloseAll();
+                    this->Toast("Cover, Hintergrund und Logo werden geladen …");
+                } } };
+        };
+        this->Push(dl);
+    }
+
+    void Home::OpenSgdbImages(const std::string &id, const SgdbGame &game, const std::string &kind, const std::string &key) {
+        struct St { bool loading = true; std::string err; std::vector<SgdbImage> list; };
+        auto st = std::make_shared<St>();
+        auto dl = std::make_shared<Dialog>();
+        dl->title = game.name + (key == "grid" ? " · Cover" : key == "hero" ? " · Hintergrund" : " · Logo");
+        dl->sub = "A = herunterladen und übernehmen";
+        dl->w = 1000; dl->x = 140; dl->y = 74; dl->shade = true; dl->preview = true;
+        dl->h = ScreenH - dl->y - this->Env().botH - 8;
+        dl->hints = { { "↑↓", "Bild" }, { "A", "Übernehmen" }, { "B", "Zurück" } };
+        dl->onSelect = [this, st](int sel) {
+            // ausgewähltes und benachbarte Vorschaubilder laden
+            if(st->list.empty()) return;
+            for(int k = sel - 1; k <= sel + 3; k++) if(k >= 0 && k < static_cast<int>(st->list.size())) this->online.EnsureThumb(st->list[k]);
+        };
+        dl->rows = [this, st, id, key]() {
+            std::vector<Row> rows;
+            if(st->loading) { rows.push_back(Row{ "Lädt …", nullptr, nullptr, nullptr }); return rows; }
+            if(!st->err.empty()) { rows.push_back(Row{ st->err, nullptr, nullptr, nullptr }); return rows; }
+            if(st->list.empty()) { rows.push_back(Row{ "Keine Bilder in diesem Format.", nullptr, nullptr, nullptr }); return rows; }
+            for(size_t i = 0; i < st->list.size(); i++) {
+                const SgdbImage im = st->list[i];
+                Row rw{ "#" + std::to_string(i + 1) + "  " + std::to_string(im.w) + "×" + std::to_string(im.h) + (im.style.empty() ? "" : "  · " + im.style), nullptr, nullptr, nullptr };
+                rw.thumb = this->online.ThumbPath(im);
+                rw.dark = key == "logo";
+                rw.activate = [this, id, key, im]() {
+                    const std::string dir = std::string(ArtDir) + "/" + id;
+                    EnsureDir(ArtDir);
+                    EnsureDir(dir);
+                    const std::string path = dir + "/sgdb-" + key + "-" + std::to_string(im.id) + ImageExt(im.mime, im.url);
+                    this->Toast("Wird heruntergeladen …");
+                    this->online.Download(im.url, path, [this, id, key, path](bool ok, std::string err) {
+                        if(!ok) { this->Toast("Download fehlgeschlagen: " + err); return; }
+                        this->d->library.SetArtOverride(id, key, path);
+                        this->ArtChanged(id);
+                        this->Toast("Übernommen und gespeichert.");
+                    });
+                };
+                rows.push_back(rw);
+            }
+            return rows;
+        };
+        this->Push(dl);
+        this->online.SgdbImages(kind, game.id, [st](std::vector<SgdbImage> list, std::string err) {
+            st->loading = false;
+            st->err = err;
+            st->list = std::move(list);
+        });
+    }
+
+    // ------------------------------------------------------------------ RetroAchievements
+
+    std::vector<Row> Home::RaRows() {
+        std::vector<Row> rows;
+        rows.push_back(Row{ "Konto", nullptr, nullptr, nullptr, true });
+        rows.push_back(Row{ "Benutzername", [this]() { const auto u = this->d->settings.S("ra.user"); return u.empty() ? std::string("nicht hinterlegt") : u; }, nullptr, [this]() {
+            this->AskText("RetroAchievements-Benutzername", this->d->settings.S("ra.user"), 60, [this](std::string v) {
+                this->d->settings.Set("ra.user", json(v));
+                this->Save();
+            });
+        } });
+        rows.push_back(Row{ "Web-API-Key", [this]() { return Masked(this->d->settings.S("ra.key")); }, nullptr, [this]() {
+            this->AskText("RetroAchievements Web-API-Key (retroachievements.org → Einstellungen → Keys)", "", 100, [this](std::string v) {
+                if(v.empty()) return;
+                this->d->settings.Set("ra.key", json(v));
+                this->Save();
+                this->Toast("Key gespeichert (nur lokal, nie im Log).");
+            });
+        } });
+        rows.push_back(Row{ "Schlüssel aus sdmc:/nexus/keys.txt laden", nullptr, nullptr, [this]() { this->ImportKeys(false); } });
+        rows.push_back(Row{ "Jetzt aktualisieren", [this]() {
+                const auto &ra = this->online.ra;
+                if(ra.loading) return std::string("lädt …");
+                if(!ra.error.empty()) return ra.error;
+                if(ra.profile.ok) return std::to_string(this->online.RaPoints()) + " Pkt. · " + std::to_string(ra.games.size()) + " Spiele";
+                return std::string();
+            }, nullptr, [this]() {
+                if(!this->d->settings.B("ra.enabled")) { this->Toast("Zuerst „RetroAchievements anzeigen“ einschalten."); return; }
+                if(!this->online.RaReady()) { this->Toast("Bitte Benutzername und Web-API-Key eintragen."); return; }
+                this->online.RaRefresh(true);
+            } });
+        return rows;
+    }
+
+    void Home::DrawRaBadge(const Entry &e, const Xf &xf, double w, double h, double op) {
+        const auto &s = this->d->settings;
+        if(!s.B("ra.enabled") || !s.B("ra.showTileBadge") || w < 70) return;
+        const RaGame *g = this->online.RaGameFor(e.id, e.name);
+        if(!g || g->max <= 0) return;
+        const int got = s.S("ra.pointsType") == "hardcore" ? g->gotHard : g->got;
+        const double pct = std::clamp(static_cast<double>(got) / g->max, 0.0, 1.0);
+        const bool master = got >= g->max;
+        const Col gold{ 255, 212, 71, 255 };
+        const Col fill = master ? gold : this->Accent();
+        const auto style = s.S("ra.badgeStyle");
+        const double x0 = xf.cx - w / 2, y1 = xf.cy + h / 2;
+        if(style == "bar") {
+            const double bw = w - 20, bx = x0 + 10, by = y1 - 12;
+            this->g->RoundRect(bx, by, bw, 5, 2.5, Col{ 0, 0, 0, static_cast<uint8_t>(150 * op) });
+            if(pct > 0) this->g->RoundRect(bx, by, std::max(5.0, bw * pct), 5, 2.5, WithA(fill, op));
+        }
+        else {
+            const std::string t = style == "percent" ? std::to_string(static_cast<int>(std::lround(pct * 100))) + " %" : std::to_string(got) + "/" + std::to_string(g->max);
+            const int tw = this->g->TextW(t, 12, true);
+            const double iw = style == "trophy" ? 16 : 0;
+            const double bw = tw + 14 + iw, bx = xf.cx + w / 2 - bw - 8, by = y1 - 30;
+            this->g->RoundRect(bx, by, bw, 22, 11, Col{ 0, 0, 0, static_cast<uint8_t>(170 * op) });
+            if(iw > 0) this->g->Icon("trophy", bx + 13, by + 11, 13, WithA(gold, op), true);
+            this->g->Text(t, 12, bx + 7 + iw, by + 3, WithA(master ? gold : Col{ 255, 255, 255, 255 }, op), 0, 0, true);
+        }
+    }
+
+    void Home::DrawRaUnderLogo(const Entry &e, double x, double y, double w, double alpha) {
+        const auto &s = this->d->settings;
+        if(!s.B("ra.enabled") || !s.B("ra.showUnderLogo")) return;
+        const RaGame *g = this->online.RaGameFor(e.id, e.name);
+        if(!g || g->max <= 0) return;
+        const int got = s.S("ra.pointsType") == "hardcore" ? g->gotHard : g->got;
+        const double pct = std::clamp(static_cast<double>(got) / g->max, 0.0, 1.0);
+        const bool master = got >= g->max;
+        const Col gold{ 255, 212, 71, 255 };
+        const std::string t = std::to_string(got) + " / " + std::to_string(g->max) + " Erfolge · " + std::to_string(static_cast<int>(std::lround(pct * 100))) + " %";
+        const double bw = std::clamp(w, 220.0, 420.0);
+        this->g->Icon("trophy", x + 9, y + 10, 16, WithA(gold, alpha), true);
+        this->g->Text(t, 15, x + 24, y + 1, WithA(Col{ 255, 255, 255, 255 }, alpha), 0, static_cast<int>(bw - 24), true);
+        this->g->RoundRect(x, y + 26, bw, 5, 2.5, Col{ 0, 0, 0, static_cast<uint8_t>(140 * alpha) });
+        if(pct > 0) {
+            if(master) this->g->RoundRect(x, y + 26, bw * pct, 5, 2.5, WithA(gold, alpha));
+            else this->g->RectFn(x, y + 26, std::max(5.0, bw * pct), 5, this->AccentFn(x, y + 26, bw, 5), alpha);
+        }
+    }
+
+    void Home::OpenRaAssign(const std::string &id) {
+        auto dl = std::make_shared<Dialog>();
+        dl->title = "RetroAchievements-Spiel zuordnen";
+        dl->sub = "Deine gespielten Spiele, zuletzt gespielte zuerst. Nicht dabei? Spiel-ID eingeben (Zahl in der Spiel-URL).";
+        dl->w = 640; dl->x = 320; dl->y = 74; dl->shade = true;
+        dl->h = ScreenH - dl->y - this->Env().botH - 8;
+        auto games = std::make_shared<std::vector<RaGame>>(this->online.ra.games);
+        std::stable_sort(games->begin(), games->end(), [](const RaGame &a, const RaGame &b) { return a.lastDate > b.lastDate; });
+        dl->rows = [this, id, games]() {
+            std::vector<Row> rows;
+            rows.push_back(Row{ "Spiel-ID eingeben …", nullptr, nullptr, [this, id]() {
+                this->AskText("RetroAchievements-Spiel-ID", "", 8, [this, id](std::string v) {
+                    const long long gid = std::atoll(v.c_str());
+                    if(gid <= 0) { this->Toast("Ungültige Spiel-ID."); return; }
+                    this->d->library.SetRaGameId(id, gid);
+                    this->MarkDirty();
+                    this->CloseAll();
+                    this->Toast("Zugeordnet (ID " + std::to_string(gid) + ").");
+                });
+            } });
+            if(games->empty()) rows.push_back(Row{ "Noch keine Spiele geladen – erst aktualisieren.", nullptr, nullptr, nullptr });
+            for(const auto &g: *games) {
+                const long long gid = g.id;
+                const std::string title = g.title;
+                rows.push_back(Row{ g.title, [g]() { return g.console; }, nullptr, [this, id, gid, title]() {
+                    this->d->library.SetRaGameId(id, gid);
+                    this->MarkDirty();
+                    this->CloseAll();
+                    this->Toast("Zugeordnet: " + title);
+                } });
+            }
+            return rows;
+        };
+        this->Push(dl);
+    }
+
+    void Home::OpenRaDialog(const std::string &id, const std::string &name) {
+        if(!this->online.RaReady()) {
+            this->Toast("RetroAchievements: Benutzername und Web-API-Key fehlen (Einstellungen → RetroAchievements).");
+            this->OpenSettings("ra");
+            return;
+        }
+        struct St { bool loading = false; std::string err; RaGame game; std::vector<RaAchievement> list; long long gid = 0; };
+        auto st = std::make_shared<St>();
+        const RaGame *cur = this->online.RaGameFor(id, name);
+        st->gid = this->d->library.RaGameId(id);
+        if(st->gid <= 0 && cur) st->gid = cur->id;
+        if(cur) st->game = *cur;
+        auto dl = std::make_shared<Dialog>();
+        dl->title = "RetroAchievements · " + name;
+        dl->w = 640; dl->x = this->DialogX(640); dl->y = 74; dl->shade = true;
+        dl->h = ScreenH - dl->y - this->Env().botH - 8;
+        dl->rows = [this, st, id]() {
+            std::vector<Row> rows;
+            const bool fixed = this->d->library.RaGameId(id) > 0;
+            if(st->gid <= 0) rows.push_back(Row{ "Diesem Titel ist kein RetroAchievements-Spiel zugeordnet.", nullptr, nullptr, nullptr });
+            else {
+                const auto &g = st->game;
+                const int got = this->d->settings.S("ra.pointsType") == "hardcore" ? g.gotHard : g.got;
+                rows.push_back(Row{ g.title.empty() ? "Spiel " + std::to_string(st->gid) : g.title, [g]() { return g.console; }, nullptr, nullptr });
+                if(g.max > 0) rows.push_back(Row{ "Fortschritt", [got, g]() { return std::to_string(got) + " / " + std::to_string(g.max) + " · " + std::to_string(got * 100 / g.max) + " %"; }, nullptr, nullptr });
+                rows.push_back(Row{ "Zuordnung", [fixed]() { return fixed ? std::string("fest") : std::string("automatisch (Titelvergleich)"); }, nullptr, nullptr });
+            }
+            rows.push_back(Row{ "Anderes Spiel zuordnen …", nullptr, nullptr, [this, id]() { this->OpenRaAssign(id); } });
+            if(fixed) rows.push_back(Row{ "Feste Zuordnung entfernen", nullptr, nullptr, [this, id]() { this->d->library.SetRaGameId(id, 0); this->MarkDirty(); this->Pop(); this->Toast("Zuordnung entfernt."); } });
+            if(st->gid > 0) {
+                rows.push_back(Row{ "Erfolge", nullptr, nullptr, nullptr, true });
+                if(st->loading) rows.push_back(Row{ "Lädt …", nullptr, nullptr, nullptr });
+                else if(!st->err.empty()) rows.push_back(Row{ st->err, nullptr, nullptr, nullptr });
+                for(const auto &a: st->list) {
+                    const RaAchievement ach = a;
+                    rows.push_back(Row{ (a.unlocked ? "+ " : "   ") + a.title, [ach]() { return (ach.unlocked ? std::string(ach.hardcore ? "Hardcore · " : "erhalten · ") : std::string()) + std::to_string(ach.points) + " P."; }, nullptr, nullptr });
+                }
+            }
+            return rows;
+        };
+        this->Push(dl);
+        if(st->gid > 0) {
+            st->loading = true;
+            this->online.RaLoadGame(st->gid, [st](RaGame g, std::vector<RaAchievement> list, std::string err) {
+                st->loading = false;
+                st->err = err;
+                if(err.empty()) { st->game = g; st->list = std::move(list); }
+            });
+        }
+    }
+
+}

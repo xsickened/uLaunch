@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>NEXUS HOME – PC-Prototyp</title>
 <style>
-:root{--accent:#3ee0c8;--ui:#0b0f17;--panel:rgba(14,18,28,.93);--text:#eef2f7;--muted:#93a0b4;--rowcur:rgba(255,255,255,.1);--font:"Segoe UI",system-ui,sans-serif;--tileMs:260ms;--ease:cubic-bezier(.2,.8,.2,1);--iconScale:1}
+:root{--accent:#3ee0c8;--accentGrad:linear-gradient(90deg,#3ee0c8,#3ee0c8);--ui:#0b0f17;--panel:rgba(14,18,28,.93);--text:#eef2f7;--muted:#93a0b4;--rowcur:rgba(255,255,255,.1);--font:"Segoe UI",system-ui,sans-serif;--tileMs:260ms;--ease:cubic-bezier(.2,.8,.2,1);--iconScale:1}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:#05070b;color:#eef2f7;font-family:system-ui,sans-serif;overflow:hidden}
 #wrap{position:fixed;inset:0;overflow:hidden}
@@ -45,7 +45,8 @@ html,body{margin:0;height:100%;background:#05070b;color:#eef2f7;font-family:syst
 #topbar.al-center #tabs{justify-content:center}
 #topbar.al-right #tabs{justify-content:flex-end}
 .tab{display:flex;align-items:center;gap:7px;padding:7px 14px;border-radius:20px;font-size:14px;color:var(--muted);cursor:pointer;white-space:nowrap}
-.tab.active{background:rgba(127,127,127,.22);color:var(--text);box-shadow:inset 0 -2px 0 var(--accent)}
+.tab.active{background:rgba(127,127,127,.22);color:var(--text);position:relative}
+.tab.active::after{content:"";position:absolute;left:14px;right:14px;bottom:0;height:2px;border-radius:2px;background:var(--accentGrad)}
 .ico{width:calc(20px * var(--iconScale));height:calc(20px * var(--iconScale));flex:none}
 #status{display:flex;gap:14px;align-items:center;font-size:14px;color:var(--text)}
 #crumb{position:absolute;left:60px;top:62px;font-size:13px;color:var(--muted)}
@@ -87,8 +88,9 @@ html,body{margin:0;height:100%;background:#05070b;color:#eef2f7;font-family:syst
 /* Ebene 5: Fokus */
 #L5{pointer-events:none}
 #ring{position:absolute;left:0;top:0;transition:transform var(--tileMs) var(--ease), width var(--tileMs) var(--ease), height var(--tileMs) var(--ease), opacity .2s;transform-origin:center;display:none}
-#ring.box{box-shadow:0 0 0 3px var(--accent),0 0 0 6px rgba(0,0,0,.45),0 0 24px var(--accent)}
-#ring.glow.box{box-shadow:0 0 0 3px var(--accent),0 0 46px 8px var(--accent)}
+#ring.box{box-shadow:0 0 0 6px rgba(0,0,0,.45),0 0 24px var(--accent)}
+#ring.glow.box{box-shadow:0 0 46px 8px var(--accent)}
+#ring.box::before{content:"";position:absolute;inset:-3px;border-radius:inherit;padding:3px;background:var(--accentGrad);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
 #ring.pulse{animation:pulse 1.4s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
 #ring svg{position:absolute;inset:-3px;width:calc(100% + 6px);height:calc(100% + 6px);overflow:visible}
@@ -110,7 +112,9 @@ html,body{margin:0;height:100%;background:#05070b;color:#eef2f7;font-family:syst
 .rows{overflow:auto;padding:4px 10px 10px;flex:1}
 .row{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-radius:8px;font-size:14px;cursor:pointer;gap:10px;min-height:38px}
 .row.head{color:var(--accent);font-size:12px;text-transform:uppercase;letter-spacing:.08em;cursor:default;padding-top:14px;min-height:0}
-.row.cur{background:var(--rowcur);box-shadow:inset 3px 0 0 var(--accent)}
+.row.cur{background:var(--rowcur);position:relative}
+.row.cur::before{content:"";position:absolute;left:0;top:4px;bottom:4px;width:3px;border-radius:2px;background:var(--accentGrad)}
+.clk.acc{background:var(--accentGrad);-webkit-background-clip:text;background-clip:text;color:transparent!important}
 .row .val{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;text-align:right}
 .row .arr{opacity:0;cursor:pointer;padding:0 4px;user-select:none}
 .row.cur .arr{opacity:.9}
@@ -229,6 +233,14 @@ const SPEC = [
   // Darstellung
   {g:"look", p:"theme.textColor", l:"Schriftfarbe", t:"enum", o:["white","black","auto"], ol:["Weiß","Schwarz","Automatisch"], d:"white"},
   {g:"look", p:"theme.accent", l:"Akzentfarbe", t:"color", d:"#3ee0c8"},
+  {g:"look", p:"theme.accentMode", l:"Akzent-Art", t:"enum", o:["solid","gradient","gradient3","rainbow"], ol:["Einfarbig","Verlauf (2 Farben)","Verlauf (3 Farben)","RGB-Regenbogen"], d:"solid"},
+  {g:"look", p:"theme.accent2", l:"Akzent: 2. Farbe", t:"color", d:"#e86cff", w:()=>["gradient","gradient3"].includes(ST().theme.accentMode)},
+  {g:"look", p:"theme.accent3", l:"Akzent: 3. Farbe", t:"color", d:"#ffd447", w:()=>ST().theme.accentMode==="gradient3"},
+  {g:"look", p:"theme.accentAngle", l:"Verlaufsrichtung", t:"num", min:0, max:345, step:15, f:deg, d:0, w:()=>ST().theme.accentMode!=="solid"},
+  {g:"look", p:"theme.rainbowRepeat", l:"Regenbogen-Wiederholungen", t:"num", min:.25, max:3, step:.25, f:v=>v.toFixed(2).replace(".",",")+"×", d:1, w:()=>ST().theme.accentMode==="rainbow"},
+  {g:"look", p:"theme.rainbowSat", l:"Regenbogen-Sättigung", t:"num", min:.3, max:1, step:.05, f:pct, d:.85, w:()=>ST().theme.accentMode==="rainbow"},
+  {g:"look", p:"theme.accentAnim", l:"Akzent-Bewegung", t:"enum", o:["none","flow","cycle","pulse"], ol:["Keine","Fließend","Farbwechsel","Pulsieren"], d:"flow"},
+  {g:"look", p:"theme.accentCycle", l:"Dauer pro Runde", t:"num", min:1, max:30, step:1, f:v=>v+" s", d:6, w:()=>ST().theme.accentAnim!=="none"},
   {g:"look", p:"theme.ui", l:"UI-Grundfarbe", t:"enum", o:["#0b0f17","#000000","#120a1f","#0f1a14","#1a1a1a","#e9edf2"], ol:["Nachtblau","Schwarz","Violett","Waldgrün","Anthrazit","Hell"], d:"#0b0f17"},
   {g:"look", p:"theme.font", l:"Schriftart", t:"enum", o:FONTS, d:"Segoe UI"},
   {g:"look", p:"theme.panelStyle", l:"Menü-Stil", t:"enum", o:["glass","solid","outline"], ol:["Glas","Deckend","Umrandet"], d:"glass"},
@@ -312,7 +324,7 @@ const SPEC = [
   {g:"home", p:"home.dim", l:"Abdunkelung", t:"num", min:0, max:.9, step:.05, f:pct, d:0},
   // Sperrbildschirm
   {g:"lock", p:"lock.enabled", l:"Beim Start anzeigen", t:"bool", d:true},
-  {g:"lock", p:"lock.bgType", l:"Hintergrund", t:"enum", o:["hero","home","gradient","color","image"], ol:["Letzter Hero","Wie Home","Farbverlauf","Volltonfarbe","Eigenes Bild"], d:"hero"},
+  {g:"lock", p:"lock.bgType", l:"Hintergrund", t:"enum", o:["home","gradient","color","image"], ol:["Wie Home","Farbverlauf","Volltonfarbe","Eigenes Bild"], d:"gradient"},
   {g:"lock", p:"lock.preset", l:"Verlauf", t:"num", min:0, max:7, step:1, f:v=>"Vorlage "+(v+1), d:3, w:()=>S.data.settings.lock.bgType==="gradient"},
   {g:"lock", p:"lock.color", l:"Farbe", t:"color", d:"#000000", w:()=>S.data.settings.lock.bgType==="color"},
   {g:"lock", p:"lock.image", l:"Bild", t:"image", d:null, w:()=>S.data.settings.lock.bgType==="image"},
@@ -321,6 +333,7 @@ const SPEC = [
   {g:"lock", p:"lock.clockPos", l:"Uhr-Position", t:"enum", o:["center","topLeft","bottomLeft","bottomRight"], ol:["Mitte","Oben links","Unten links","Unten rechts"], d:"center"},
   {g:"lock", p:"lock.clockSize", l:"Uhr-Größe", t:"num", min:60, max:240, step:10, f:px, d:140},
   {g:"lock", p:"lock.clockFont", l:"Uhr-Schrift", t:"enum", o:FONTS, d:"Segoe UI"},
+  {g:"lock", p:"lock.clockAccent", l:"Uhr im Akzent (Verlauf/RGB)", t:"bool", d:false},
   {g:"lock", p:"lock.textColor", l:"Schriftfarbe", t:"enum", o:["white","black"], ol:["Weiß","Schwarz"], d:"white"},
   {g:"lock", p:"lock.clock24", l:"24-Stunden-Format", t:"bool", d:true},
   {g:"lock", p:"lock.showDate", l:"Datum", t:"bool", d:true},
@@ -336,9 +349,10 @@ const SPEC = [
   {g:"profile", p:"profile.showClock", l:"Uhrzeit anzeigen", t:"bool", d:true},
   {g:"profile", p:"profile.showAddUser", l:"„Benutzer hinzufügen“ anzeigen", t:"bool", d:true},
   {g:"profile", p:"profile.autoSingle", l:"Bei nur einem Profil automatisch wählen", t:"bool", d:false},
-  {g:"profile", p:"profile.bgType", l:"Hintergrund", t:"enum", o:["home","hero","gradient","color"], ol:["Wie Home","Letzter Hero","Farbverlauf","Volltonfarbe"], d:"home"},
+  {g:"profile", p:"profile.bgType", l:"Hintergrund", t:"enum", o:["home","hero","gradient","color","image"], ol:["Wie Home","Letztes Spiel","Farbverlauf","Volltonfarbe","Eigenes Bild"], d:"home"},
   {g:"profile", p:"profile.preset", l:"Verlauf", t:"num", min:0, max:7, step:1, f:v=>"Vorlage "+(v+1), d:1, w:()=>S.data.settings.profile.bgType==="gradient"},
   {g:"profile", p:"profile.color", l:"Farbe", t:"color", d:"#0b0f17", w:()=>S.data.settings.profile.bgType==="color"},
+  {g:"profile", p:"profile.image", l:"Bild", t:"image", d:null, w:()=>S.data.settings.profile.bgType==="image"},
   {g:"profile", p:"profile.dim", l:"Abdunkelung", t:"num", min:0, max:.9, step:.05, f:pct, d:.25},
   {g:"profile", p:"profile.anim", l:"Einblendung", t:"enum", o:["pop","slideUp","fade","none"], ol:["Aufploppen","Von unten","Blenden","Keine"], d:"pop"},
   // Kachel-Standard
@@ -371,6 +385,8 @@ const SPEC = [
   {g:"ra", p:"ra.key", l:"", t:"str", d:"", hidden:true},
   {g:"lib", p:"library.sort", l:"„Alle Spiele“ sortieren", t:"enum", o:["name","recent"], ol:["Nach Name","Zuletzt gespielt"], d:"name"},
   {g:"lib", p:"theme.name", l:"", t:"str", d:"Nexus Dunkel", hidden:true},
+  {g:"lib", p:"sgdb.gridDims", l:"SteamGridDB: Cover-Format", t:"enum", o:["600x900","920x430","460x215","512x512","any"], ol:["Hochformat 600×900","Querformat 920×430","Quer klein 460×215","Quadrat 512×512","Alle Formate"], d:"600x900"},
+  {g:"lib", p:"sgdb.autoMissing", l:"Fehlende Bilder automatisch laden", t:"bool", d:false},
   {g:"lib", p:"sgdbKey", l:"", t:"str", d:"", hidden:true},
 ];
 const GROUPS = [["look","Darstellung & Schrift"],["top","Kopfzeile, Symbole & Hinweise"],["layout","Anordnung der Kacheln"],["anim","Animationen"],["tiles","Kacheln (Standard)"],["hero","Fokus: Hintergrund"],["logo","Fokus: Logo"],["home","Home-Hintergrund"],["lock","Sperrbildschirm"],["profile","Profilauswahl"],["sections","Bereiche (Reihenfolge & Sichtbarkeit)"],["lib","Bibliothek & SteamGridDB"],["ra","RetroAchievements"],["sys","Themes, Backup & System"]];
@@ -534,6 +550,32 @@ function bgCSS(type, preset, color, image, heroUrl){
   const p = BG_PRESETS[clamp(preset|0,0,BG_PRESETS.length-1)];
   return `linear-gradient(135deg, ${p[0]}, ${p[1]}, ${p[2]}, ${p[1]})`;
 }
+
+/* ---------------- Akzent: Verlauf / RGB (gleiche Rechnung wie projects/nexus/source/core/accent.cpp) ---------------- */
+function hexRgb(h){ return /^#[0-9a-f]{6}$/i.test(h||"") ? [1,3,5].map(i=>parseInt(h.substr(i,2),16)) : [62,224,200]; }
+const frac = x=>x-Math.floor(x), tri = x=>1-Math.abs(2*frac(x)-1);
+function mixRgb(a,b,t){ t=clamp(t,0,1); return a.map((v,i)=>v+(b[i]-v)*t); }
+function rgbHue([r,g,b]){ r/=255; g/=255; b/=255; const mx=Math.max(r,g,b), mn=Math.min(r,g,b), d=mx-mn; if(d<1e-9) return 0; let h = mx===r ? ((g-b)/d)%6 : mx===g ? (b-r)/d+2 : (r-g)/d+4; h*=60; return h<0?h+360:h; }
+function hsvRgb(h,s,v){ h=frac(h/360)*6; const i=Math.floor(h)%6, f=h-Math.floor(h), p=v*(1-s), q=v*(1-s*f), t=v*(1-s*(1-f)); const c=[[v,t,p],[q,v,p],[p,v,t],[p,q,v],[t,p,v],[v,p,q]][i]; return c.map(x=>x*255); }
+function accentAt(u, t){
+  const th = ST().theme, mode = th.accentMode||"solid", anim = th.accentAnim||"none", cyc = Math.max(.5, th.accentCycle||6);
+  const phase = (anim==="flow"||anim==="cycle") ? t/cyc : 0, uu = anim==="cycle" ? 0 : u;
+  const c1 = hexRgb(th.accent), c2 = hexRgb(th.accent2), c3 = hexRgb(th.accent3); let c = c1;
+  if(mode==="gradient"||mode==="gradient3"){ const k = anim==="cycle" ? tri(phase) : tri((uu+phase)/2);
+    c = mode==="gradient" ? mixRgb(c1,c2,k) : (k<.5 ? mixRgb(c1,c2,k*2) : mixRgb(c2,c3,(k-.5)*2)); }
+  else if(mode==="rainbow") c = hsvRgb(rgbHue(c1) + 360*(uu*(th.rainbowRepeat||1) + phase), clamp(th.rainbowSat??.85,0,1), 1);
+  if(anim==="pulse"){ const f = .65+.35*(.5+.5*Math.sin(2*Math.PI*t/cyc)); c = c.map(v=>v*f); }
+  return c.map(v=>clamp(v,0,255));
+}
+const rgbStr = c=>`rgb(${c.map(v=>Math.round(v)).join(",")})`;
+const T0 = performance.now();
+function updateAccent(){
+  const th = ST().theme, t = (performance.now()-T0)/1000, st = $("#stage");
+  const stops = []; for(let i=0;i<=8;i++) stops.push(rgbStr(accentAt(i/8,t))+" "+(i*12.5)+"%");
+  st.style.setProperty("--accentGrad", `linear-gradient(${90+(th.accentAngle||0)}deg, ${stops.join(",")})`);
+  st.style.setProperty("--accent", rgbStr(accentAt(.5,t)));
+}
+setInterval(()=>{ try{ if((ST().theme.accentAnim||"none")!=="none") updateAccent(); }catch(e){} }, 50);
 
 /* ---------------- RetroAchievements (Prototyp: Offline-Testdaten) ----------------
    Switch-App: GET https://retroachievements.org/API/API_GetGameInfoAndUserProgress.php?g=<Spiel-ID>&u=<Benutzer>&y=<Web-API-Key>
@@ -730,7 +772,7 @@ function applyTheme(){
   const light = t.textColor==="black" || (t.textColor==="auto" && lum(t.ui) > .55);
   st.classList.toggle("light", light);
   st.classList.remove("ps-glass","ps-solid","ps-outline"); st.classList.add("ps-"+t.panelStyle);
-  st.style.setProperty("--accent", t.accent); st.style.setProperty("--ui", t.ui); st.style.setProperty("--font", `"${t.font}", system-ui, sans-serif`);
+  st.style.setProperty("--accent", t.accent); updateAccent(); st.style.setProperty("--ui", t.ui); st.style.setProperty("--font", `"${t.font}", system-ui, sans-serif`);
   st.style.setProperty("--heroMs", s.hero.transitionMs+"ms"); st.style.setProperty("--iconScale", s.icons.size);
   const dur = !animOn() ? 0 : s.anim.reduce ? 120 : s.anim.speed;
   st.style.setProperty("--tileMs", dur+"ms"); st.style.setProperty("--ease", EASE[s.anim.easing]);
@@ -825,7 +867,7 @@ function placeRing(){
   ring.style.display = "block"; ring.style.width = it.w+"px"; ring.style.height = it.h+"px"; ring.style.transform = tileTransform(it, S.focus, true);
   ring.className = (it.hex ? "" : "box") + (fx==="glow" ? " glow" : "") + (fx==="pulse" && animOn() ? " pulse" : "");
   ring.style.borderRadius = (ST().layout.mode==="list" ? t.radius : t.radius)+"px";
-  ring.innerHTML = it.hex ? `<svg viewBox="0 0 100 100" preserveAspectRatio="none"><polygon points="50,0 100,25 100,75 50,100 0,75 0,25" fill="none" stroke="${ST().theme.accent}" stroke-width="3" vector-effect="non-scaling-stroke" style="filter:drop-shadow(0 0 8px ${ST().theme.accent})"/></svg>` : "";
+  ring.innerHTML = it.hex ? `<svg viewBox="0 0 100 100" preserveAspectRatio="none"><polygon points="50,0 100,25 100,75 50,100 0,75 0,25" fill="none" stroke-width="3" vector-effect="non-scaling-stroke" style="stroke:var(--accent);filter:drop-shadow(0 0 8px var(--accent))"/></svg>` : "";
   ring.style.zIndex = 1;
 }
 function bindTiles(){
@@ -1189,12 +1231,11 @@ function showLock(){
   if(S.dialogs.some(d=>d.kind==="lock")) return;
   const d = {kind:"lock", hints:[["A","Entsperren"]], unlocking:false,
     draw(){ const l = ST().lock; const el = document.createElement("div"); el.className = "lock";
-      const hero = S.lastHero || FocusPresentationManager.heroFor(S.list[0]);
-      el.style.background = l.bgType==="home" ? bgCSS(ST().home.bgType, ST().home.preset, ST().home.color, ST().home.image) : bgCSS(l.bgType, l.preset, l.color, l.image, hero);
+      el.style.background = l.bgType==="home" ? bgCSS(ST().home.bgType, ST().home.preset, ST().home.color, ST().home.image) : bgCSS(l.bgType, l.preset, l.color, l.image);
       const col = l.textColor==="black" ? "#111" : "#fff"; const now = new Date();
       const pos = {center:"left:0;right:0;top:34%;text-align:center", topLeft:"left:70px;top:80px", bottomLeft:"left:70px;bottom:110px", bottomRight:"right:70px;bottom:110px;text-align:right"}[l.clockPos];
       el.innerHTML = `<div class="ld" style="opacity:${l.dim};backdrop-filter:blur(${l.blur}px);-webkit-backdrop-filter:blur(${l.blur}px)"></div>
-        <div class="clk" style="${pos};font-size:${l.clockSize}px;font-family:'${l.clockFont}',system-ui;color:${col}">${fmtTime(now, l.clock24)}${l.showDate?`<div class="dt">${now.toLocaleDateString("de-DE",{weekday:"long",day:"numeric",month:"long"})}</div>`:""}</div>
+        <div class="clk${l.clockAccent?" acc":""}" style="${pos};font-size:${l.clockSize}px;font-family:'${l.clockFont}',system-ui;color:${col}">${fmtTime(now, l.clock24)}${l.showDate?`<div class="dt">${now.toLocaleDateString("de-DE",{weekday:"long",day:"numeric",month:"long"})}</div>`:""}</div>
         ${l.showBattery?`<div class="lb" style="color:${col}">${batteryIcon(col)} 87 %</div>`:""}${l.hint?`<div class="lh" style="color:${col}">Zum Entsperren A drücken oder tippen</div>`:""}${(ST().ra.enabled && ST().ra.lockRecent && RetroAchievements.recent()) ? `<div class="lh" style="color:${col};bottom:80px;animation:none;opacity:.9">🏆 Zuletzt freigeschaltet: „${esc(RetroAchievements.recent().title)}“ in ${esc(RetroAchievements.recent().game)}</div>` : ""}`;
       el.onclick = ()=>d.input("A"); return el; },
     input(k){ if(d.unlocking || !["A","B","X","Y"].includes(k)) return;
@@ -1215,7 +1256,7 @@ function showProfile(manual){
   const d = {kind:"profile", hints:[["←→","Profil"],["A","Auswählen"]],
     draw(){ const p = ST().profile; const el = document.createElement("div"); el.className = "lock"; el.style.cursor = "default";
       const hero = S.lastHero || FocusPresentationManager.heroFor(S.list[0]);
-      el.style.background = p.bgType==="home" ? bgCSS(ST().home.bgType, ST().home.preset, ST().home.color, ST().home.image) : bgCSS(p.bgType, p.preset, p.color, null, hero);
+      el.style.background = p.bgType==="home" ? bgCSS(ST().home.bgType, ST().home.preset, ST().home.color, ST().home.image) : bgCSS(p.bgType, p.preset, p.color, p.image, hero);
       const light = $("#stage").classList.contains("light"); const col = light ? "#12161d" : "#fff"; const sz = p.iconSize; const list = items();
       const isList = p.style==="list";
       const box = isList ? `display:flex;flex-direction:column;gap:12px;align-items:stretch;width:440px` : `display:flex;gap:${p.style==="cards"?24:40}px;align-items:flex-start;justify-content:center`;
@@ -1225,7 +1266,7 @@ function showProfile(manual){
         ${p.title?`<div style="position:absolute;left:0;right:0;top:${p.position==="top"?70:p.position==="bottom"?120:110}px;text-align:center;font-size:34px;font-weight:600;color:${col}">Wer spielt?</div>`:""}
         ${p.showClock?`<div style="position:absolute;right:40px;top:22px;font-size:18px;color:${col}">${fmtTime(new Date(), ST().topbar.clock24)}</div>`:""}
         <div style="position:absolute;left:0;right:0;${vpos};display:flex;justify-content:center"><div style="${box}">${list.map((u,i)=>{
-          const cur = i===sel; const ring = cur ? `box-shadow:0 0 0 4px ${ST().theme.accent},0 0 26px ${ST().theme.accent};` : "";
+          const cur = i===sel; const ring = cur ? `box-shadow:0 0 0 4px var(--accent),0 0 26px var(--accent);` : "";
           const img = u.id==="add" ? `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:${sz*0.45}px;color:${col};background:rgba(127,127,127,.25)">+</div>` : `<img src="${avatar(u)}" style="width:100%;height:100%;object-fit:cover">`;
           const delay = `animation-delay:${i*60}ms`;
           if(isList) return `<div data-i="${i}" class="${anim}" style="${delay};display:flex;align-items:center;gap:16px;padding:10px 14px;border-radius:14px;background:rgba(127,127,127,${cur?.3:.15});${ring}color:${col};font-size:20px;cursor:pointer"><div style="width:56px;height:56px;border-radius:50%;overflow:hidden;flex:none">${img}</div>${esc(u.name)}</div>`;

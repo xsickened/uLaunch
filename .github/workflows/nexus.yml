@@ -58,7 +58,7 @@ jobs:
 
     - name: SD-Paket zusammenstellen
       run: |
-        mkdir -p out/switch/nexus out/nexus/art out/ulaunch/bin/uMenu
+        mkdir -p out/switch/nexus out/nexus/art/backgrounds out/ulaunch/bin/uMenu
         cp projects/nexus/nexus.nro out/switch/nexus/nexus.nro
         cp SdOut/ulaunch/bin/uMenu/main SdOut/ulaunch/bin/uMenu/main.npdm SdOut/ulaunch/bin/uMenu/romfs.bin out/ulaunch/bin/uMenu/
         cat > out/nexus/art/LIESMICH.txt << 'EOF'
@@ -66,7 +66,21 @@ jobs:
           sdmc:/nexus/art/<TITEL-ID>/grid.jpg   Cover (nur Kachel)
           sdmc:/nexus/art/<TITEL-ID>/hero.jpg   Hintergrund (Ebene 1)
           sdmc:/nexus/art/<TITEL-ID>/logo.png   schwebendes Logo (Ebene 3, transparent)
-        Danach in NEXUS: X > Eigene Bilder > Bilder neu einlesen.
+        Weitere Bilder (beliebige Namen) im selben Ordner lassen sich in NEXUS auswählen:
+          X > Bilder wählen > Cover / Hintergrund / Logo
+        Eigene Hintergründe für Home, Sperrbildschirm und Profilauswahl:
+          sdmc:/nexus/art/backgrounds/  (JPG oder PNG, ideal 1280x720 oder 1920x1080)
+          Auswahl: Einstellungen > Home-Hintergrund / Sperrbildschirm / Profilauswahl > Art "Eigenes Bild" > Bild
+          Screenshots aus dem Album stehen dort ebenfalls zur Auswahl.
+        EOF
+        cat > out/nexus/keys-BEISPIEL.txt << 'EOF'
+        # Schlüssel bequem am PC eintragen: Datei in "keys.txt" umbenennen und Werte einsetzen.
+        # NEXUS übernimmt sie beim nächsten Öffnen und löscht keys.txt danach.
+        # SteamGridDB: steamgriddb.com > Einstellungen > API
+        sgdb=
+        # RetroAchievements: retroachievements.org > Einstellungen > Keys (Web-API-Key)
+        ra_user=
+        ra_key=
         EOF
         cat > out/NEXUS-LIESMICH.txt << 'EOF'
         NEXUS HOME - Installation (setzt installiertes uLaunch 1.2.3 voraus)
@@ -78,6 +92,8 @@ jobs:
           - Im NEXUS-Menü (+) -> "Klassisches uLaunch-Menü"; zurück mit ZL halten + ZR
           - Nach zwei Fehlstarts schaltet NEXUS automatisch auf klassisch um
           - Komplett zurück: gesicherten uMenu-Ordner zurückkopieren oder uLaunch-v1.2.3.zip erneut aufspielen
+        Online (optional): SteamGridDB-Bilder und RetroAchievements brauchen einen Schlüssel,
+          siehe nexus/keys-BEISPIEL.txt oder Einstellungen > Bibliothek & SteamGridDB / RetroAchievements.
         EOF
 
     - name: ZIP für die SD-Karte

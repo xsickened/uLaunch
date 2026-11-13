@@ -41,6 +41,138 @@
   },
   {
    "group": "look",
+   "path": "theme.accentMode",
+   "label": "Akzent-Art",
+   "type": "enum",
+   "options": [
+    "solid",
+    "gradient",
+    "gradient3",
+    "rainbow"
+   ],
+   "optionLabels": [
+    "Einfarbig",
+    "Verlauf (2 Farben)",
+    "Verlauf (3 Farben)",
+    "RGB-Regenbogen"
+   ],
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "solid",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "look",
+   "path": "theme.accent2",
+   "label": "Akzent: 2. Farbe",
+   "type": "color",
+   "options": null,
+   "optionLabels": null,
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "#e86cff",
+   "conditional": true,
+   "hidden": false
+  },
+  {
+   "group": "look",
+   "path": "theme.accent3",
+   "label": "Akzent: 3. Farbe",
+   "type": "color",
+   "options": null,
+   "optionLabels": null,
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "#ffd447",
+   "conditional": true,
+   "hidden": false
+  },
+  {
+   "group": "look",
+   "path": "theme.accentAngle",
+   "label": "Verlaufsrichtung",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": 0,
+   "max": 345,
+   "step": 15,
+   "default": 0,
+   "conditional": true,
+   "hidden": false
+  },
+  {
+   "group": "look",
+   "path": "theme.rainbowRepeat",
+   "label": "Regenbogen-Wiederholungen",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": 0.25,
+   "max": 3,
+   "step": 0.25,
+   "default": 1,
+   "conditional": true,
+   "hidden": false
+  },
+  {
+   "group": "look",
+   "path": "theme.rainbowSat",
+   "label": "Regenbogen-Sättigung",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": 0.3,
+   "max": 1,
+   "step": 0.05,
+   "default": 0.85,
+   "conditional": true,
+   "hidden": false
+  },
+  {
+   "group": "look",
+   "path": "theme.accentAnim",
+   "label": "Akzent-Bewegung",
+   "type": "enum",
+   "options": [
+    "none",
+    "flow",
+    "cycle",
+    "pulse"
+   ],
+   "optionLabels": [
+    "Keine",
+    "Fließend",
+    "Farbwechsel",
+    "Pulsieren"
+   ],
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "flow",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "look",
+   "path": "theme.accentCycle",
+   "label": "Dauer pro Runde",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": 1,
+   "max": 30,
+   "step": 1,
+   "default": 6,
+   "conditional": true,
+   "hidden": false
+  },
+  {
+   "group": "look",
    "path": "theme.ui",
    "label": "UI-Grundfarbe",
    "type": "enum",
@@ -1336,14 +1468,12 @@
    "label": "Hintergrund",
    "type": "enum",
    "options": [
-    "hero",
     "home",
     "gradient",
     "color",
     "image"
    ],
    "optionLabels": [
-    "Letzter Hero",
     "Wie Home",
     "Farbverlauf",
     "Volltonfarbe",
@@ -1352,7 +1482,7 @@
    "min": null,
    "max": null,
    "step": null,
-   "default": "hero",
+   "default": "gradient",
    "conditional": false,
    "hidden": false
   },
@@ -1482,6 +1612,20 @@
    "max": null,
    "step": null,
    "default": "Segoe UI",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "lock",
+   "path": "lock.clockAccent",
+   "label": "Uhr im Akzent (Verlauf/RGB)",
+   "type": "bool",
+   "options": null,
+   "optionLabels": null,
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": false,
    "conditional": false,
    "hidden": false
   },
@@ -1720,13 +1864,15 @@
     "home",
     "hero",
     "gradient",
-    "color"
+    "color",
+    "image"
    ],
    "optionLabels": [
     "Wie Home",
-    "Letzter Hero",
+    "Letztes Spiel",
     "Farbverlauf",
-    "Volltonfarbe"
+    "Volltonfarbe",
+    "Eigenes Bild"
    ],
    "min": null,
    "max": null,
@@ -1760,6 +1906,20 @@
    "max": null,
    "step": null,
    "default": "#0b0f17",
+   "conditional": true,
+   "hidden": false
+  },
+  {
+   "group": "profile",
+   "path": "profile.image",
+   "label": "Bild",
+   "type": "image",
+   "options": null,
+   "optionLabels": null,
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": null,
    "conditional": true,
    "hidden": false
   },
@@ -2238,6 +2398,46 @@
    "default": "Nexus Dunkel",
    "conditional": false,
    "hidden": true
+  },
+  {
+   "group": "lib",
+   "path": "sgdb.gridDims",
+   "label": "SteamGridDB: Cover-Format",
+   "type": "enum",
+   "options": [
+    "600x900",
+    "920x430",
+    "460x215",
+    "512x512",
+    "any"
+   ],
+   "optionLabels": [
+    "Hochformat 600×900",
+    "Querformat 920×430",
+    "Quer klein 460×215",
+    "Quadrat 512×512",
+    "Alle Formate"
+   ],
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "600x900",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "lib",
+   "path": "sgdb.autoMissing",
+   "label": "Fehlende Bilder automatisch laden",
+   "type": "bool",
+   "options": null,
+   "optionLabels": null,
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": false,
+   "conditional": false,
+   "hidden": false
   },
   {
    "group": "lib",

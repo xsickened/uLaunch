@@ -192,6 +192,12 @@ namespace ul::menu::ui {
         return g_NexusState == 1;
     }
 
+    bool NexusLockOnWake() {
+        std::string source;
+        std::vector<std::string> report;
+        return nexus::LoadData(nexus::DataFile, source, report).settings.B("lock.enabled");
+    }
+
     void SetNexusClassicMode(const bool classic) {
         if(classic) nexus::WriteFileAtomic(ClassicFlagPath, "1");
         else std::remove(ClassicFlagPath);
@@ -256,6 +262,11 @@ namespace ul::menu::ui {
 
             void OnHome() {
                 if(this->inited) this->home.OnHome();
+            }
+
+            // Tastatur & Co. hier (Eingabe-Phase) statt mitten im Zeichnen öffnen
+            void RunDeferred() {
+                if(this->inited && !this->busy) this->home.RunDeferred();
             }
 
             void Feed(const u64 down, const u64 held, const pu::ui::TouchPoint tp) {
@@ -323,6 +334,7 @@ namespace ul::menu::ui {
     void NexusMenuLayout::OnMenuInput(const u64 keys_down, const u64 keys_up, const u64 keys_held, const pu::ui::TouchPoint touch_pos) {
         UpdateScreenCaptureBackground(false);
         this->elem->Feed(keys_down, keys_held, touch_pos);
+        this->elem->RunDeferred();
     }
 
     bool NexusMenuLayout::OnHomeButtonPress() {

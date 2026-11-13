@@ -26,7 +26,7 @@ namespace nexus {
             { "look", "Darstellung & Schrift" }, { "top", "Kopfzeile, Symbole & Hinweise" }, { "layout", "Anordnung der Kacheln" },
             { "anim", "Animationen" }, { "tiles", "Kacheln (Standard)" }, { "hero", "Fokus: Hintergrund" }, { "logo", "Fokus: Logo" },
             { "home", "Home-Hintergrund" }, { "lock", "Sperrbildschirm" }, { "profile", "Profilauswahl" }, { "sections", "Bereiche (Reihenfolge & Sichtbarkeit)" },
-            { "lib", "Bibliothek" }, { "sys", "Themes & System" }
+            { "lib", "Bibliothek & SteamGridDB" }, { "ra", "RetroAchievements" }, { "sys", "Themes & System" }
         };
         const char *const Presets[8][3] = {
             { "#0b0f17", "#1d2b4a", "#0b0f17" }, { "#1a0b2e", "#4a1d6b", "#0f0a1f" }, { "#0d3b4c", "#1b6e6b", "#0a1f2b" }, { "#2b0f0f", "#6b2a1d", "#1a0a0a" },
@@ -43,6 +43,11 @@ namespace nexus {
         // In uLaunch entscheidet der Unterbau, wann Sperrbildschirm/Profilauswahl kommen
         this->locked = !h && this->d->settings.B("lock.enabled") && !safeMode;
         if(h) this->currentUser = h->CurrentUser();
+        this->online.Init(this->d);
+        this->online.onArtChanged = [this](const std::string &id) { this->ArtChanged(id); };
+        EnsureDir(std::string(ArtDir) + "/backgrounds");
+        this->accentP = AccentFrom(this->d->settings);
+        this->ImportKeys(true);
         if(safeMode) this->Toast("Abgesicherter Modus: Darstellung auf Standard gesetzt. Bibliothek ist erhalten.");
         else if(isApplet) this->Toast("Applet-Modus: wenig Speicher. Besser ein Spiel mit gedrückter R-Taste starten.");
         return true;
@@ -81,7 +86,24 @@ namespace nexus {
     }
     Col Home::TextCol() const { return this->Light() ? Col{ 18, 22, 29, 255 } : Col{ 238, 242, 247, 255 }; }
     Col Home::MutedCol() const { return WithA(this->TextCol(), 0.62); }
-    Col Home::Accent() const { return ParseCol(this->d->settings.S("theme.accent")); }
+    Col Home::AccentAtU(double u) const {
+        const Rgb c = AccentAt(this->accentP, u, this->time);
+        return Col{ static_cast<uint8_t>(c.r), static_cast<uint8_t>(c.g), static_cast<uint8_t>(c.b), 255 };
+    }
+    Col Home::Accent() const { return this->AccentAtU(0.5); }
+    ColFn Home::AccentFn(double x, double y, double w, double h) const {
+        // Verlauf bezogen auf das jeweilige Element (wie im Prototyp per CSS)
+        const AccentParams p = this->accentP;
+        const double t = this->time;
+        if(p.mode == "solid" && p.anim != "pulse") {
+            const Col c = this->Accent();
+            return [c](float, float) { return c; };
+        }
+        return [p, t, x, y, w, h](float px, float py) {
+            const Rgb c = AccentAt(p, AccentU(p, px - x, py - y, w, h), t);
+            return Col{ static_cast<uint8_t>(c.r), static_cast<uint8_t>(c.g), static_cast<uint8_t>(c.b), 255 };
+        };
+    }
     Col Home::UiCol() const { return ParseCol(this->d->settings.S("theme.ui")); }
 
     // ------------------------------------------------------------------ Daten
@@ -106,6 +128,12 @@ namespace nexus {
         if(it != this->art.end()) return it->second;
         ArtPaths p;
         const std::string base = std::string(ArtDir) + "/" + id + "/";
+        // eigene Auswahl (Bildauswahl / SteamGridDB) hat Vorrang
+        for(const char *k: { "grid", "hero", "logo" }) {
+            const auto o = this->d->library.ArtOverride(id, k);
+            if(o.empty() || !FileExists(o)) continue;
+            if(k[0] == 'g') p.grid = o; else if(k[0] == 'h') p.hero = o; else p.logo = o;
+        }
         for(const char *n: { "grid.jpg", "grid.png" }) if(p.grid.empty() && FileExists(base + n)) p.grid = base + n;
         for(const char *n: { "hero.jpg", "hero.png" }) if(p.hero.empty() && FileExists(base + n)) p.hero = base + n;
         for(const char *n: { "logo.png", "logo.jpg" }) if(p.logo.empty() && FileExists(base + n)) p.logo = base + n;
@@ -581,17 +609,21 @@ namespace nexus {
     }
 
     void Home::CreateFolderFlow(const std::vector<std::string> &ids) {
-        std::string name;
-        if(!plat::Keyboard("Name des neuen Ordners", "Neuer Ordner", 40, name)) {
-            name = "Ordner " + std::to_string(this->d->library.folders.size() + 1);
-            this->Toast("Tastatur hier nicht verfügbar – Ordner heißt „" + name + "“ (später umbenennbar).");
-        }
-        if(name.empty()) return;
         const int at = (this->section == "start" && this->openFolder.empty()) ? this->focus + 1 : -1;
-        const auto fid = this->d->library.CreateFolder(name, at);
-        for(const auto &id: ids) this->d->library.AddToFolder(id, fid);
-        this->listDirty = true;
-        this->MarkDirty();
+        auto make = [this, ids, at](const std::string &name) {
+            if(name.empty()) return;
+            const auto fid = this->d->library.CreateFolder(name, at);
+            for(const auto &id: ids) this->d->library.AddToFolder(id, fid);
+            this->listDirty = true;
+            this->MarkDirty();
+        };
+        this->AskText("Name des neuen Ordners", "Neuer Ordner", 40, [this, make](std::string name) {
+            if(name.empty()) {
+                name = "Ordner " + std::to_string(this->d->library.folders.size() + 1);
+                this->Toast("Ordner heißt „" + name + "“ (später umbenennbar).");
+            }
+            make(name);
+        });
     }
 
     void Home::OpenFolderPicker(const std::vector<std::string> &ids) {
@@ -616,22 +648,22 @@ namespace nexus {
 
     void Home::OpenArtInfo(const std::string &id) {
         auto dl = std::make_shared<Dialog>();
-        dl->title = "Eigene Bilder"; dl->w = 640; dl->x = 320; dl->y = 160; dl->shade = true;
-        dl->sub = "Lege Bilder (z. B. von SteamGridDB) auf der SD-Karte ab. Die SteamGridDB-Suche direkt auf der Switch folgt in Phase 5.";
-        const std::string base = std::string(ArtDir) + "/" + id + "/";
-        dl->rows = [this, base, id]() {
+        dl->title = "Bilder wählen"; dl->w = 640; dl->x = 320; dl->y = 140; dl->shade = true;
+        dl->sub = "Drei getrennte Ebenen: Cover nur auf der Kachel, Hintergrund bildschirmfüllend, Logo schwebend darüber.";
+        dl->rows = [this, id]() {
+            auto name = [](const std::string &p) { const auto k = p.find_last_of('/'); return p.empty() ? std::string("automatisch") : p.substr(k == std::string::npos ? 0 : k + 1); };
             const auto &a = this->Art(id);
-            return std::vector<Row>{
-                Row{ "Cover (nur Kachel)", [base, a]() { return a.grid.empty() ? base + "grid.jpg" : std::string("vorhanden"); }, nullptr, nullptr },
-                Row{ "Hintergrund (Ebene 1)", [base, a]() { return a.hero.empty() ? base + "hero.jpg" : std::string("vorhanden"); }, nullptr, nullptr },
-                Row{ "Logo (Ebene 3, transparent)", [base, a]() { return a.logo.empty() ? base + "logo.png" : std::string("vorhanden"); }, nullptr, nullptr },
-                Row{ "Bilder neu einlesen", nullptr, nullptr, [this, id]() {
-                    const auto old = this->Art(id);
-                    for(const auto &k: { old.grid, old.hero, old.logo }) if(!k.empty()) this->img->Invalidate(k);
-                    this->art.erase(id);
-                    this->heroA.key.clear(); this->heroFor.clear(); this->logoId.clear();
-                    this->Toast("Bilder neu eingelesen.");
-                } } };
+            std::vector<Row> rows;
+            rows.push_back(Row{ "Cover (Ebene 2, nur Kachel)", [a, name]() { return a.grid.empty() ? std::string("keins") : name(a.grid); }, nullptr, [this, id]() { this->OpenArtKind(id, "grid"); } });
+            rows.push_back(Row{ "Hintergrund (Ebene 1)", [a, name]() { return a.hero.empty() ? std::string("keiner") : name(a.hero); }, nullptr, [this, id]() { this->OpenArtKind(id, "hero"); } });
+            rows.push_back(Row{ "Logo (Ebene 3, transparent)", [a, name]() { return a.logo.empty() ? std::string("Schriftzug") : name(a.logo); }, nullptr, [this, id]() { this->OpenArtKind(id, "logo"); } });
+            rows.push_back(Row{ "Bei SteamGridDB suchen …", nullptr, nullptr, [this, id]() {
+                std::string nm = id;
+                for(const auto &e: this->list) if(e.id == id) nm = e.name;
+                this->OpenSgdbFlow(id, nm, nm);
+            } });
+            rows.push_back(Row{ "Bilder neu einlesen", nullptr, nullptr, [this, id]() { this->ArtChanged(id); this->Toast("Bilder neu eingelesen."); } });
+            return rows;
         };
         this->Push(dl);
     }
@@ -647,7 +679,9 @@ namespace nexus {
             std::vector<Row> rows;
             rows.push_back(Row{ e.folder ? "Öffnen" : "Starten", nullptr, nullptr, [this]() { this->Pop(); this->Activate(); } });
             rows.push_back(Row{ "Kachel bearbeiten", nullptr, nullptr, [this, e]() { this->Pop(); this->OpenEditor(e.id); } });
-            rows.push_back(Row{ "Eigene Bilder (Cover, Hintergrund, Logo)", nullptr, nullptr, [this, e]() { this->Pop(); this->OpenArtInfo(e.id); } });
+            rows.push_back(Row{ "Bilder wählen (Cover, Hintergrund, Logo)", nullptr, nullptr, [this, e]() { this->Pop(); this->OpenArtInfo(e.id); } });
+            rows.push_back(Row{ "SteamGridDB: Bilder suchen …", nullptr, nullptr, [this, e]() { this->Pop(); this->OpenSgdbFlow(e.id, e.name, e.name); } });
+            if(!e.folder && this->d->settings.B("ra.enabled")) rows.push_back(Row{ "RetroAchievements …", nullptr, nullptr, [this, e]() { this->Pop(); this->OpenRaDialog(e.id, e.name); } });
             rows.push_back(Row{ "Position ändern", nullptr, nullptr, [this, e]() {
                 this->Pop();
                 auto *order = this->ManualOrder();
@@ -658,9 +692,9 @@ namespace nexus {
             if(e.folder) {
                 rows.push_back(Row{ "Ordner umbenennen", nullptr, nullptr, [this, e]() {
                     this->Pop();
-                    std::string name;
-                    if(!plat::Keyboard("Neuer Ordnername", e.name, 40, name)) { this->Toast("Tastatur hier nicht verfügbar (Applet-Modus)."); return; }
-                    if(auto *f = this->d->library.FindFolder(e.id); f && !name.empty()) { f->name = name.substr(0, 60); this->listDirty = true; this->MarkDirty(); }
+                    this->AskText("Neuer Ordnername", e.name, 40, [this, e](std::string name) {
+                        if(auto *f = this->d->library.FindFolder(e.id); f && !name.empty()) { f->name = SanitizeUtf8(name.substr(0, 60)); this->listDirty = true; this->MarkDirty(); }
+                    });
                 } });
                 rows.push_back(Row{ "Ordner löschen (Inhalt bleibt)", nullptr, nullptr, [this, e]() {
                     this->Pop();
@@ -737,7 +771,7 @@ namespace nexus {
         const auto mode = s.S("layout.mode");
         auto in = [&](std::initializer_list<const char *> l) { for(const char *m: l) if(mode == m) return true; return false; };
         // In v0.1 der Switch-App noch nicht umgesetzt (im Prototyp vorhanden)
-        static const char *const unsupported[] = { "hero.blur", "lock.blur", "theme.font", "lock.clockFont", "home.image", "lock.image", "hints.layerLabel" };
+        static const char *const unsupported[] = { "hero.blur", "lock.blur", "theme.font", "lock.clockFont", "hints.layerLabel" };
         for(const char *u: unsupported) if(p == u) return false;
         if(p == "layout.position" || p == "layout.height") return !IsVertical(s);
         if(p == "layout.side") return in({ "vgrid", "list" });
@@ -760,6 +794,18 @@ namespace nexus {
         if(p == "profile.preset") return s.S("profile.bgType") == "gradient";
         if(p == "profile.color") return s.S("profile.bgType") == "color";
         if(p == "topbar.showUser") return this->host != nullptr;
+        if(p == "home.image") return s.S("home.bgType") == "image";
+        if(p == "lock.image") return s.S("lock.bgType") == "image";
+        if(p == "profile.image") return s.S("profile.bgType") == "image";
+        const auto am = s.S("theme.accentMode");
+        if(p == "theme.accent2") return am == "gradient" || am == "gradient3";
+        if(p == "theme.accent3") return am == "gradient3";
+        if(p == "theme.accentAngle") return am != "solid";
+        if(p == "theme.rainbowRepeat" || p == "theme.rainbowSat") return am == "rainbow";
+        if(p == "theme.accentCycle") return s.S("theme.accentAnim") != "none";
+        const auto rt = s.S("ra.topbar");
+        if(p == "ra.pointsType") return rt == "points" || rt == "both";
+        if(p == "ra.topbarIcon" || p == "ra.topbarName") return rt != "none";
         return true;
     }
 
@@ -768,6 +814,9 @@ namespace nexus {
         const json keepLib = *JGet(this->d->settings.data, "library");
         const json *ra = JGet(this->d->settings.data, "ra");
         const json keepRa = ra ? *ra : json::object();
+        const json *sg = JGet(this->d->settings.data, "sgdb");
+        const json keepSg = sg ? *sg : json::object();
+        const std::string keepKey = this->d->settings.S("sgdbKey");
         const char *names[] = { "Nexus Dunkel", "Aurora", "Kino", "Rad", "Hell & klar" };
         idx = std::clamp(idx, 0, 4);
         auto set = [&](const char *p, json v) { JSet(s, p, v); };
@@ -778,6 +827,8 @@ namespace nexus {
         set("theme.name", names[idx]);
         s["library"] = keepLib;
         s["ra"] = keepRa;
+        s["sgdb"] = keepSg;
+        s["sgdbKey"] = keepKey;
         this->d->settings.data = Settings::Sanitize(s, nullptr);
         this->listDirty = true;
         this->MarkDirty();
@@ -806,7 +857,6 @@ namespace nexus {
                 const auto gid = id;
                 rows.push_back(Row{ label, nullptr, nullptr, [this, gid]() { this->OpenGroup(gid); } });
             }
-            rows.push_back(Row{ "RetroAchievements & SteamGridDB", []() { return std::string("folgt in Phase 5"); }, nullptr, nullptr });
             return rows;
         };
         dl->onB = [this]() { this->CloseAll(); this->SwitchSection("start"); };
@@ -872,8 +922,10 @@ namespace nexus {
                     this->Confirm("Darstellung zurücksetzen?", "Ordner, Favoriten und Kachelanpassungen bleiben erhalten.", "Zurücksetzen", [this]() {
                         const json *ra = JGet(this->d->settings.data, "ra");
                         const json keepRa = ra ? *ra : json::object();
+                        const std::string keepKey = this->d->settings.S("sgdbKey");
                         this->d->settings.data = Settings::Defaults();
                         this->d->settings.data["ra"] = keepRa;
+                        this->d->settings.data["sgdbKey"] = keepKey;
                         this->d->settings.data = Settings::Sanitize(this->d->settings.data, nullptr);
                         this->listDirty = true; this->MarkDirty();
                     });
@@ -887,7 +939,7 @@ namespace nexus {
                     this->Toast(rep.empty() ? "Konfiguration ist in Ordnung." : std::to_string(rep.size()) + " Werte repariert.");
                 } });
                 rows.push_back(Row{ "Info", nullptr, nullptr, nullptr, true });
-                rows.push_back(Row{ "Version", []() { return std::string("NEXUS HOME 0.1 (Test-App)"); }, nullptr, nullptr });
+                rows.push_back(Row{ "Version", []() { return std::string("NEXUS HOME 0.2"); }, nullptr, nullptr });
                 rows.push_back(Row{ "Modus", [this]() { return std::string(this->applet ? "Applet (wenig Speicher)" : "Anwendung (voller Speicher)"); }, nullptr, nullptr });
                 rows.push_back(Row{ "Texturspeicher", [this]() { return std::to_string(this->img->UsedBytes() / (1024 * 1024)) + " MB"; }, nullptr, nullptr });
                 rows.push_back(Row{ "Beenden (+)", nullptr, nullptr, [this]() { this->Toast("Zum Beenden + drücken (außerhalb der Menüs)."); } });
@@ -900,9 +952,27 @@ namespace nexus {
                 for(const auto &e: Schema()) {
                     if(e.group != gid || e.hidden || !this->SettingVisible(e.path)) continue;
                     const auto *ep = &e;
+                    if(e.type == SType::Image) {
+                        rows.push_back(Row{ e.label, [this, ep]() {
+                                const auto v = this->d->settings.S(ep->path);
+                                const auto k = v.find_last_of('/');
+                                return v.empty() ? std::string("kein Bild (A = wählen)") : v.substr(k == std::string::npos ? 0 : k + 1);
+                            }, nullptr, [this, ep, changed]() {
+                                const std::string path = ep->path;
+                                this->OpenImagePicker(ep->label, { { "Eigene Hintergründe", std::string(ArtDir) + "/backgrounds" }, { "NEXUS-Bilder", ArtDir } }, true, false,
+                                    [this, path, changed](const std::string &pick) {
+                                        if(pick.empty()) JSet(this->d->settings.data, path, json(nullptr));
+                                        else this->d->settings.Set(path, json(pick));
+                                        changed();
+                                    }, "Kein Bild");
+                            } });
+                        continue;
+                    }
                     rows.push_back(Row{ e.label, [this, ep]() { return this->d->settings.Display(*ep); },
                         [this, ep, changed](int dir) { this->d->settings.Step(*ep, dir); changed(); }, nullptr });
                 }
+                if(gid == "lib") for(auto &rw: this->SgdbRows()) rows.push_back(rw);
+                if(gid == "ra") for(auto &rw: this->RaRows()) rows.push_back(rw);
                 if(gid == "lock") rows.push_back(Row{ "Sperrbildschirm jetzt anzeigen (−)", nullptr, nullptr, [this]() { this->CloseAll(); this->locked = true; this->unlocking = false; } });
                 if(gid == "profile" && this->host) rows.push_back(Row{ "Profil wechseln (zur Profilauswahl)", nullptr, nullptr, [this]() { this->CloseAll(); this->Save(); this->host->Logoff(); } });
                 if(gid == "lib") rows.push_back(Row{ "Bilder neu einlesen", nullptr, nullptr, [this]() { this->art.clear(); this->img->Clear(); this->heroA.key.clear(); this->heroFor.clear(); this->logoId.clear(); this->Toast("Bilder werden neu geladen."); } });
@@ -916,6 +986,12 @@ namespace nexus {
 
     void Home::Update(double dt) {
         this->time += dt;
+        this->accentP = AccentFrom(this->d->settings);
+        this->online.Tick();
+        if(!this->autoArtQueued && this->appsVersion > 0 && !this->apps->Busy()) {
+            this->autoArtQueued = true;
+            if(this->d->settings.B("sgdb.autoMissing")) this->QueueMissingArt(false);
+        }
         this->frameDt = std::clamp(dt, 0.0, 0.1);
         this->wobbleT += dt;
         if(this->toastT > 0) this->toastT -= dt;
@@ -992,6 +1068,7 @@ namespace nexus {
         const auto &s = this->d->settings;
         const auto type = s.S("home.bgType");
         if(type == "color") this->g->Rect(0, 0, ScreenW, ScreenH, ParseCol(s.S("home.color")));
+        else if(type == "image" && this->DrawBgImage(s.S("home.image"), 0, 1.0)) {}
         else {
             const int p = std::clamp(static_cast<int>(s.N("home.preset")), 0, 7);
             Col c0 = ParseCol(Presets[p][0]), c1 = ParseCol(Presets[p][1]), c2 = ParseCol(Presets[p][2]);
@@ -1119,6 +1196,7 @@ namespace nexus {
         const double alpha = this->logoAlpha * s.N("logo.opacity");
         if(s.B("logo.shadow")) this->g->Image(tex, x + 3, y + 6, w, h, alpha * 0.5, true, Col{ 0, 0, 0, 255 });
         this->g->Image(tex, x, y, w, h, alpha, true);
+        if(!e.folder) this->DrawRaUnderLogo(e, x, std::min(y + h + 10, by1 - 40), w, alpha);
     }
 
     void Home::DrawTiles() {
@@ -1227,6 +1305,7 @@ namespace nexus {
                 if(!e.folder && this->d->library.IsFav(e.id) && std::abs(xf.rot) < 0.5) {
                     this->g->Icon("fav", xf.cx - ds.w * xf.sc * xf.squash / 2 + 14, xf.cy - ds.h * xf.sc / 2 + 14, 16, Col{ 255, 212, 71, static_cast<uint8_t>(255 * op) }, true);
                 }
+                if(!e.folder && std::abs(xf.rot) < 0.5) this->DrawRaBadge(e, xf, ds.w * xf.sc * xf.squash, ds.h * xf.sc, op);
             }
             if(this->host && !e.folder && std::abs(xf.rot) < 0.5) {
                 auto ai = this->appMap.find(e.id);
@@ -1241,12 +1320,15 @@ namespace nexus {
         }
         // Ebene 5: Fokusmarkierung (eigene Ebene, nicht Teil der Kachel)
         if(haveFocus) {
-            Col acc = this->moving ? Col{ 255, 212, 71, 255 } : this->Accent();
+            const double fw = focusXf.w * focusXf.sc * focusXf.squash, fh = focusXf.h * focusXf.sc;
+            const double pad = 30;
+            ColFn fn = this->AccentFn(focusXf.cx - fw / 2 - pad, focusXf.cy - fh / 2 - pad, fw + 2 * pad, fh + 2 * pad);
+            if(this->moving) fn = [](float, float) { return Col{ 255, 212, 71, 255 }; };
             double pulse = 1.0;
             if(fx == "pulse" && s.B("anim.enabled")) pulse = 0.55 + 0.45 * std::sin(this->time * 4.5);
             const int layers = fx == "glow" ? 5 : 3;
-            for(int k = layers; k >= 1; k--) this->g->ShapeRing(focusXf, focusRad, focusHex, 3 + k * (fx == "glow" ? 5 : 3), WithA(acc, 0.12 * pulse / k * (fx == "glow" ? 1.6 : 1)));
-            this->g->ShapeRing(focusXf, focusRad, focusHex, 3.5, WithA(acc, pulse));
+            for(int k = layers; k >= 1; k--) this->g->ShapeRingFn(focusXf, focusRad, focusHex, 3 + k * (fx == "glow" ? 5 : 3), fn, 0.12 * pulse / k * (fx == "glow" ? 1.6 : 1));
+            this->g->ShapeRingFn(focusXf, focusRad, focusHex, 3.5, fn, pulse);
         }
         if(!this->openFolder.empty()) {
             auto *f = this->d->library.FindFolder(this->openFolder);
@@ -1308,6 +1390,23 @@ namespace nexus {
             this->g->Text(buf, 16, rx, 18, mc);
             rx -= 16;
         }
+        // RetroAchievements: Punkte / Anzahl
+        if(s.B("ra.enabled") && s.S("ra.topbar") != "none" && this->online.ra.profile.ok) {
+            const auto mode = s.S("ra.topbar");
+            std::string t;
+            auto fmt = [](long long v) {
+                std::string n = std::to_string(v), o;
+                for(size_t i = 0; i < n.size(); i++) { if(i && (n.size() - i) % 3 == 0) o += '.'; o += n[i]; }
+                return o;
+            };
+            if(s.B("ra.topbarName") && !this->online.ra.profile.user.empty()) t = this->online.ra.profile.user;
+            if(mode == "points" || mode == "both") t += (t.empty() ? "" : " · ") + fmt(this->online.RaPoints()) + " Pkt.";
+            if(mode == "count" || mode == "both") t += (t.empty() ? "" : " · ") + fmt(this->online.RaTrophies()) + " Pokale";
+            rx -= this->g->TextW(t, 16);
+            this->g->Text(t, 16, rx, 18, tc);
+            if(s.B("ra.topbarIcon")) { rx -= isz + 6; this->g->Icon("trophy", rx + isz / 2, 28, isz, Col{ 255, 212, 71, 255 }, filled); }
+            rx -= 18;
+        }
         // Profil (nur in uLaunch)
         double userW = 0;
         if(this->host && s.B("topbar.showUser") && !this->currentUser.name.empty()) {
@@ -1337,7 +1436,7 @@ namespace nexus {
             const double w = widths[i];
             if(active) {
                 this->g->RoundRect(x, 12, w, 34, 17, Col{ 127, 127, 127, 56 });
-                this->g->Rect(x + 14, 43, w - 28, 2.5, this->Accent());
+                this->g->RectFn(x + 14, 43, w - 28, 2.5, this->AccentFn(x + 14, 43, w - 28, 2.5), 1.0);
             }
             double cx = x + 14;
             if(style != "text") {
@@ -1396,13 +1495,15 @@ namespace nexus {
             const bool top = di + 1 == this->dialogs.size();
             if(dl.shade) this->g->Rect(0, 0, ScreenW, ScreenH, Col{ 0, 0, 0, 110 });
             auto rows = dl.rows();
+            if(top && dl.onSelect) dl.onSelect(dl.sel);
+            const double lw = dl.preview ? std::min(dl.w * 0.46, 430.0) : dl.w;
             const double headH = 46 + (dl.sub.empty() ? 0 : 22 * (1 + static_cast<int>(this->g->TextW(dl.sub, 13) / (dl.w - 40))));
             double contentH = 0;
             for(const auto &rw: rows) contentH += rw.head ? 30 : 38;
             const double maxH = ScreenH - dl.y - this->Env().botH - 6;
             const double h = dl.h > 0 ? dl.h : std::min(maxH, headH + contentH + 14);
             this->g->RoundRect(dl.x, dl.y, dl.w, h, 14, panel);
-            if(ps == "outline") this->g->RoundRectOutline(dl.x, dl.y, dl.w, h, 14, 2, acc);
+            if(ps == "outline") { Xf ox; ox.cx = dl.x + dl.w / 2; ox.cy = dl.y + h / 2; ox.w = dl.w; ox.h = h; this->g->ShapeRingFn(ox, 14, false, 2, this->AccentFn(dl.x, dl.y, dl.w, h), 1.0); }
             this->g->Text(dl.title, 20, dl.x + 20, dl.y + 14, tc, 0, static_cast<int>(dl.w - 40), true);
             if(!dl.sub.empty()) {
                 // einfacher Zeilenumbruch
@@ -1435,26 +1536,40 @@ namespace nexus {
                     else {
                         const bool sel = i == dl.sel && top;
                         if(sel) {
-                            this->g->RoundRect(dl.x + 10, y, dl.w - 20, rh - 2, 8, light ? Col{ 0, 0, 0, 20 } : Col{ 255, 255, 255, 26 });
-                            this->g->Rect(dl.x + 10, y + 4, 3, rh - 10, acc);
+                            this->g->RoundRect(dl.x + 10, y, lw - 20, rh - 2, 8, light ? Col{ 0, 0, 0, 20 } : Col{ 255, 255, 255, 26 });
+                            this->g->RectFn(dl.x + 10, y + 4, 3, rh - 10, this->AccentFn(dl.x, y, lw, rh), 1.0, 4);
                         }
                         const std::string val = rw.value ? rw.value() : std::string();
-                        const int vw = val.empty() ? 0 : this->g->TextW(val, 13);
-                        this->g->Text(rw.label, 15, dl.x + 22, y + 9, tc, 0, static_cast<int>(dl.w - 60 - vw));
+                        const int vw = val.empty() ? 0 : std::min(this->g->TextW(val, 13), static_cast<int>(lw * 0.5));
+                        this->g->Text(rw.label, 15, dl.x + 22, y + 9, tc, 0, static_cast<int>(lw - 60 - vw));
                         if(!val.empty()) {
                             const bool adj = static_cast<bool>(rw.adjust);
-                            const double vx = dl.x + dl.w - 30 - (adj && sel ? 14 : 0);
-                            this->g->Text(val, 13, vx, y + 11, mc, 2);
+                            const double vx = dl.x + lw - 30 - (adj && sel ? 14 : 0);
+                            this->g->Text(val, 13, vx, y + 11, mc, 2, static_cast<int>(lw * 0.5));
                             if(adj && sel) {
                                 this->g->Text("<", 14, vx - vw - 16, y + 10, mc, 0, 0, true);
-                                this->g->Text(">", 14, dl.x + dl.w - 34, y + 10, mc, 0, 0, true);
+                                this->g->Text(">", 14, dl.x + lw - 34, y + 10, mc, 0, 0, true);
                             }
                         }
-                        else if(rw.activate) this->g->Text(">", 14, dl.x + dl.w - 34, y + 10, mc, 0, 0, true);
-                        if(top) this->rowHits.push_back(Hit{ dl.x + 10, y, dl.w - 20, rh, "", i });
+                        else if(rw.activate) this->g->Text(">", 14, dl.x + lw - 34, y + 10, mc, 0, 0, true);
+                        if(top) this->rowHits.push_back(Hit{ dl.x + 10, y, lw - 20, rh, "", i });
                     }
                 }
                 y += rh;
+            }
+            if(dl.preview && dl.sel >= 0 && dl.sel < static_cast<int>(rows.size())) {
+                // großes Vorschaubild der Auswahl
+                const double px = dl.x + lw + 4, py = areaY, pw = dl.w - lw - 24, ph = areaH - 4;
+                const auto &rw = rows[dl.sel];
+                if(rw.dark) for(int cy = 0; cy < 8; cy++) for(int cx = 0; cx < 8; cx++) this->g->Rect(px + cx * pw / 8, py + cy * ph / 8, pw / 8 + 1, ph / 8 + 1, (cx + cy) % 2 ? Col{ 40, 44, 52, 255 } : Col{ 28, 31, 38, 255 });
+                else this->g->RoundRect(px, py, pw, ph, 10, Col{ 0, 0, 0, 70 });
+                if(!rw.thumb.empty()) {
+                    const bool exists = rw.thumb.rfind("mem:", 0) == 0 || FileExists(rw.thumb);
+                    SDL_Texture *t = exists ? this->img->Get(rw.thumb, 0) : nullptr;
+                    if(t) this->g->Image(t, px + 8, py + 8, pw - 16, ph - 16, 1.0, false);
+                    else this->g->Text(exists && this->img->Failed(rw.thumb) ? "Bild nicht lesbar" : "Vorschau wird geladen …", 15, px + pw / 2, py + ph / 2 - 10, mc, 1);
+                }
+                else this->g->Text("Keine Vorschau", 15, px + pw / 2, py + ph / 2 - 10, mc, 1);
             }
             if(top) this->panelHit = Hit{ dl.x, dl.y, dl.w, h, "", -1 };
         }
@@ -1467,9 +1582,8 @@ namespace nexus {
         const double oy = anim == "slideUp" ? -ScreenH * t : 0;
         const double alpha = anim == "slideUp" ? 1.0 : 1.0 - t;
         const auto type = s.S("lock.bgType");
-        SDL_Texture *hero = nullptr;
-        if(type == "hero" && !this->lastHeroKey.empty()) hero = this->img->Get(this->lastHeroKey, 0);
-        if(hero) this->g->Image(hero, 0, oy, ScreenW, ScreenH, alpha, true);
+        // Bewusst ohne Spielbild: der Sperrbildschirm zeigt nur eigene Hintergründe
+        if(type == "image" && this->DrawBgImage(s.S("lock.image"), oy, alpha)) {}
         else if(type == "color") this->g->Rect(0, oy, ScreenW, ScreenH, WithA(ParseCol(s.S("lock.color")), alpha));
         else if(type == "home") {
             const int p = std::clamp(static_cast<int>(s.N("home.preset")), 0, 7);
@@ -1498,7 +1612,12 @@ namespace nexus {
         else if(pos == "bottomLeft") { y = ScreenH - 140 - size; }
         else if(pos == "bottomRight") { x = ScreenW - 70; y = ScreenH - 140 - size; align = 2; }
         (void)cw;
-        this->g->Text(clk, size, x, y + oy, col, align);
+        if(s.B("lock.clockAccent")) {
+            const int tw = this->g->TextW(clk, size);
+            const double lx = align == 1 ? x - tw / 2.0 : align == 2 ? x - tw : x;
+            this->g->TextFn(clk, size, x, y + oy, this->AccentFn(lx, y + oy, tw, size * 1.2), alpha, align);
+        }
+        else this->g->Text(clk, size, x, y + oy, col, align);
         if(s.B("lock.showDate")) this->g->Text(date, 24, x, y + oy + size * 1.15, col, align);
         if(s.B("lock.showBattery")) {
             const int pct = plat::BatteryPercent();
@@ -1507,6 +1626,13 @@ namespace nexus {
                 this->g->Text(ps, 16, ScreenW - 40, 26 + oy, col, 2);
                 this->g->Battery(ScreenW - 80 - this->g->TextW(ps, 16), 28 + oy, 20, pct, plat::BatteryCharging(), col);
             }
+        }
+        if(s.B("ra.enabled") && s.B("ra.lockRecent") && !this->online.ra.recent.empty()) {
+            const auto &rr = this->online.ra.recent.front();
+            const std::string t = "Zuletzt freigeschaltet: „" + rr.title + "“ in " + rr.game;
+            const int tw = std::min(1000, this->g->TextW(t, 16));
+            this->g->Icon("trophy", ScreenW / 2 - tw / 2 - 16, ScreenH - 102 + oy, 18, WithA(Col{ 255, 212, 71, 255 }, alpha), true);
+            this->g->Text(t, 16, ScreenW / 2 + 6, ScreenH - 112 + oy, WithA(col, 0.9), 1, 1000);
         }
         if(s.B("lock.hint")) {
             const double pa = 0.55 + 0.45 * std::sin(this->time * 2.8);
@@ -1661,6 +1787,7 @@ namespace nexus {
         const auto bg = s.S("profile.bgType");
         SDL_Texture *hero = (bg == "hero" && !this->lastHeroKey.empty()) ? this->img->Get(this->lastHeroKey, 0) : nullptr;
         if(hero) this->g->Image(hero, 0, 0, ScreenW, ScreenH, 1.0, true);
+        else if(bg == "image" && this->DrawBgImage(s.S("profile.image"), 0, 1.0)) {}
         else if(bg == "color") this->g->Rect(0, 0, ScreenW, ScreenH, ParseCol(s.S("profile.color")));
         else if(bg == "gradient") {
             const int p = std::clamp(static_cast<int>(s.N("profile.preset")), 0, 7);
@@ -1669,7 +1796,7 @@ namespace nexus {
         }
         else this->DrawBackground();
         this->g->Rect(0, 0, ScreenW, ScreenH, Col{ 0, 0, 0, static_cast<uint8_t>(s.N("profile.dim") * 255) });
-        const Col tc = this->TextCol(), acc = this->Accent();
+        const Col tc = this->TextCol();
         const auto pos = s.S("profile.position");
         if(s.B("profile.title")) this->g->Text("Wer spielt?", 34, ScreenW / 2, pos == "top" ? 70 : pos == "bottom" ? 120 : 110, tc, 1, 0, true);
         if(s.B("profile.showClock")) {
@@ -1713,7 +1840,7 @@ namespace nexus {
             if(list) {
                 xf.w = iw; xf.h = ih;
                 this->g->Shape(xf, 14, false, WithA(Col{ 127, 127, 127, 255 }, (foc ? 0.32 : 0.16) * a));
-                if(foc) this->g->ShapeRing(xf, 14, false, 3.5, WithA(acc, a));
+                if(foc) this->g->ShapeRingFn(xf, 14, false, 3.5, this->AccentFn(cx - iw / 2, cy - ih / 2, iw, ih), a);
                 Xf ic; ic.cx = cx - iw / 2 * sc + 14 * sc + 28 * sc; ic.cy = cy; ic.w = ic.h = 56; ic.sc = sc;
                 if(tex) this->g->ShapeTex(tex, ic, 28, false, a, true, 50, 50);
                 else { this->g->Shape(ic, 28, false, WithA(Col{ 127, 127, 127, 255 }, 0.35 * a)); this->g->Text("+", 26, ic.cx, ic.cy - 18, WithA(tc, a), 1); }
@@ -1722,10 +1849,11 @@ namespace nexus {
             else {
                 xf.w = iw; xf.h = ih;
                 const double rad = cards ? 16 : iw / 2;
-                if(foc) for(int k = 3; k >= 1; k--) this->g->ShapeRing(xf, rad, false, 4 + k * 5, WithA(acc, 0.13 / k * a));
+                const ColFn afn = this->AccentFn(cx - iw / 2 - 20, cy - ih / 2 - 20, iw + 40, ih + 40);
+                if(foc) for(int k = 3; k >= 1; k--) this->g->ShapeRingFn(xf, rad, false, 4 + k * 5, afn, 0.13 / k * a);
                 if(tex) this->g->ShapeTex(tex, xf, rad, false, a, true, 50, 50);
                 else { this->g->Shape(xf, rad, false, WithA(Col{ 127, 127, 127, 255 }, 0.3 * a)); this->g->Text("+", static_cast<int>(sz * 0.4), cx, cy - sz * 0.27, WithA(tc, a), 1); }
-                if(foc) this->g->ShapeRing(xf, rad, false, 4, WithA(acc, a));
+                if(foc) this->g->ShapeRingFn(xf, rad, false, 4, afn, a);
                 if(nameH > 0) this->g->Text(u.name, 18, cx, cy + ih / 2 * sc + 10, WithA(tc, (foc ? 1.0 : 0.75) * a), 1, static_cast<int>(iw + gap - 6));
             }
             const double hw = iw * sc, hh = ih * sc + nameH;

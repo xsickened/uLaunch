@@ -1,6 +1,7 @@
 #include <ul/menu/ui/ui_IMenuLayout.hpp>
 #include <ul/menu/ui/ui_Common.hpp>
 #include <ul/menu/ui/ui_MenuApplication.hpp>
+#include <ul/menu/ui/ui_NexusMenuLayout.hpp>
 #include <ul/net/net_Service.hpp>
 
 extern ul::menu::ui::GlobalSettings g_GlobalSettings;
@@ -34,6 +35,10 @@ namespace ul::menu::ui {
             // Load lockscreen, if enabled
             bool lockscreen_enabled;
             UL_ASSERT_TRUE(g_GlobalSettings.config.GetEntry(cfg::ConfigEntryId::LockscreenEnabled, lockscreen_enabled));
+            // NEXUS HOME: eigener Sperrbildschirm, eigene Einstellung (uLaunchs Option ist standardmäßig aus)
+            if(IsNexusActive()) {
+                lockscreen_enabled = NexusLockOnWake();
+            }
             if(lockscreen_enabled) {
                 g_MenuApplication->LoadMenu(MenuType::Lockscreen, true);
             }

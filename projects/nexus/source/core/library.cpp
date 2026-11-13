@@ -23,6 +23,18 @@ namespace nexus {
         return s;
     }
 
+    json SanitizeArt(const json &a) {
+        json o = json::object();
+        if(!a.is_object()) return o;
+        for(const char *k: { "grid", "hero", "logo" }) {
+            const json *v = JGet(a, k);
+            if(!v || !v->is_string()) continue;
+            const std::string p = v->get<std::string>();
+            if(p.size() < 300 && p.rfind("sdmc:/", 0) == 0 && p.find("..") == std::string::npos) o[k] = SanitizeUtf8(p);
+        }
+        return o;
+    }
+
     Library Library::FromJson(const json &j, std::vector<std::string> *report) {
         Library lib;
         const json *apps = JGet(j, "apps");
@@ -39,6 +51,8 @@ namespace nexus {
                 if(ra >= 1 && ra < 1e7 && ra == static_cast<double>(static_cast<long long>(ra))) a["raGameId"] = static_cast<long long>(ra);
                 const json *t = JGet(it.value(), "tile");
                 a["tile"] = t ? SanitizeTile(*t) : json::object();
+                const json *art = JGet(it.value(), "art");
+                if(art) { json sa = SanitizeArt(*art); if(!sa.empty()) a["art"] = sa; }
                 lib.apps[it.key()] = a;
             }
         }
@@ -60,6 +74,8 @@ namespace nexus {
                 fo.sort = JStr(f, "sort", "manual") == "name" ? "name" : "manual";
                 const json *t = JGet(f, "tile");
                 fo.tile = t ? SanitizeTile(*t) : json::object();
+                const json *fart = JGet(f, "art");
+                fo.art = fart ? SanitizeArt(*fart) : json::object();
                 const json *items = JGet(f, "items");
                 if(items && items->is_array()) {
                     for(const auto &i: *items) {
@@ -99,7 +115,7 @@ namespace nexus {
         j["apps"] = this->apps;
         json fs = json::array();
         for(const auto &f: this->folders) {
-            fs.push_back({ { "id", f.id }, { "name", f.name }, { "accent", f.accent }, { "items", f.items }, { "tile", f.tile }, { "sort", f.sort } });
+            fs.push_back({ { "id", f.id }, { "name", f.name }, { "accent", f.accent }, { "items", f.items }, { "tile", f.tile }, { "sort", f.sort }, { "art", f.art } });
         }
         j["folders"] = fs;
         j["rootOrder"] = this->rootOrder;
@@ -238,6 +254,44 @@ namespace nexus {
     double Library::Launched(const std::string &tid) const {
         const json *a = JGet(this->apps, tid);
         return a ? JNum(*a, "launched", 0) : 0;
+    }
+
+    std::string Library::ArtOverride(const std::string &id, const std::string &kind) {
+        const json *art = nullptr;
+        if(IsFolderId(id)) { if(auto *f = this->FindFolder(id)) art = &f->art; }
+        else { const json *a = JGet(this->apps, id); if(a) art = JGet(*a, "art"); }
+        if(!art || !art->is_object()) return "";
+        return JStr(*art, kind.c_str(), "");
+    }
+
+    void Library::SetArtOverride(const std::string &id, const std::string &kind, const std::string &path) {
+        if(kind != "grid" && kind != "hero" && kind != "logo") return;
+        json *art = nullptr;
+        if(IsFolderId(id)) { if(auto *f = this->FindFolder(id)) art = &f->art; }
+        else if(IsTid(id)) {
+            auto &a = this->apps[id];
+            if(!a.is_object()) a = json::object();
+            if(!a.contains("art") || !a["art"].is_object()) a["art"] = json::object();
+            art = &a["art"];
+        }
+        if(!art) return;
+        if(!art->is_object()) *art = json::object();
+        if(path.empty()) art->erase(kind);
+        else (*art)[kind] = path;
+        *art = SanitizeArt(*art);
+    }
+
+    long long Library::RaGameId(const std::string &tid) const {
+        const json *a = JGet(this->apps, tid);
+        return a ? static_cast<long long>(JNum(*a, "raGameId", 0)) : 0;
+    }
+
+    void Library::SetRaGameId(const std::string &tid, long long gid) {
+        if(!IsTid(tid)) return;
+        auto &a = this->apps[tid];
+        if(!a.is_object()) a = json::object();
+        if(gid <= 0) a.erase("raGameId");
+        else a["raGameId"] = gid;
     }
 
 }

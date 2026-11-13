@@ -225,6 +225,74 @@ namespace nexus {
         SDL_RenderGeometry(this->r, nullptr, this->vbuf.data(), static_cast<int>(this->vbuf.size()), this->ibuf.data(), static_cast<int>(this->ibuf.size()));
     }
 
+    void Gfx::ShapeRingFn(const Xf &xf, double rad, bool hex, double t, const ColFn &fn, double alpha) {
+        std::vector<SDL_FPoint> outer, inner;
+        this->ShapePoints(xf, rad, hex, t, outer, nullptr, false, 0, 0, 50, 50);
+        this->ShapePoints(xf, rad, hex, 0, inner, nullptr, false, 0, 0, 50, 50);
+        if(outer.size() != inner.size() || outer.size() < 3) return;
+        this->vbuf.clear();
+        this->ibuf.clear();
+        const int n = static_cast<int>(outer.size());
+        for(int i = 0; i < n; i++) {
+            const SDL_Color co = SC(WithA(fn(outer[i].x, outer[i].y), alpha));
+            const SDL_Color ci = SC(WithA(fn(inner[i].x, inner[i].y), alpha));
+            this->vbuf.push_back(SDL_Vertex{ outer[i], co, { 0, 0 } });
+            this->vbuf.push_back(SDL_Vertex{ inner[i], ci, { 0, 0 } });
+        }
+        for(int i = 0; i < n; i++) {
+            const int a = 2 * i, b = 2 * i + 1, c2 = 2 * ((i + 1) % n), d = 2 * ((i + 1) % n) + 1;
+            this->ibuf.insert(this->ibuf.end(), { a, b, c2, b, d, c2 });
+        }
+        SDL_RenderGeometry(this->r, nullptr, this->vbuf.data(), static_cast<int>(this->vbuf.size()), this->ibuf.data(), static_cast<int>(this->ibuf.size()));
+    }
+
+    void Gfx::RectFn(double x, double y, double w, double h, const ColFn &fn, double alpha, int segs) {
+        if(w <= 0 || h <= 0) return;
+        segs = std::clamp(segs, 1, 64);
+        this->vbuf.clear();
+        this->ibuf.clear();
+        const bool horiz = w >= h;
+        for(int i = 0; i <= segs; i++) {
+            const double f = static_cast<double>(i) / segs;
+            const float ax = static_cast<float>(horiz ? x + w * f : x), ay = static_cast<float>(horiz ? y : y + h * f);
+            const float bx = static_cast<float>(horiz ? x + w * f : x + w), by = static_cast<float>(horiz ? y + h : y + h * f);
+            this->vbuf.push_back(SDL_Vertex{ { ax, ay }, SC(WithA(fn(ax, ay), alpha)), { 0, 0 } });
+            this->vbuf.push_back(SDL_Vertex{ { bx, by }, SC(WithA(fn(bx, by), alpha)), { 0, 0 } });
+        }
+        for(int i = 0; i < segs; i++) {
+            const int a = 2 * i;
+            this->ibuf.insert(this->ibuf.end(), { a, a + 1, a + 2, a + 1, a + 3, a + 2 });
+        }
+        SDL_RenderGeometry(this->r, nullptr, this->vbuf.data(), static_cast<int>(this->vbuf.size()), this->ibuf.data(), static_cast<int>(this->ibuf.size()));
+    }
+
+    int Gfx::TextFn(const std::string &s, int size, double x, double y, const ColFn &fn, double alpha, int align, bool bold) {
+        int w, h;
+        // weiße Schrift, eingefärbt über die Eckpunkt-Farben
+        SDL_Texture *t = this->TextTex(s, size, Col{ 255, 255, 255, 255 }, 0, Col{}, w, h, bold);
+        if(!t || w <= 0) return 0;
+        double dx = x;
+        if(align == 1) dx = x - w / 2.0;
+        else if(align == 2) dx = x - w;
+        SDL_SetTextureAlphaMod(t, 255);
+        const int segs = 8;
+        this->vbuf.clear();
+        this->ibuf.clear();
+        for(int i = 0; i <= segs; i++) {
+            const double f = static_cast<double>(i) / segs;
+            const float px = static_cast<float>(dx + w * f);
+            const float top = static_cast<float>(y), bot = static_cast<float>(y + h);
+            this->vbuf.push_back(SDL_Vertex{ { px, top }, SC(WithA(fn(px, top), alpha)), { static_cast<float>(f), 0 } });
+            this->vbuf.push_back(SDL_Vertex{ { px, bot }, SC(WithA(fn(px, bot), alpha)), { static_cast<float>(f), 1 } });
+        }
+        for(int i = 0; i < segs; i++) {
+            const int a = 2 * i;
+            this->ibuf.insert(this->ibuf.end(), { a, a + 1, a + 2, a + 1, a + 3, a + 2 });
+        }
+        SDL_RenderGeometry(this->r, t, this->vbuf.data(), static_cast<int>(this->vbuf.size()), this->ibuf.data(), static_cast<int>(this->ibuf.size()));
+        return w;
+    }
+
     void Gfx::RoundRect(double x, double y, double w, double h, double rad, Col c) {
         Xf xf;
         xf.cx = x + w / 2; xf.cy = y + h / 2; xf.w = w; xf.h = h;
@@ -381,6 +449,11 @@ namespace nexus {
                 const double a = i * kPi / 4;
                 this->Line(cx + std::cos(a) * 0.55 * h, cy + std::sin(a) * 0.55 * h, cx + std::cos(a) * 0.9 * h, cy + std::sin(a) * 0.9 * h, t * 1.3, c);
             }
+        }
+        else if(name == "trophy") {
+            poly({ { -0.5, -0.78 }, { 0.5, -0.78 }, { 0.44, -0.12 }, { 0.14, 0.18 }, { 0.14, 0.5 }, { 0.42, 0.5 }, { 0.42, 0.78 }, { -0.42, 0.78 }, { -0.42, 0.5 }, { -0.14, 0.5 }, { -0.14, 0.18 }, { -0.44, -0.12 } }, true);
+            poly({ { -0.48, -0.6 }, { -0.85, -0.6 }, { -0.78, -0.22 }, { -0.42, -0.1 } }, false);
+            poly({ { 0.48, -0.6 }, { 0.85, -0.6 }, { 0.78, -0.22 }, { 0.42, -0.1 } }, false);
         }
         else if(name == "lock") { poly({ { -0.6, -0.1 }, { 0.6, -0.1 }, { 0.6, 0.8 }, { -0.6, 0.8 } }, true); poly({ { -0.35, -0.1 }, { -0.35, -0.5 }, { 0, -0.8 }, { 0.35, -0.5 }, { 0.35, -0.1 } }, false); }
         else ring(0, 0, 0.6);
