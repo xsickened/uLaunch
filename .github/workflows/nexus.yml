@@ -5,6 +5,9 @@ on:
     branches: [ nexus-home ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   nexus:
     runs-on: ubuntu-latest
@@ -46,6 +49,22 @@ jobs:
           sdmc:/nexus/art/<TITEL-ID>/logo.png   schwebendes Logo (Ebene 3, transparent)
         Danach in NEXUS: X > Eigene Bilder > Bilder neu einlesen.
         EOF
+
+    - name: ZIP für die SD-Karte
+      run: cd out && zip -r ../NEXUS-HOME-SD.zip switch nexus
+
+    - name: Release „nexus-latest“ aktualisieren
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: nexus-latest
+        name: NEXUS HOME – aktueller Test-Build
+        prerelease: true
+        files: NEXUS-HOME-SD.zip
+        body: |
+          Test-App NEXUS HOME (Commit ${{ github.sha }}).
+          Installation: ZIP entpacken und die Ordner `switch` und `nexus` in die oberste Ebene der SD-Karte kopieren.
+          Start: ein Spiel mit gedrückter R-Taste starten -> Homebrew-Menü -> NEXUS HOME.
+          Abgesicherter Modus: L beim Start gedrückt halten. Schreibt nur nach sdmc:/nexus/.
 
     - uses: actions/upload-artifact@v4
       with:
