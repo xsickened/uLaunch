@@ -27,6 +27,9 @@ namespace nexus {
             void Invalidate(const std::string &key);
             void Clear();
             size_t UsedBytes() const { return this->used; }
+            size_t Budget() const { return this->budget; }
+            // Budget anpassen (z. B. bei knappem Speicher) und sofort freigeben, was darüber liegt
+            void SetBudget(size_t b) { this->budget = b; this->Evict(); }
 
             // Dauerhafter Cache auf der SD-Karte: große Bilder und PNGs werden einmal verkleinert
             // gespeichert (JPG, mit Transparenz PNG) und danach direkt daraus geladen.

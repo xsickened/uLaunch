@@ -274,11 +274,12 @@ namespace ul::menu::ui {
                 u64 total = 0, used = 0;
                 size_t budget = 24u * 1024 * 1024;
                 if(R_SUCCEEDED(svcGetInfo(&total, InfoType_TotalMemorySize, CUR_PROCESS_HANDLE, 0)) && R_SUCCEEDED(svcGetInfo(&used, InfoType_UsedMemorySize, CUR_PROCESS_HANDLE, 0)) && total > used) {
-                    budget = std::clamp<size_t>(static_cast<size_t>((total - used) / 3), 24u * 1024 * 1024, 128u * 1024 * 1024);
+                    // uMenu hat nur einen festen Speicher (296 MB) für alles: höchstens ein Sechstel des freien, max. 56 MB
+                    budget = std::clamp<size_t>(static_cast<size_t>((total - used) / 6), 24u * 1024 * 1024, 56u * 1024 * 1024);
                 }
                 nexus::Log("Speicher: gesamt %lu MB, belegt %lu MB, Bildbudget %lu MB", static_cast<unsigned long>(total >> 20), static_cast<unsigned long>(used >> 20), static_cast<unsigned long>(budget >> 20));
                 // uMenu zeichnet in 1920x1080: Bilder bis 1920 px, damit Vollbild-Hintergründe scharf bleiben
-                this->images.Start(budget, budget >= 48u * 1024 * 1024 ? 1920 : 1280);
+                this->images.Start(budget, budget >= 40u * 1024 * 1024 ? 1600 : 1280);
                 this->host.images = &this->images;
                 if(!this->apps.Start(&this->images)) nexus::Log("Titelliste nicht verfügbar: %s", this->apps.Error().c_str());
                 std::string source;
@@ -347,7 +348,20 @@ namespace ul::menu::ui {
                         nexus::BootGuardOk(UmenuBootPath);
                         this->bootOk = true;
                     }
-                    if(++this->colorTick >= 30) { this->colorTick = 0; UpdateFadeColor(this->data.settings); }
+                    if(++this->colorTick >= 30) {
+                        this->colorTick = 0;
+                        UpdateFadeColor(this->data.settings);
+                        // Speicherwächter: wird es knapp, Bilder freigeben statt abzustürzen
+                        u64 total = 0, used = 0;
+                        if(R_SUCCEEDED(svcGetInfo(&total, InfoType_TotalMemorySize, CUR_PROCESS_HANDLE, 0)) && R_SUCCEEDED(svcGetInfo(&used, InfoType_UsedMemorySize, CUR_PROCESS_HANDLE, 0)) && total > used) {
+                            const u64 freeMem = total - used;
+                            if(freeMem < 40ull * 1024 * 1024 && this->images.Budget() > 12u * 1024 * 1024) {
+                                const size_t nb = std::max<size_t>(12u * 1024 * 1024, this->images.Budget() * 2 / 3);
+                                nexus::Log("Speicher knapp (%lu MB frei): Bildbudget %lu -> %lu MB", static_cast<unsigned long>(freeMem >> 20), static_cast<unsigned long>(this->images.Budget() >> 20), static_cast<unsigned long>(nb >> 20));
+                                this->images.SetBudget(nb);
+                            }
+                        }
+                    }
                     this->busy = false;
                 }
                 SDL_RenderSetScale(r, sx, sy);

@@ -139,13 +139,18 @@ namespace nexus {
                     cacheIt = s && !base.empty() && (slowFmt || s->w > this->maxEdge || s->h > this->maxEdge);
                 }
             }
+            if(s && s->format && s->format->format != SDL_PIXELFORMAT_RGBA32) {
+                SDL_Surface *c = SDL_ConvertSurfaceFormat(s, SDL_PIXELFORMAT_RGBA32, 0);
+                SDL_FreeSurface(s);
+                s = c;
+            }
             // Sehr große Bilder verkleinern (Speicherbudget). Hochwertig gefiltert (stb_image_resize2,
             // sRGB-korrekt), statt SDL_BlitScaled (nächster Nachbar, wirkt krisselig/unscharf).
             if(s && (s->w > this->maxEdge || s->h > this->maxEdge)) {
                 const double k = static_cast<double>(this->maxEdge) / std::max(s->w, s->h);
                 const int nw = std::max(1, static_cast<int>(std::lround(s->w * k))), nh = std::max(1, static_cast<int>(std::lround(s->h * k)));
-                SDL_Surface *conv = SDL_ConvertSurfaceFormat(s, SDL_PIXELFORMAT_RGBA32, 0);
-                SDL_Surface *small = conv ? SDL_CreateRGBSurfaceWithFormat(0, nw, nh, 32, SDL_PIXELFORMAT_RGBA32) : nullptr;
+                SDL_Surface *conv = s;   // bereits RGBA32
+                SDL_Surface *small = SDL_CreateRGBSurfaceWithFormat(0, nw, nh, 32, SDL_PIXELFORMAT_RGBA32);
                 bool ok = false;
                 if(conv && small) {
                     SDL_LockSurface(conv);
@@ -164,13 +169,12 @@ namespace nexus {
                     s = small;
                     small = nullptr;
                 }
-                if(conv) SDL_FreeSurface(conv);
                 if(small) SDL_FreeSurface(small);
             }
             uint32_t dom = 0xFFFFFFFFu;
             if(s) {
                 // prägende Farbe bestimmen (Farbton-Histogramm, gewichtet nach Sättigung und Helligkeit)
-                SDL_Surface *c32 = SDL_ConvertSurfaceFormat(s, SDL_PIXELFORMAT_RGBA32, 0);
+                SDL_Surface *c32 = s;   // RGBA32, keine Kopie
                 if(c32) {
                     double w[12] = {}, sr[12] = {}, sg[12] = {}, sb[12] = {};
                     SDL_LockSurface(c32);
@@ -191,7 +195,6 @@ namespace nexus {
                         }
                     }
                     SDL_UnlockSurface(c32);
-                    SDL_FreeSurface(c32);
                     int best = 0;
                     double total = 0;
                     for(int i = 0; i < 12; i++) { total += w[i]; if(w[i] > w[best]) best = i; }
@@ -208,7 +211,7 @@ namespace nexus {
             }
             if(s && cacheIt) {
                 // verkleinertes Bild speichern (tmp -> umbenennen, damit nie halbe Dateien geladen werden)
-                SDL_Surface *rgba = SDL_ConvertSurfaceFormat(s, SDL_PIXELFORMAT_RGBA32, 0);
+                SDL_Surface *rgba = s;
                 if(rgba) {
                     bool alpha = false;
                     SDL_LockSurface(rgba);
@@ -217,16 +220,19 @@ namespace nexus {
                         const uint8_t *row = px + y * rgba->pitch;
                         for(int x = 0; x < rgba->w; x++) if(row[x * 4 + 3] < 250) { alpha = true; break; }
                     }
-                    std::vector<uint8_t> packed(static_cast<size_t>(rgba->w) * rgba->h * 4);
-                    for(int y = 0; y < rgba->h; y++) std::copy(px + y * rgba->pitch, px + y * rgba->pitch + rgba->w * 4, packed.begin() + static_cast<size_t>(y) * rgba->w * 4);
-                    SDL_UnlockSurface(rgba);
+                    std::vector<uint8_t> packed;
+                    if(rgba->pitch != rgba->w * 4) {
+                        packed.resize(static_cast<size_t>(rgba->w) * rgba->h * 4);
+                        for(int y = 0; y < rgba->h; y++) std::copy(px + y * rgba->pitch, px + y * rgba->pitch + rgba->w * 4, packed.begin() + static_cast<size_t>(y) * rgba->w * 4);
+                    }
+                    const uint8_t *data = packed.empty() ? px : packed.data();
                     const std::string out = base + (alpha ? ".png" : ".jpg"), tmp = out + ".tmp";
                     mkdir(this->diskDir.c_str(), 0777);
-                    const int ok = alpha ? stbi_write_png(tmp.c_str(), rgba->w, rgba->h, 4, packed.data(), rgba->w * 4)
-                                         : stbi_write_jpg(tmp.c_str(), rgba->w, rgba->h, 4, packed.data(), 90);
+                    const int ok = alpha ? stbi_write_png(tmp.c_str(), rgba->w, rgba->h, 4, data, rgba->w * 4)
+                                         : stbi_write_jpg(tmp.c_str(), rgba->w, rgba->h, 4, data, 90);
+                    SDL_UnlockSurface(rgba);
                     if(ok) std::rename(tmp.c_str(), out.c_str());
                     else std::remove(tmp.c_str());
-                    SDL_FreeSurface(rgba);
                 }
             }
             std::lock_guard<std::mutex> lk(this->mtx);
