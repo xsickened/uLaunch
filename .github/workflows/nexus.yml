@@ -16,32 +16,43 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Abhängigkeiten
+    - name: Submodule und Werkzeuge
       run: |
-        git config --global --add safe.directory "$GITHUB_WORKSPACE"
-        git submodule update --init --depth 1 libs/json
+        git config --global --add safe.directory '*'
+        git submodule update --init --depth 1 libs/json libs/zip libs/Plutonium libs/libnx-ext libs/stb arc
+        sudo -n apt-get update
+        sudo -n apt-get install -y python3 python3-pip python-is-python3 zip g++
+        python -m pip install requests --break-system-packages || python -m pip install requests
+        sudo -n dkp-pacman --noconfirm -U "https://wii.leseratte10.de/devkitPro/other-stuff/dkp-toolchain-vars-1.0.2-1-any.pkg.tar.xz"
+        chmod 777 -R "$GITHUB_WORKSPACE"
 
     - name: Kern-Tests (Schema, Bibliothek, Speichern, Anordnungen)
       run: |
-        command -v g++ || (sudo -n apt-get update && sudo -n apt-get install -y g++) || (apt-get update && apt-get install -y g++)
         g++ -std=gnu++20 -O1 -Ilibs/json/single_include -Iprojects/nexus/source/core nexus/tests/core_test.cpp projects/nexus/source/core/*.cpp -o /tmp/core_test
         /tmp/core_test
 
-    - name: NRO bauen
+    - name: libnx master (wie uLaunch)
+      run: |
+        git clone --depth 1 https://github.com/switchbrew/libnx /tmp/libnx
+        make -C /tmp/libnx -j$(nproc)
+        cp -r /tmp/libnx/nx/external/bsd/include /tmp/libnx/nx
+
+    - name: Test-App (NRO) bauen
       run: |
         if ! make -C projects/nexus -j$(nproc); then
-          echo "::warning::Build mit stabiler libnx fehlgeschlagen – versuche libnx master (wie uLaunch)"
-          git clone --depth 1 https://github.com/switchbrew/libnx /tmp/libnx
-          make -C /tmp/libnx -j$(nproc)
-          cp -r /tmp/libnx/nx/external/bsd/include /tmp/libnx/nx
           make -C projects/nexus clean
           make -C projects/nexus -j$(nproc) LIBNX=/tmp/libnx/nx
         fi
 
+    - name: NEXUS-uMenu bauen (ersetzt die uLaunch-Oberfläche)
+      run: |
+        make -j$(nproc) LIBNX=/tmp/libnx/nx/ umenu
+
     - name: SD-Paket zusammenstellen
       run: |
-        mkdir -p out/switch/nexus out/nexus/art
+        mkdir -p out/switch/nexus out/nexus/art out/ulaunch/bin/uMenu
         cp projects/nexus/nexus.nro out/switch/nexus/nexus.nro
+        cp SdOut/ulaunch/bin/uMenu/main SdOut/ulaunch/bin/uMenu/main.npdm SdOut/ulaunch/bin/uMenu/romfs.bin out/ulaunch/bin/uMenu/
         cat > out/nexus/art/LIESMICH.txt << 'EOF'
         Eigene Bilder pro Titel (Titel-ID siehe Kontextmenü X in NEXUS):
           sdmc:/nexus/art/<TITEL-ID>/grid.jpg   Cover (nur Kachel)
@@ -49,22 +60,32 @@ jobs:
           sdmc:/nexus/art/<TITEL-ID>/logo.png   schwebendes Logo (Ebene 3, transparent)
         Danach in NEXUS: X > Eigene Bilder > Bilder neu einlesen.
         EOF
+        cat > out/NEXUS-LIESMICH.txt << 'EOF'
+        NEXUS HOME - Installation (setzt installiertes uLaunch 1.2.3 voraus)
+        1. Sicherung: Ordner sdmc:/ulaunch/bin/uMenu am PC kopieren (z. B. nach uMenu-original).
+        2. Ordner "ulaunch", "nexus" und "switch" aus diesem Paket in die oberste Ebene der SD-Karte kopieren.
+        3. Switch neu starten.
+        Notausgang:
+          - L gedrückt halten, während das Menü erscheint -> klassisches uLaunch (nur diese Sitzung)
+          - Im NEXUS-Menü (+) -> "Klassisches uLaunch-Menü"; zurück mit ZL halten + ZR
+          - Nach zwei Fehlstarts schaltet NEXUS automatisch auf klassisch um
+          - Komplett zurück: gesicherten uMenu-Ordner zurückkopieren oder uLaunch-v1.2.3.zip erneut aufspielen
+        EOF
 
     - name: ZIP für die SD-Karte
-      run: cd out && zip -r ../NEXUS-HOME-SD.zip switch nexus
+      run: cd out && zip -r ../NEXUS-HOME-SD.zip .
 
     - name: Release „nexus-latest“ aktualisieren
       uses: softprops/action-gh-release@v2
       with:
         tag_name: nexus-latest
-        name: NEXUS HOME – aktueller Test-Build
+        name: NEXUS HOME – aktueller Build
         prerelease: true
         files: NEXUS-HOME-SD.zip
         body: |
-          Test-App NEXUS HOME (Commit ${{ github.sha }}).
-          Installation: ZIP entpacken und die Ordner `switch` und `nexus` in die oberste Ebene der SD-Karte kopieren.
-          Start: ein Spiel mit gedrückter R-Taste starten -> Homebrew-Menü -> NEXUS HOME.
-          Abgesicherter Modus: L beim Start gedrückt halten. Schreibt nur nach sdmc:/nexus/.
+          NEXUS HOME (Commit ${{ github.sha }}) – ersetzt die Oberfläche von uLaunch 1.2.3 (Atmosphère 1.10.2 / FW 21.2.0).
+          Installation und Notausgang: siehe NEXUS-LIESMICH.txt im ZIP.
+          Enthält zusätzlich die Test-App switch/nexus/nexus.nro.
 
     - uses: actions/upload-artifact@v4
       with:
