@@ -10,6 +10,9 @@
 #define STB_IMAGE_WRITE_STATIC
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+#define STB_IMAGE_RESIZE_STATIC
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
+#include "stb_image_resize2.h"
 
 namespace nexus {
 
@@ -136,14 +139,27 @@ namespace nexus {
                     cacheIt = s && !base.empty() && (slowFmt || s->w > this->maxEdge || s->h > this->maxEdge);
                 }
             }
-            // Sehr große Bilder verkleinern (Speicherbudget)
+            // Sehr große Bilder verkleinern (Speicherbudget). Hochwertig gefiltert (stb_image_resize2,
+            // sRGB-korrekt), statt SDL_BlitScaled (nächster Nachbar, wirkt krisselig/unscharf).
             if(s && (s->w > this->maxEdge || s->h > this->maxEdge)) {
                 const double k = static_cast<double>(this->maxEdge) / std::max(s->w, s->h);
+                const int nw = std::max(1, static_cast<int>(std::lround(s->w * k))), nh = std::max(1, static_cast<int>(std::lround(s->h * k)));
                 SDL_Surface *conv = SDL_ConvertSurfaceFormat(s, SDL_PIXELFORMAT_RGBA32, 0);
-                SDL_Surface *small = conv ? SDL_CreateRGBSurfaceWithFormat(0, std::max(1, static_cast<int>(s->w * k)), std::max(1, static_cast<int>(s->h * k)), 32, SDL_PIXELFORMAT_RGBA32) : nullptr;
+                SDL_Surface *small = conv ? SDL_CreateRGBSurfaceWithFormat(0, nw, nh, 32, SDL_PIXELFORMAT_RGBA32) : nullptr;
+                bool ok = false;
                 if(conv && small) {
-                    SDL_SetSurfaceBlendMode(conv, SDL_BLENDMODE_NONE);
-                    SDL_BlitScaled(conv, nullptr, small, nullptr);
+                    SDL_LockSurface(conv);
+                    SDL_LockSurface(small);
+                    ok = stbir_resize_uint8_srgb(static_cast<const unsigned char *>(conv->pixels), conv->w, conv->h, conv->pitch,
+                                                 static_cast<unsigned char *>(small->pixels), nw, nh, small->pitch, STBIR_RGBA) != nullptr;
+                    SDL_UnlockSurface(small);
+                    SDL_UnlockSurface(conv);
+                    if(!ok) {
+                        SDL_SetSurfaceBlendMode(conv, SDL_BLENDMODE_NONE);
+                        ok = SDL_BlitScaled(conv, nullptr, small, nullptr) == 0;
+                    }
+                }
+                if(ok) {
                     SDL_FreeSurface(s);
                     s = small;
                     small = nullptr;

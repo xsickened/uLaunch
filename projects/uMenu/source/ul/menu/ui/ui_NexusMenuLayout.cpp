@@ -274,10 +274,11 @@ namespace ul::menu::ui {
                 u64 total = 0, used = 0;
                 size_t budget = 24u * 1024 * 1024;
                 if(R_SUCCEEDED(svcGetInfo(&total, InfoType_TotalMemorySize, CUR_PROCESS_HANDLE, 0)) && R_SUCCEEDED(svcGetInfo(&used, InfoType_UsedMemorySize, CUR_PROCESS_HANDLE, 0)) && total > used) {
-                    budget = std::clamp<size_t>(static_cast<size_t>((total - used) / 4), 24u * 1024 * 1024, 96u * 1024 * 1024);
+                    budget = std::clamp<size_t>(static_cast<size_t>((total - used) / 3), 24u * 1024 * 1024, 128u * 1024 * 1024);
                 }
                 nexus::Log("Speicher: gesamt %lu MB, belegt %lu MB, Bildbudget %lu MB", static_cast<unsigned long>(total >> 20), static_cast<unsigned long>(used >> 20), static_cast<unsigned long>(budget >> 20));
-                this->images.Start(budget, budget >= 64u * 1024 * 1024 ? 1280 : 960);
+                // uMenu zeichnet in 1920x1080: Bilder bis 1920 px, damit Vollbild-Hintergründe scharf bleiben
+                this->images.Start(budget, budget >= 48u * 1024 * 1024 ? 1920 : 1280);
                 this->host.images = &this->images;
                 if(!this->apps.Start(&this->images)) nexus::Log("Titelliste nicht verfügbar: %s", this->apps.Error().c_str());
                 std::string source;
