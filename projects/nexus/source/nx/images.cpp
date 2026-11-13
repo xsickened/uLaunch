@@ -21,7 +21,7 @@ namespace nexus {
         this->budget = budgetBytes;
         this->maxEdge = edge;
         this->running = true;
-        this->worker = std::thread([this]() { this->Work(); });
+        this->worker.Start([this]() { this->Work(); }, 2 * 1024 * 1024);
     }
 
     void ImageCache::Stop() {
@@ -30,7 +30,7 @@ namespace nexus {
             this->running = false;
         }
         this->cv.notify_all();
-        if(this->worker.joinable()) this->worker.join();
+        this->worker.Join();
         for(auto &[k, s]: this->decoded) SDL_FreeSurface(s);
         this->decoded.clear();
         this->Clear();
@@ -101,8 +101,16 @@ namespace nexus {
             bool isMem = false;
             {
                 std::unique_lock<std::mutex> lk(this->mtx);
-                this->cv.wait(lk, [this]() { return !this->running || !this->queue.empty(); });
+                this->cv.wait(lk, [this]() { return !this->running || !this->queue.empty() || this->gcWanted; });
                 if(!this->running) return;
+                if(this->gcWanted) {
+                    // Cache aufräumen im selben Thread, der die Cache-Dateien schreibt: nie gleichzeitig
+                    std::vector<std::string> use = std::move(this->gcInUse);
+                    this->gcWanted = false;
+                    lk.unlock();
+                    this->RunGarbage(use);
+                    continue;
+                }
                 // höchste Priorität zuerst (kleinste Zahl), bei Gleichstand die neueste Anforderung
                 auto best = this->queue.begin();
                 for(auto it = this->queue.begin(); it != this->queue.end(); ++it) {
@@ -230,7 +238,6 @@ namespace nexus {
                     }
                     const uint8_t *data = packed.empty() ? px : packed.data();
                     const std::string out = base + (alpha ? ".png" : ".jpg"), tmp = out + ".tmp";
-                    mkdir(this->diskDir.c_str(), 0777);
                     const int ok = alpha ? stbi_write_png(tmp.c_str(), rgba->w, rgba->h, 4, data, rgba->w * 4)
                                          : stbi_write_jpg(tmp.c_str(), rgba->w, rgba->h, 4, data, 90);
                     SDL_UnlockSurface(rgba);
@@ -295,7 +302,8 @@ namespace nexus {
     }
 
     std::string ImageCache::DiskBase(const std::string &src) const {
-        if(this->diskDir.empty() || src.rfind("sdmc:/", 0) != 0 || src.rfind(this->diskDir, 0) == 0) return "";
+        const std::string dd = this->DiskDir();
+        if(dd.empty() || src.rfind("sdmc:/", 0) != 0 || src.rfind(dd, 0) == 0) return "";
         struct stat st;
         if(stat(src.c_str(), &st) != 0) return "";
         // Name aus Pfad, Änderungszeit, Größe und Zielgröße: ändert sich die Quelle, passt der Cache nicht mehr
@@ -307,7 +315,15 @@ namespace nexus {
         mix(std::to_string(this->maxEdge));
         char buf[24];
         std::snprintf(buf, sizeof(buf), "%016llx", static_cast<unsigned long long>(h));
-        return this->diskDir + "/" + buf;
+        return dd + "/" + buf;
+    }
+
+    void ImageCache::SetDiskCache(const std::string &dir) {
+        {
+            std::lock_guard<std::mutex> lk(this->dirMtx);
+            this->diskDir = dir;
+        }
+        if(!dir.empty()) mkdir(dir.c_str(), 0777);
     }
 
     void ImageCache::DropDisk(const std::string &src) {
@@ -318,17 +334,23 @@ namespace nexus {
     }
 
     void ImageCache::CollectGarbage(std::vector<std::string> inUse) {
-        if(this->diskDir.empty()) return;
-        const std::string dir = this->diskDir;
-        const int edge = this->maxEdge;
-        Log("Bild-Cache: Aufräumen startet (%d Bilder in Benutzung)", static_cast<int>(inUse.size()));
-        std::thread([dir, edge, inUse]() {
-            ImageCache probe;
-            probe.diskDir = dir;
-            probe.maxEdge = edge;
+        if(this->DiskDir().empty()) return;
+        Log("Bild-Cache: Aufräumen angefordert (%d Bilder in Benutzung)", static_cast<int>(inUse.size()));
+        {
+            std::lock_guard<std::mutex> lk(this->mtx);
+            this->gcInUse = std::move(inUse);
+            this->gcWanted = true;
+        }
+        this->cv.notify_one();
+    }
+
+    void ImageCache::RunGarbage(const std::vector<std::string> &inUse) {
+        const std::string dir = this->DiskDir();
+        if(dir.empty()) return;
+        {
             std::set<std::string> keep;
             for(const auto &p: inUse) {
-                const auto b = probe.DiskBase(p);
+                const auto b = this->DiskBase(p);
                 if(!b.empty()) keep.insert(b.substr(b.find_last_of('/') + 1));
             }
             DIR *d = opendir(dir.c_str());
@@ -337,12 +359,13 @@ namespace nexus {
             while(dirent *e = readdir(d)) {
                 const std::string n = e->d_name;
                 if(n.size() < 16 || n[0] == '.') continue;
+                if(n.size() > 4 && n.compare(n.size() - 4, 4, ".tmp") == 0) { drop.push_back(dir + "/" + n); continue; }
                 if(!keep.count(n.substr(0, 16))) drop.push_back(dir + "/" + n);
             }
             closedir(d);
             for(const auto &f: drop) std::remove(f.c_str());
             Log("Bild-Cache: Aufräumen fertig, %d Dateien entfernt", static_cast<int>(drop.size()));
-        }).detach();
+        }
     }
 
     bool ImageCache::ColorOf(const std::string &key, uint8_t &r, uint8_t &g, uint8_t &b) {

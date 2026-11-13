@@ -1,4 +1,5 @@
 #pragma once
+#include "thread.hpp"
 #include "images.hpp"
 #include <atomic>
 #include <cstdint>
@@ -31,7 +32,7 @@ namespace nexus {
         private:
             std::vector<AppInfo> apps;
             std::mutex mtx;
-            std::thread worker;
+            Thread worker;
             std::atomic<int> version{ 0 };
             std::atomic<bool> busy{ false }, stop{ false };
             ImageCache *images = nullptr;

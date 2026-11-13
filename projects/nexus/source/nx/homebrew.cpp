@@ -6,10 +6,10 @@
 namespace nexus {
 
     void Homebrew::Start(ImageCache *img) {
-        if(this->worker.joinable()) return;
+        if(this->worker.Joinable()) return;
         this->images = img;
         this->busy = true;
-        this->worker = std::thread([this]() {
+        this->worker.Start([this]() {
             std::vector<HbInfo> out;
             for(const auto &path: FindNros("sdmc:/switch", 300)) {
                 if(this->stop) break;
@@ -36,12 +36,12 @@ namespace nexus {
             Log("Homebrew: %d Einträge", static_cast<int>(this->list.size()));
             this->version++;
             this->busy = false;
-        });
+        }, 512 * 1024);
     }
 
     void Homebrew::Stop() {
         this->stop = true;
-        if(this->worker.joinable()) this->worker.join();
+        this->worker.Join();
     }
 
     std::vector<HbInfo> Homebrew::Snapshot(int &v) {

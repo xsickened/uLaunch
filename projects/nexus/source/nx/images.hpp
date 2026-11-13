@@ -1,4 +1,5 @@
 #pragma once
+#include "thread.hpp"
 #include <SDL2/SDL.h>
 #include <condition_variable>
 #include <deque>
@@ -35,7 +36,7 @@ namespace nexus {
 
             // Dauerhafter Cache auf der SD-Karte: große Bilder und PNGs werden einmal verkleinert
             // gespeichert (JPG, mit Transparenz PNG) und danach direkt daraus geladen.
-            void SetDiskCache(const std::string &dir) { this->diskDir = dir; }
+            void SetDiskCache(const std::string &dir);
             // Cache-Dateien eines Quellbilds (Grundname ohne Endung; leer, wenn die Quelle fehlt)
             std::string DiskBase(const std::string &src) const;
             void DropDisk(const std::string &src);
@@ -54,13 +55,19 @@ namespace nexus {
             std::vector<std::string> failed;
             std::mutex mtx;
             std::condition_variable cv;
-            std::thread worker;
+            Thread worker;
             bool running = false;
             size_t budget = 64 * 1024 * 1024, used = 0;
             int maxEdge = 1280;
             std::string diskDir;
+            mutable std::mutex dirMtx;   // diskDir wird im Hauptthread gesetzt und im Lade-Thread gelesen
+            std::string DiskDir() const { std::lock_guard<std::mutex> lk(this->dirMtx); return this->diskDir; }
             std::unordered_map<std::string, uint32_t> colors;   // 0xRRGGBB, 0xFFFFFFFF = grau
             uint64_t tick = 0;
+            std::vector<std::string> gcInUse;   // Aufräumauftrag für den Lade-Thread
+            bool gcWanted = false;
+
+            void RunGarbage(const std::vector<std::string> &inUse);
 
             void Work();
             void Evict();

@@ -59,13 +59,13 @@ namespace nexus {
         }
         this->version++;
         this->busy = true;
-        this->worker = std::thread([this]() { this->Work(); });
+        this->worker.Start([this]() { this->Work(); }, 512 * 1024);
         return true;
     }
 
     void Apps::Stop() {
         this->stop = true;
-        if(this->worker.joinable()) this->worker.join();
+        this->worker.Join();
         if(this->nsOk) nsExit();
     }
 

@@ -7,7 +7,7 @@ namespace nexus {
 
     void AnimBg::Clear() {
         this->cancel = true;
-        if(this->worker.joinable()) this->worker.join();
+        this->worker.Join();
         for(auto *s: this->surfaces) if(s) SDL_FreeSurface(s);
         for(auto *t: this->textures) if(t) SDL_DestroyTexture(t);
         this->surfaces.clear();
@@ -25,7 +25,7 @@ namespace nexus {
         this->path = p;
 #if defined(SDL_IMAGE_VERSION_ATLEAST)
 #if SDL_IMAGE_VERSION_ATLEAST(2, 6, 0)
-        this->worker = std::thread([this, p, budget]() {
+        this->worker.Start([this, p, budget]() {
             IMG_Animation *a = IMG_LoadAnimation(p.c_str());
             if(!a || a->count <= 0) { if(a) IMG_FreeAnimation(a); this->failed = true; Log("GIF nicht lesbar: %s", p.c_str()); return; }
             const double k = std::min(1.0, 640.0 / std::max(1, a->w));
@@ -49,7 +49,7 @@ namespace nexus {
             }
             IMG_FreeAnimation(a);
             this->done = true;
-        });
+        }, 1024 * 1024);
         return;
 #endif
 #endif

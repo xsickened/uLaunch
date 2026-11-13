@@ -1,4 +1,5 @@
 #pragma once
+#include "thread.hpp"
 #include "../core/nro.hpp"
 #include "images.hpp"
 #include <atomic>
@@ -24,7 +25,7 @@ namespace nexus {
         private:
             std::vector<HbInfo> list;
             std::mutex mtx;
-            std::thread worker;
+            Thread worker;
             std::atomic<int> version{ 0 };
             std::atomic<bool> busy{ false }, stop{ false };
             ImageCache *images = nullptr;

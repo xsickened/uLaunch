@@ -1,4 +1,5 @@
 #pragma once
+#include "thread.hpp"
 #include <SDL2/SDL.h>
 #include <atomic>
 #include <mutex>
@@ -22,7 +23,7 @@ namespace nexus {
 
         private:
             std::string path;
-            std::thread worker;
+            Thread worker;
             std::mutex mtx;
             std::vector<SDL_Surface *> surfaces;
             std::vector<SDL_Texture *> textures;
