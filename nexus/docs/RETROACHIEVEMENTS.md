@@ -30,7 +30,10 @@
 
 - **Kacheln:** Balken, Prozent oder Pokal mit Anzahl. Gemeisterte Spiele werden golden dargestellt.
 - **Fokus:** „🏆 12 / 40 Erfolge · 30 %“ mit Balken unter dem schwebenden Logo. Liegt in Ebene 3 und bewegt sich mit dem Logo, nie mit der Kachel.
-- **Kopfzeile:** Benutzername und Punkte.
+- **Kopfzeile:** wahlweise Pokalpunkte, Anzahl der Pokale, beides oder aus (`ra.topbar`).
+  - Punkteart wählbar: Hardcore, Softcore oder RetroPoints (`ra.pointsType`).
+  - Pokal-Symbol und Benutzername einzeln abschaltbar.
+  - Profilfelder (z. B. `TotalPoints`, `TotalSoftcorePoints`, `TotalTruePoints`) vor Phase 5 gegen die Doku prüfen.
 - **Sperrbildschirm:** zuletzt freigeschalteter Erfolg.
 - **Kontextmenü:** vollständige Erfolgsliste des Spiels.
 

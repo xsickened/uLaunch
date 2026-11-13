@@ -343,7 +343,10 @@ const SPEC = [
   {g:"ra", p:"ra.showTileBadge", l:"Fortschritt auf Kacheln", t:"bool", d:true},
   {g:"ra", p:"ra.badgeStyle", l:"Kachel-Anzeige", t:"enum", o:["bar","percent","trophy"], ol:["Balken","Prozent","Pokal + Anzahl"], d:"bar"},
   {g:"ra", p:"ra.showUnderLogo", l:"Fortschritt unter dem Logo", t:"bool", d:true},
-  {g:"ra", p:"ra.showProfile", l:"Profil & Punkte in der Kopfzeile", t:"bool", d:true},
+  {g:"ra", p:"ra.topbar", l:"In der Kopfzeile", t:"enum", o:["points","count","both","none"], ol:["Pokalpunkte","Anzahl Pokale","Punkte + Anzahl","Aus"], d:"both"},
+  {g:"ra", p:"ra.pointsType", l:"Punkteart", t:"enum", o:["hardcore","softcore","retro"], ol:["Hardcore-Punkte","Softcore-Punkte","RetroPoints (gewichtet)"], d:"hardcore", w:()=>["points","both"].includes(S.data.settings.ra.topbar)},
+  {g:"ra", p:"ra.topbarIcon", l:"Pokal-Symbol in der Kopfzeile", t:"bool", d:true, w:()=>S.data.settings.ra.topbar!=="none"},
+  {g:"ra", p:"ra.topbarName", l:"Benutzername in der Kopfzeile", t:"bool", d:false, w:()=>S.data.settings.ra.topbar!=="none"},
   {g:"ra", p:"ra.lockRecent", l:"Letzter Erfolg auf dem Sperrbildschirm", t:"bool", d:true},
   {g:"ra", p:"ra.mapping", l:"Spiele zuordnen", t:"enum", o:["auto","manual"], ol:["Automatisch (Titelvergleich)","Nur manuell (Spiel-ID)"], d:"auto"},
   {g:"ra", p:"ra.refreshMin", l:"Aktualisieren alle", t:"num", min:5, max:120, step:5, f:v=>v+" min", d:15},
@@ -405,6 +408,7 @@ function sanitizeData(d){
   return {data:{schema:2, settings, apps, folders, rootOrder, themes: themes.length?themes:builtinThemes()}, report};
 }
 function migrate(d){
+  if(d && d.settings && d.settings.ra && d.settings.ra.showProfile===false && d.settings.ra.topbar===undefined) d.settings.ra.topbar = "none";
   if(d && d.schema===1){ // v1 → v2: grid.rows/gap → layout.height/gap
     d.settings = d.settings||{}; d.settings.layout = d.settings.layout||{};
     if(d.settings.grid){ d.settings.layout.height = d.settings.grid.rows; d.settings.layout.gap = d.settings.grid.gap; delete d.settings.grid; }
@@ -525,7 +529,8 @@ const RetroAchievements = {
     return {gameId:e.raGameId, total, got, pct:Math.round(got/total*100), mastered:got===total,
       achievements:Array.from({length:total},(_,i)=>({title:RA_NAMES[i%RA_NAMES.length]+(i>=RA_NAMES.length?" "+(1+Math.floor(i/RA_NAMES.length)):""), points:[5,10,25,50][i%4], unlocked:i<got}))};
   },
-  profile(){ const u = ST().ra.user; return u ? {user:u, points:1234} : null; },
+  // Testdaten; die Switch-App liest das Profil über API_GetUserProfile / API_GetUserSummary
+  profile(){ return {user:ST().ra.user||"", points:{hardcore:12345, softcore:2310, retro:31870}, trophies:87}; },
   recent(){ const e = S.data.apps.find(a=>a.raGameId); const p = e && this.progress(e); return p && p.got ? {game:e.name, title:p.achievements[p.got-1].title} : null; }
 };
 function raBadge(e){
@@ -731,8 +736,12 @@ function renderTopbar(){
 }
 function renderStatus(){
   const s = ST().topbar, now = new Date(), ic = iconColor(); let h = "";
-  const rap = ST().ra.enabled && ST().ra.showProfile ? RetroAchievements.profile() : null;
-  if(rap) h += `<span title="RetroAchievements">🏆 ${esc(rap.user)} · ${rap.points}</span>`;
+  const ra = ST().ra;
+  if(ra.enabled && ra.topbar!=="none"){ const p = RetroAchievements.profile(); const parts = [];
+    if(ra.topbarName && p.user) parts.push(esc(p.user));
+    if(ra.topbar==="points"||ra.topbar==="both") parts.push(p.points[ra.pointsType].toLocaleString("de-DE")+" Pkt.");
+    if(ra.topbar==="count"||ra.topbar==="both") parts.push(p.trophies.toLocaleString("de-DE")+" Pokale");
+    h += `<span title="RetroAchievements" style="display:flex;align-items:center;gap:6px">${ra.topbarIcon?'<span style="font-size:calc(17px * var(--iconScale))">🏆</span>':""}${parts.join(" · ")}</span>`; }
   if(s.showDate) h += `<span>${now.toLocaleDateString("de-DE",{weekday:"short",day:"2-digit",month:"2-digit"})}</span>`;
   if(s.showClock) h += `<span>${fmtTime(now, s.clock24)}</span>`;
   if(s.showWifi) h += icon("wifi", ic);

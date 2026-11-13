@@ -1825,8 +1825,54 @@
   },
   {
    "group": "ra",
-   "path": "ra.showProfile",
-   "label": "Profil & Punkte in der Kopfzeile",
+   "path": "ra.topbar",
+   "label": "In der Kopfzeile",
+   "type": "enum",
+   "options": [
+    "points",
+    "count",
+    "both",
+    "none"
+   ],
+   "optionLabels": [
+    "Pokalpunkte",
+    "Anzahl Pokale",
+    "Punkte + Anzahl",
+    "Aus"
+   ],
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "both",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "ra",
+   "path": "ra.pointsType",
+   "label": "Punkteart",
+   "type": "enum",
+   "options": [
+    "hardcore",
+    "softcore",
+    "retro"
+   ],
+   "optionLabels": [
+    "Hardcore-Punkte",
+    "Softcore-Punkte",
+    "RetroPoints (gewichtet)"
+   ],
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "hardcore",
+   "conditional": true,
+   "hidden": false
+  },
+  {
+   "group": "ra",
+   "path": "ra.topbarIcon",
+   "label": "Pokal-Symbol in der Kopfzeile",
    "type": "bool",
    "options": null,
    "optionLabels": null,
@@ -1834,7 +1880,21 @@
    "max": null,
    "step": null,
    "default": true,
-   "conditional": false,
+   "conditional": true,
+   "hidden": false
+  },
+  {
+   "group": "ra",
+   "path": "ra.topbarName",
+   "label": "Benutzername in der Kopfzeile",
+   "type": "bool",
+   "options": null,
+   "optionLabels": null,
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": false,
+   "conditional": true,
    "hidden": false
   },
   {
