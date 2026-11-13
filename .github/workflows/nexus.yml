@@ -50,7 +50,11 @@ jobs:
       run: |
         # arc fragt die GitHub-API ab; ohne Anmeldung greift dort das Abfragelimit -> Token mitgeben
         sed -i 's|requests.get(gh_api_url)|requests.get(gh_api_url, headers=({"Authorization": "Bearer " + os.environ["GITHUB_TOKEN"]} if os.environ.get("GITHUB_TOKEN") else {}))|' arc/arc_db_gen.py
-        make -j$(nproc) LIBNX=/tmp/libnx/nx/ umenu
+        # uLaunch 1.2.3 erwartet die libnx-Struktur der stabilen Version (NacpStruct::lang); libnx master nur als Rückfall
+        if ! make -j$(nproc) umenu; then
+          make -C projects/uMenu clean; make -C libs/uCommon clean || true
+          make -j$(nproc) LIBNX=/tmp/libnx/nx/ umenu
+        fi
 
     - name: SD-Paket zusammenstellen
       run: |
