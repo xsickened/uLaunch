@@ -208,7 +208,7 @@ Alle Bilder sind generierte Testgrafiken; SteamGridDB ist mit Offline-Testdaten 
 const U = 24, SW = 1280, SH = 720, HINT_H = 36;
 const SIZES = {S:5, M:7, L:9, XL:11};
 const RATIOS = {"1:1":1, "2:3":2/3, "3:2":1.5, "4:3":4/3, "16:9":16/9};
-const SECTION_NAMES = {start:"Startseite", all:"Alle Spiele", fav:"Favoriten", folders:"Ordner", recent:"Zuletzt gespielt", homebrew:"Homebrew", settings:"Einstellungen"};
+const SECTION_NAMES = {start:"Startseite", all:"Alle Spiele", fav:"Favoriten", folders:"Ordner", recent:"Zuletzt gespielt", homebrew:"Homebrew", almost:"Fast gemeistert", settings:"Einstellungen"};
 const PALETTE = ["#3ee0c8","#ff5d73","#ffb347","#7c8cff","#5fd35f","#e86cff","#ffffff","#000000","#222831","#00a2ff","#ffd447"];
 const FONTS = ["Segoe UI","Georgia","Verdana","Trebuchet MS","Courier New","Impact"];
 const $ = s => document.querySelector(s);
@@ -248,6 +248,7 @@ const SPEC = [
   {g:"look", p:"theme.textEffect", l:"Schrift-Effekt", t:"enum", o:["solid","accent"], ol:["Einfarbig","Wie Akzent (Verlauf/RGB)"], d:"solid"},
   {g:"look", p:"theme.mutedOpacity", l:"Deckkraft Nebentext", t:"num", min:.3, max:1, step:.05, f:pct, d:.62},
   {g:"look", p:"theme.accent", l:"Akzentfarbe", t:"color", d:"#3ee0c8"},
+  {g:"look", p:"theme.accentSource", l:"Akzent-Quelle", t:"enum", o:["custom","game"], ol:["Eigene Farbe(n)","Aus dem Spielbild (passt sich an)"], d:"custom"},
   {g:"look", p:"theme.accentMode", l:"Akzent-Art", t:"enum", o:["solid","gradient","gradient3","rainbow"], ol:["Einfarbig","Verlauf (2 Farben)","Verlauf (3 Farben)","RGB-Regenbogen"], d:"solid"},
   {g:"look", p:"theme.accent2", l:"Akzent: 2. Farbe", t:"color", d:"#e86cff", w:()=>["gradient","gradient3"].includes(ST().theme.accentMode)},
   {g:"look", p:"theme.accent3", l:"Akzent: 3. Farbe", t:"color", d:"#ffd447", w:()=>ST().theme.accentMode==="gradient3"},
@@ -355,6 +356,7 @@ const SPEC = [
   {g:"logo", p:"logo.anim", l:"Einblendung", t:"enum", o:["slide","fade","zoom","none"], ol:["Gleiten","Blenden","Zoom","Keine"], d:"slide"},
   {g:"logo", p:"logo.float", l:"Schwebebewegung", t:"bool", d:true},
   {g:"logo", p:"logo.shadow", l:"Schatten", t:"bool", d:true},
+  {g:"logo", p:"logo.showPlaytime", l:"Spielzeit unter dem Logo", t:"bool", d:true},
   {g:"logo", p:"logo.safeArea", l:"Sicherheitsbereich (verdeckt keine Kacheln)", t:"bool", d:true, w:()=>ST().logo.placement!=="free"},
   // Kachel-Aura (Partikel)
   {g:"aura", p:"aura.enabled", l:"Aura anzeigen", t:"bool", d:false},
@@ -388,15 +390,27 @@ const SPEC = [
   {g:"bgfx", p:"bgfx.sizeScale", l:"Größe", t:"num", min:.3, max:3, step:.1, f:pct, d:1, w:()=>ST().bgfx.type!=="none"},
   {g:"bgfx", p:"bgfx.opacity", l:"Deckkraft", t:"num", min:.1, max:1, step:.05, f:pct, d:.7, w:()=>ST().bgfx.type!=="none"},
   {g:"bgfx", p:"bgfx.layer", l:"Ebene", t:"enum", o:["back","front"], ol:["Hinter den Kacheln","Vor allem (außer Menüs)"], d:"back", w:()=>ST().bgfx.type!=="none"},
+  // Sounds & Musik
+  {g:"sound", p:"sound.enabled", l:"Menü-Sounds", t:"bool", d:true},
+  {g:"sound", p:"sound.style", l:"Klang", t:"enum", o:["soft","click","retro","glass"], ol:["Weich","Klick","Retro (8-Bit)","Glas"], d:"soft", w:()=>ST().sound.enabled},
+  {g:"sound", p:"sound.volume", l:"Lautstärke Sounds", t:"num", min:.05, max:1, step:.05, f:pct, d:.5, w:()=>ST().sound.enabled},
+  {g:"sound", p:"sound.bgm", l:"Musik (sdmc:/nexus/sounds/bgm.mp3 / lock.mp3)", t:"bool", d:true},
+  {g:"sound", p:"sound.bgmVolume", l:"Lautstärke Musik", t:"num", min:.05, max:1, step:.05, f:pct, d:.4, w:()=>ST().sound.bgm},
+  // Automatischer Themewechsel
+  {g:"auto", p:"auto.enabled", l:"Tag- und Nacht-Theme automatisch", t:"bool", d:false},
+  {g:"auto", p:"auto.dayStart", l:"Tag beginnt um", t:"num", min:0, max:23, step:1, f:v=>v+":00 Uhr", d:7, w:()=>ST().auto.enabled},
+  {g:"auto", p:"auto.nightStart", l:"Nacht beginnt um", t:"num", min:0, max:23, step:1, f:v=>v+":00 Uhr", d:20, w:()=>ST().auto.enabled},
+  {g:"auto", p:"auto.dayTheme", l:"", t:"str", d:"", hidden:true},
+  {g:"auto", p:"auto.nightTheme", l:"", t:"str", d:"", hidden:true},
   // Bildschirmschoner
   {g:"idle", p:"idle.mode", l:"Bei Inaktivität", t:"enum", o:["off","dim","slideshow","clock","lock"], ol:["Nichts","Abdunkeln","Diashow der Spielbilder","Große Uhr","Sperrbildschirm"], d:"off"},
   {g:"idle", p:"idle.minutes", l:"Nach", t:"num", min:1, max:30, step:1, f:v=>v+" min", d:5, w:()=>ST().idle.mode!=="off"},
   {g:"idle", p:"idle.slideSeconds", l:"Bildwechsel alle", t:"num", min:3, max:30, step:1, f:v=>v+" s", d:8, w:()=>ST().idle.mode==="slideshow"},
   // Home-Hintergrund
-  {g:"home", p:"home.bgType", l:"Art", t:"enum", o:["gradient","animated","color","image"], ol:["Farbverlauf","Animierter Verlauf","Volltonfarbe","Eigenes Bild"], d:"gradient"},
+  {g:"home", p:"home.bgType", l:"Art", t:"enum", o:["gradient","animated","color","image","gif"], ol:["Farbverlauf","Animierter Verlauf","Volltonfarbe","Eigenes Bild","Animiertes Bild (GIF, braucht mehr Akku)"], d:"gradient"},
   {g:"home", p:"home.preset", l:"Verlauf", t:"num", min:0, max:7, step:1, f:v=>"Vorlage "+(v+1), d:0, w:()=>["gradient","animated"].includes(S.data.settings.home.bgType)},
   {g:"home", p:"home.color", l:"Farbe", t:"color", d:"#0b0f17", w:()=>S.data.settings.home.bgType==="color"},
-  {g:"home", p:"home.image", l:"Bild", t:"image", d:null, w:()=>S.data.settings.home.bgType==="image"},
+  {g:"home", p:"home.image", l:"Bild", t:"image", d:null, w:()=>["image","gif"].includes(S.data.settings.home.bgType)},
   {g:"home", p:"home.dim", l:"Abdunkelung", t:"num", min:0, max:.9, step:.05, f:pct, d:0},
   // Sperrbildschirm
   {g:"lock", p:"lock.enabled", l:"Beim Start anzeigen", t:"bool", d:true},
@@ -420,6 +434,7 @@ const SPEC = [
   {g:"lock", p:"lock.hint", l:"Hinweis „Zum Entsperren …“", t:"bool", d:true},
   {g:"lock", p:"lock.anim", l:"Entsperr-Animation", t:"enum", o:["slideUp","fade","zoom"], ol:["Nach oben schieben","Ausblenden","Zoom"], d:"slideUp"},
   // Profilauswahl
+  {g:"profile", p:"profile.perUser", l:"Eigene Darstellung & Favoriten pro Benutzer", t:"bool", d:false},
   {g:"profile", p:"profile.style", l:"Darstellung", t:"enum", o:["circles","cards","list"], ol:["Kreise","Karten","Liste"], d:"circles"},
   {g:"profile", p:"profile.iconSize", l:"Bildgröße", t:"num", min:80, max:220, step:10, f:px, d:140},
   {g:"profile", p:"profile.position", l:"Position", t:"enum", o:["center","bottom","top"], ol:["Mitte","Unten","Oben"], d:"center"},
@@ -457,22 +472,29 @@ const SPEC = [
   {g:"ra", p:"ra.pointsType", l:"Punkteart", t:"enum", o:["hardcore","softcore","retro"], ol:["Hardcore-Punkte","Softcore-Punkte","RetroPoints (gewichtet)"], d:"hardcore", w:()=>["points","both"].includes(S.data.settings.ra.topbar)},
   {g:"ra", p:"ra.topbarIcon", l:"Pokal-Symbol in der Kopfzeile", t:"bool", d:true, w:()=>S.data.settings.ra.topbar!=="none"},
   {g:"ra", p:"ra.topbarName", l:"Benutzername in der Kopfzeile", t:"bool", d:false, w:()=>S.data.settings.ra.topbar!=="none"},
+  {g:"ra", p:"ra.notify", l:"Neue Erfolge melden", t:"bool", d:true},
+  {g:"ra", p:"ra.almostPct", l:"„Fast gemeistert“ ab", t:"num", min:50, max:95, step:5, f:v=>v+" %", d:80},
   {g:"ra", p:"ra.lockRecent", l:"Letzter Erfolg auf dem Sperrbildschirm", t:"bool", d:true},
   {g:"ra", p:"ra.mapping", l:"Spiele zuordnen", t:"enum", o:["auto","manual"], ol:["Automatisch (Titelvergleich)","Nur manuell (Spiel-ID)"], d:"auto"},
   {g:"ra", p:"ra.refreshMin", l:"Aktualisieren alle", t:"num", min:5, max:120, step:5, f:v=>v+" min", d:15},
   {g:"ra", p:"ra.user", l:"", t:"str", d:"", hidden:true},
   {g:"ra", p:"ra.key", l:"", t:"str", d:"", hidden:true},
   {g:"lib", p:"library.sort", l:"„Alle Spiele“ sortieren", t:"enum", o:["name","recent"], ol:["Nach Name","Zuletzt gespielt"], d:"name"},
+  {g:"lib", p:"library.hbScan", l:"Homebrew aus sdmc:/switch anzeigen", t:"bool", d:true},
+  {g:"lib", p:"library.hbMode", l:"Homebrew starten als", t:"enum", o:["applet","app"], ol:["Applet (wenig Speicher)","Anwendung (voller Speicher, wie mit R)"], d:"applet"},
+  {g:"lib", p:"library.stickers", l:"Aufkleber auf Kacheln", t:"bool", d:true},
+  {g:"lib", p:"library.stickerPos", l:"Position der Aufkleber", t:"enum", o:["bottomLeft","bottomRight","topRight"], ol:["Unten links","Unten rechts","Oben rechts"], d:"bottomLeft", w:()=>ST().library.stickers},
+  {g:"lib", p:"library.quickLaunch", l:"ZL + A startet das zuletzt gespielte Spiel", t:"bool", d:true},
   {g:"lib", p:"library.startSection", l:"Beim Öffnen zeigen", t:"enum", o:["start","last","all","fav","recent","folders"], ol:["Startseite","Zuletzt geöffneten Bereich","Alle Spiele","Favoriten","Zuletzt gespielt","Ordner"], d:"start"},
   {g:"lib", p:"theme.name", l:"", t:"str", d:"Nexus Dunkel", hidden:true},
   {g:"lib", p:"sgdb.gridDims", l:"SteamGridDB: Cover-Format", t:"enum", o:["600x900","920x430","460x215","512x512","any"], ol:["Hochformat 600×900","Querformat 920×430","Quer klein 460×215","Quadrat 512×512","Alle Formate"], d:"600x900"},
   {g:"lib", p:"sgdb.autoMissing", l:"Fehlende Bilder automatisch laden", t:"bool", d:false},
   {g:"lib", p:"sgdbKey", l:"", t:"str", d:"", hidden:true},
 ];
-const GROUPS = [["look","Darstellung & Schrift"],["ui","Textboxen & Schrift"],["aura","Kachel-Aura (Partikel)"],["bgfx","Hintergrund-Effekte"],["idle","Bildschirmschoner"],["top","Kopfzeile, Symbole & Hinweise"],["layout","Anordnung der Kacheln"],["anim","Animationen"],["tiles","Kacheln (Standard)"],["hero","Fokus: Hintergrund"],["logo","Fokus: Logo"],["home","Home-Hintergrund"],["lock","Sperrbildschirm"],["profile","Profilauswahl"],["sections","Bereiche (Reihenfolge & Sichtbarkeit)"],["lib","Bibliothek & SteamGridDB"],["ra","RetroAchievements"],["sys","Themes, Backup & System"]];
+const GROUPS = [["look","Darstellung & Schrift"],["ui","Textboxen & Schrift"],["aura","Kachel-Aura (Partikel)"],["bgfx","Hintergrund-Effekte"],["idle","Bildschirmschoner"],["sound","Sounds & Musik"],["auto","Automatischer Themewechsel"],["top","Kopfzeile, Symbole & Hinweise"],["layout","Anordnung der Kacheln"],["anim","Animationen"],["tiles","Kacheln (Standard)"],["hero","Fokus: Hintergrund"],["logo","Fokus: Logo"],["home","Home-Hintergrund"],["lock","Sperrbildschirm"],["profile","Profilauswahl"],["sections","Bereiche (Reihenfolge & Sichtbarkeit)"],["lib","Bibliothek & SteamGridDB"],["ra","RetroAchievements"],["sys","Themes, Backup & System"]];
 const TILE_SPEC = SPEC.filter(s=>s.g==="tiles").map(s=>({...s, p:s.p.replace("tileDefaults.","")}));
 const SECTION_IDS = Object.keys(SECTION_NAMES);
-function defaultSettings(){ const s = {}; SPEC.forEach(x=>setP(s, x.p, clone(x.d))); s.sections = SECTION_IDS.map(id=>({id, visible:true})); return s; }
+function defaultSettings(){ const s = {}; SPEC.forEach(x=>setP(s, x.p, clone(x.d))); s.sections = SECTION_IDS.map(id=>({id, visible:id!=="almost"})); return s; }
 
 /* ---------------- Validierung (Stabilität) ---------------- */
 function validValue(spec, v){
@@ -493,7 +515,7 @@ function sanitizeSettings(s, report){
     setP(out, spec.p, v); }
   const seen = new Set(); out.sections = [];
   (Array.isArray(s.sections)?s.sections:[]).forEach(x=>{ if(x && SECTION_IDS.includes(x.id) && !seen.has(x.id)){ seen.add(x.id); out.sections.push({id:x.id, visible:x.id==="settings" ? true : x.visible!==false}); } });
-  SECTION_IDS.forEach(id=>{ if(!seen.has(id)) out.sections.push({id, visible:true}); });
+  SECTION_IDS.forEach(id=>{ if(!seen.has(id)) out.sections.push({id, visible:id!=="almost"}); });
   return out;
 }
 function sanitizeTile(t){ const out = {}; if(!t || typeof t!=="object") return out;
@@ -508,7 +530,7 @@ function sanitizeData(d){
   if(!d || typeof d!=="object") return {data:defaultData(), report:["komplette Datei"]};
   const apps = (Array.isArray(d.apps)?d.apps:[]).filter(a=>a && typeof a.id==="string" && typeof a.name==="string").map(a=>({
     id:a.id, name:a.name.slice(0,120), origName:typeof a.origName==="string"?a.origName.slice(0,120):undefined, kind:["game","forwarder","homebrew"].includes(a.kind)?a.kind:"game", titleId:a.titleId, nroPath:a.nroPath, platform:a.platform,
-    hue:Number.isFinite(a.hue)?a.hue:hash(a.id)%360, favorite:a.favorite===true, lastPlayed:Number.isFinite(a.lastPlayed)?a.lastPlayed:0, tile:sanitizeTile(a.tile), art:sanitizeArt(a.art), raGameId:(Number.isInteger(a.raGameId)&&a.raGameId>0&&a.raGameId<1e7)?a.raGameId:0}));
+    hue:Number.isFinite(a.hue)?a.hue:hash(a.id)%360, stickers:Array.isArray(a.stickers)?a.stickers.filter(k=>typeof k==="string" && ["new","progress","done","100","mp","coop","top"].includes(k)).slice(0,7):[], favorite:a.favorite===true, lastPlayed:Number.isFinite(a.lastPlayed)?a.lastPlayed:0, tile:sanitizeTile(a.tile), art:sanitizeArt(a.art), raGameId:(Number.isInteger(a.raGameId)&&a.raGameId>0&&a.raGameId<1e7)?a.raGameId:0}));
   const ids = new Set(apps.map(a=>a.id)); const owned = new Set();
   const folders = (Array.isArray(d.folders)?d.folders:[]).filter(f=>f && typeof f.id==="string" && typeof f.name==="string").map(f=>({
     id:f.id, kind:"folder", name:f.name.slice(0,60), accent:validValue({t:"color"}, f.accent)?f.accent:"#3ee0c8", hue:Number.isFinite(f.hue)?f.hue:hash(f.id)%360,
@@ -624,12 +646,28 @@ const ArtworkManager = {
 };
 const BG_PRESETS = [["#0b0f17","#1d2b4a","#0b0f17"],["#1a0b2e","#4a1d6b","#0f0a1f"],["#0d3b4c","#1b6e6b","#0a1f2b"],["#2b0f0f","#6b2a1d","#1a0a0a"],["#0f2b14","#2a6b3b","#0a1a0e"],["#2b2b0f","#6b5a1d","#14140a"],["#e9edf2","#c9d6ea","#f6f8fb"],["#101010","#3a3a3a","#000000"]];
 function bgCSS(type, preset, color, image, heroUrl){
-  if(type==="image") return image ? `url("${image}") center/cover` : "#111";
+  if(type==="image" || type==="gif") return image ? `url("${image}") center/cover` : "#111";
   if(type==="color") return color;
   if(type==="hero") return heroUrl ? `url("${heroUrl}") center/cover` : bgCSS("gradient",0);
   const p = BG_PRESETS[clamp(preset|0,0,BG_PRESETS.length-1)];
   return `linear-gradient(135deg, ${p[0]}, ${p[1]}, ${p[2]}, ${p[1]})`;
 }
+
+/* ---------------- Aufkleber ---------------- */
+const STICKERS = {new:["Neu","#3ee0c8"], progress:["Angefangen","#ffb347"], done:["Durchgespielt","#5fd35f"], "100":["100 %","#ffd447"], mp:["Multiplayer","#00a2ff"], coop:["Koop","#e86cff"], top:["Top","#ff5f6d"]};
+function stickerHtml(e){ const l=ST().library; if(!l.stickers || !Array.isArray(e.stickers) || !e.stickers.length) return "";
+  const b = tileCfg(e).showTitle ? 32 : 6;
+  const pos = l.stickerPos==="topRight" ? "top:6px;right:6px;flex-direction:column;align-items:flex-end" : l.stickerPos==="bottomRight" ? `bottom:${b}px;right:6px;flex-direction:column-reverse;align-items:flex-end` : `bottom:${b}px;left:6px;flex-direction:column-reverse;align-items:flex-start`;
+  return `<div style="position:absolute;${pos};display:flex;gap:3px;z-index:2">${e.stickers.slice(0,3).map(k=>STICKERS[k]?`<span style="background:${STICKERS[k][1]};color:#000;font-size:10px;font-weight:700;padding:2px 7px;border-radius:9px">${STICKERS[k][0]}</span>`:"").join("")}</div>`; }
+function openStickers(e){ pushDialog(rowsDialog({title:"Aufkleber", sub:"Erscheinen auf der Kachel.", rows:()=>Object.keys(STICKERS).map(k=>({l:STICKERS[k][0], get:()=>(e.stickers||[]).includes(k), set:v=>{ e.stickers=(e.stickers||[]).filter(x=>x!==k); if(v) e.stickers.push(k); DataStore.save(); render(); }, t:"bool"})), box:{l:panelX(420), t:90, w:420}})); }
+
+/* ---------------- Sounds (WebAudio, gleiche Tonfolgen wie nx/sound.cpp) ---------------- */
+const SFX = { ctx:null,
+  play(ev){ const c=ST().sound; if(!c||!c.enabled) return; try{ this.ctx = this.ctx || new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; }
+    const N={move:[[880],.035,.18],select:[[660,990],.09,.35],back:[[560,400],.08,.35],open:[[740,880],.07,.25],launch:[[523,659,784,1046],.22,.35],lock:[[500,330],.14,.35],unlock:[[330,500,750],.16,.35],error:[[220,180],.16,.3],toggle:[[1200],.03,.2]}[ev]; if(!N) return;
+    let [notes,dur,amp]=N; if(c.style==="glass") dur*=2.2; const t0=this.ctx.currentTime, g=this.ctx.createGain(); g.connect(this.ctx.destination);
+    g.gain.setValueAtTime(0,t0); g.gain.linearRampToValueAtTime(amp*c.volume,t0+.005); g.gain.exponentialRampToValueAtTime(.0001,t0+dur);
+    notes.forEach((f,i)=>{ const o=this.ctx.createOscillator(); o.type=c.style==="retro"?"square":c.style==="click"?"triangle":"sine"; o.frequency.value=f; o.connect(g); o.start(t0+i*dur/notes.length); o.stop(t0+(i+1)*dur/notes.length); }); } };
 
 /* ---------------- Akzent: Verlauf / RGB (gleiche Rechnung wie projects/nexus/source/core/accent.cpp) ---------------- */
 function hexRgb(h){ return /^#[0-9a-f]{6}$/i.test(h||"") ? [1,3,5].map(i=>parseInt(h.substr(i,2),16)) : [62,224,200]; }
@@ -640,7 +678,9 @@ function hsvRgb(h,s,v){ h=frac(h/360)*6; const i=Math.floor(h)%6, f=h-Math.floor
 function accentAt(u, t){
   const th = ST().theme, mode = th.accentMode||"solid", anim = th.accentAnim||"none", cyc = Math.max(.5, th.accentCycle||6);
   const phase = (anim==="flow"||anim==="cycle") ? t/cyc : 0, uu = anim==="cycle" ? 0 : u;
-  const c1 = hexRgb(th.accent), c2 = hexRgb(th.accent2), c3 = hexRgb(th.accent3); let c = c1;
+  let c1 = hexRgb(th.accent); const c2 = hexRgb(th.accent2), c3 = hexRgb(th.accent3);
+  if(th.accentSource==="game"){ const e=S.list&&S.list[S.focus]; if(e && Number.isFinite(e.hue)) c1 = FX.hsv(e.hue, .7, 1); else if(e && e.accent) c1 = hexRgb(e.accent); }
+  let c = c1;
   if(mode==="gradient"||mode==="gradient3"){ const k = anim==="cycle" ? tri(phase) : tri((uu+phase)/2);
     c = mode==="gradient" ? mixRgb(c1,c2,k) : (k<.5 ? mixRgb(c1,c2,k*2) : mixRgb(c2,c3,(k-.5)*2)); }
   else if(mode==="rainbow") c = hsvRgb(rgbHue(c1) + 360*(uu*(th.rainbowRepeat||1) + phase), clamp(th.rainbowSat??.85,0,1), 1);
@@ -776,6 +816,7 @@ function vertical(){ const l = ST().layout; return l.mode==="vgrid" || l.mode===
 
 function currentList(){
   const d = S.data;
+  if(S.search){ const q=S.search.toLowerCase(); return [...d.folders.filter(f=>f.name.toLowerCase().includes(q)), ...d.apps.filter(a=>a.name.toLowerCase().includes(q)).sort((a,b)=>a.name.localeCompare(b.name))]; }
   if(S.openFolder){ const f = entry(S.openFolder); if(!f){ S.openFolder=null; return currentList(); } const it = f.items.map(entry).filter(Boolean); if(f.sort==="name") it.sort((a,b)=>a.name.localeCompare(b.name)); return it; }
   const games = d.apps.filter(a=>a.kind!=="homebrew");
   switch(S.section){
@@ -785,6 +826,7 @@ function currentList(){
     case "folders": return [...d.folders];
     case "recent": return d.apps.filter(a=>a.lastPlayed).sort((a,b)=>b.lastPlayed-a.lastPlayed).slice(0,10);
     case "homebrew": return d.apps.filter(a=>a.kind==="homebrew");
+    case "almost": { const th=(ST().ra.almostPct||80)/100; return d.apps.map(a=>[a,RetroAchievements.progress(a)]).filter(([a,p])=>p && p.total && p.got/p.total>=th && p.got<p.total).sort((x,y)=>y[1].got/y[1].total-x[1].got/x[1].total).map(x=>x[0]); }
   } return [];
 }
 function manualOrderArray(){ if(S.openFolder){ const f=entry(S.openFolder); return f.sort==="manual"?f.items:null; } return S.section==="start"?S.data.rootOrder:null; }
@@ -995,7 +1037,7 @@ function render(){
       const badge = e.kind==="folder"?`<div class="badge" style="color:${e.accent}">▣ ${e.items.length}</div>`:e.kind==="forwarder"?`<div class="badge">TICO</div>`:e.kind==="homebrew"?`<div class="badge">NRO</div>`:"";
       const clip = it.hex ? "clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);" : `border-radius:${t.radius}px;`;
       if(isList) return `<div class="tile li" draggable="true" data-i="${i}"><div class="in" style="border-radius:${t.radius}px;box-shadow:${shadow}"><img class="cover" src="${img}" onerror="this.src=PLACEHOLDER"><div style="min-width:0"><div class="nm">${esc(e.name)}</div><div class="kd">${e.kind==="folder"?"Ordner · "+e.items.length+" Einträge":e.kind==="forwarder"?"TICO-Forwarder · "+esc(e.platform):e.kind==="homebrew"?"Homebrew":"Spiel"}</div></div>${badge}${e.favorite?`<div class="fav">★</div>`:""}${sel?`<div class="sel"></div>`:""}</div></div>`;
-      return `<div class="tile" draggable="true" data-i="${i}" style="opacity:${t.opacity}"><div class="in" style="${clip}box-shadow:${it.hex?"none":shadow}"><img class="cover" src="${img}" onerror="this.src=PLACEHOLDER" style="object-fit:${t.fit};object-position:${t.posX}% ${t.posY}%">${t.showTitle?`<div class="ttl">${esc(e.name)}</div>`:""}${raBadge(e)}${badge}${e.favorite?`<div class="fav">★</div>`:""}${sel?`<div class="sel"></div>`:""}</div></div>`;
+      return `<div class="tile" draggable="true" data-i="${i}" style="opacity:${t.opacity}"><div class="in" style="${clip}box-shadow:${it.hex?"none":shadow}"><img class="cover" src="${img}" onerror="this.src=PLACEHOLDER" style="object-fit:${t.fit};object-position:${t.posX}% ${t.posY}%">${t.showTitle?`<div class="ttl">${esc(e.name)}</div>`:""}${raBadge(e)}${stickerHtml(e)}${badge}${e.favorite?`<div class="fav">★</div>`:""}${sel?`<div class="sel"></div>`:""}</div></div>`;
     }).join("") || `<div class="empty" style="top:${(area().y0+area().y1)/2}px">Keine Einträge in diesem Bereich.</div>`;
     bindTiles();
     const doEntry = S.entry && animOn() && !ST().anim.reduce && ST().anim.entry!=="none";
@@ -1038,6 +1080,7 @@ function placeRing(){
   ring.style.borderRadius = (ST().layout.mode==="list" ? t.radius : t.radius)+"px";
   ring.innerHTML = it.hex ? `<svg viewBox="0 0 100 100" preserveAspectRatio="none"><polygon points="50,0 100,25 100,75 50,100 0,75 0,25" fill="none" stroke-width="3" vector-effect="non-scaling-stroke" style="stroke:var(--accent);filter:drop-shadow(0 0 8px var(--accent))"/></svg>` : "";
   ring.style.zIndex = 1;
+  if(ST().theme.accentSource==="game") updateAccent();
   const an = ST().anim; ring.style.setProperty("--ringW", (an.ringWidth??3.5)+"px"); ring.classList.toggle("noring", (an.ringWidth??3.5)<=0);
   ring.classList.toggle("ttl", !!an.titleOnFocus); ring.dataset.title = (S.list[S.focus]||{}).name||"";
   $("#tiles").querySelectorAll(".tile").forEach(el=>{ el.style.filter = (+el.dataset.i!==S.focus && an.dimOthers>0) ? `brightness(${1-an.dimOthers})` : ""; });
@@ -1099,7 +1142,9 @@ const FocusPresentationManager = {
       this.front = this.front==="A"?"B":"A"; this.curKey = key; }
     const logo = $("#logo"), ls = ST().logo, img = logo.querySelector("img"); const url = this.logoFor(e);
     const ri = $("#raInfo"); const rp = ST().ra.showUnderLogo ? RetroAchievements.progress(e) : null;
-    if(rp){ ri.innerHTML = `🏆 ${rp.got} / ${rp.total} Erfolge · ${rp.pct} %<br><span class="rb"><i style="width:${rp.pct}%"></i></span>`; ri.classList.toggle("m", rp.mastered); ri.classList.add("on"); } else ri.classList.remove("on");
+    const pt = (ST().logo.showPlaytime && e && e.kind!=="folder" && e.kind!=="homebrew" && e.lastPlayed) ? (hash(e.id)%2400)+30 : 0;
+    const ptHtml = pt ? `<div style="margin-top:6px;opacity:.85">⏱ ${pt>=60?Math.floor(pt/60)+" Std. "+(pt%60)+" Min.":pt+" Min."} gespielt · ${(hash(e.id)%40)+1}× gestartet (Testdaten)</div>` : "";
+    if(rp || pt){ ri.innerHTML = (rp?`🏆 ${rp.got} / ${rp.total} Erfolge · ${rp.pct} %<br><span class="rb"><i style="width:${rp.pct}%"></i></span>`:"")+ptHtml; ri.classList.toggle("m", !!(rp&&rp.mastered)); ri.classList.add("on"); } else ri.classList.remove("on");
     if(!ls.visible || !e){ logo.classList.remove("on"); return; }
     if(img.dataset.src !== url){ logo.classList.remove("on");
       const st = !animOn() ? "none" : ls.anim==="slide" ? "translateX(-30px)" : ls.anim==="zoom" ? "scale(.9)" : "none";
@@ -1231,7 +1276,8 @@ function openContext(){
     ...(isF ? [] : [A_("RetroAchievements…", ()=>{ popDialog(); openRA(e); })]), A_("Größe ändern", ()=>{ popDialog(); openEditor(e,1); }), A_("Format ändern", ()=>{ popDialog(); openEditor(e,3); }),
     A_("Position ändern", ()=>{ popDialog(); startMove(); }), A_("Anordnung ändern…", ()=>{ popDialog(); openSettings("layout"); })];
   if(isF){ rows.push(A_("Ordner umbenennen", ()=>{ popDialog(); openOSK("Ordnername", e.name, v=>{ if(v.trim()){ e.name=v.trim().slice(0,60); DataStore.save(); render(); } }); }), A_("Ordner löschen (Inhalt bleibt)", ()=>{ popDialog(); deleteFolder(e); })); }
-  else { rows.push(A_("Anzeigenamen ändern…", ()=>{ popDialog(); openOSK("Anzeigename", e.name, v=>{ v=v.trim().slice(0,80); if(!v) return; if(!e.origName) e.origName=e.name; e.name=v; DataStore.save(); render(); toast(`Angezeigt als „${v}“.`); }); }));
+  else { rows.push(A_("Aufkleber…", ()=>{ popDialog(); openStickers(e); }));
+    rows.push(A_("Anzeigenamen ändern…", ()=>{ popDialog(); openOSK("Anzeigename", e.name, v=>{ v=v.trim().slice(0,80); if(!v) return; if(!e.origName) e.origName=e.name; e.name=v; DataStore.save(); render(); toast(`Angezeigt als „${v}“.`); }); }));
     if(e.origName) rows.push(A_("Originalnamen wiederherstellen", ()=>{ popDialog(); e.name=e.origName; delete e.origName; DataStore.save(); render(); toast("Originalname wiederhergestellt."); }));
     rows.push(A_("Zu Ordner hinzufügen…", ()=>{ popDialog(); openFolderPicker([e.id]); })); if(S.openFolder) rows.push(A_("Aus Ordner entfernen", ()=>{ popDialog(); removeFromFolder(e.id); }));
     rows.push(A_(e.favorite?"Aus Favoriten entfernen":"Zu Favoriten hinzufügen", ()=>{ popDialog(); toggleFav(e); })); }
@@ -1480,6 +1526,7 @@ function press(k, raw){
   try{
     lastInput = performance.now();
     if(IdleSaver.on){ IdleSaver.stop(); return; }
+    SFX.play({left:"move",right:"move",up:"move",down:"move",L:"move",R:"move",A:"select",B:"back",X:"open",LOCK:"lock",ZR:"open"}[k]||"");
     const top = S.dialogs[S.dialogs.length-1];
     if(k==="LOCK"){ showLock(); return; }
     if(top){ if((k==="L"||k==="R") && top.kind==="settings" && top.onLR){ top.onLR(k); return; } if((k==="L"||k==="R") && top.kind==="settings"){ cycleSection(k==="L"?-1:1); return; } top.input(k, raw); return; }
@@ -1490,9 +1537,10 @@ function press(k, raw){
     switch(k){
       case "left": case "right": case "up": case "down": navigate(k); break;
       case "L": cycleSection(-1); break; case "R": cycleSection(1); break;
+      case "ZR": openOSK("Suche (Spiele, Homebrew, Ordner)", S.search||"", v=>{ S.search=v.trim(); S.focus=0; S.entry=true; render(); }); break;
       case "A": if(!e) return; if(S.multi){ S.multi.has(e.id)?S.multi.delete(e.id):S.multi.add(e.id); render(); return; }
         if(e.kind==="folder"){ S.openFolder = e.id; S.focus=0; S.scroll=0; S.entry=true; render(); } else SystemAdapter.launch(e); break;
-      case "B": if(S.multi){ S.multi=null; render(); return; } if(S.openFolder){ const id=S.openFolder; S.openFolder=null; S.scroll=0; S.entry=true; S.list=currentList(); S.focus=Math.max(0,S.list.findIndex(x=>x.id===id)); render(); } break;
+      case "B": if(S.multi){ S.multi=null; render(); return; } if(S.search){ S.search=""; S.focus=0; S.entry=true; render(); return; } if(S.openFolder){ const id=S.openFolder; S.openFolder=null; S.scroll=0; S.entry=true; S.list=currentList(); S.focus=Math.max(0,S.list.findIndex(x=>x.id===id)); render(); } break;
       case "X": if(S.multi){ const ids=[...S.multi].filter(id=>entry(id) && entry(id).kind!=="folder");
           pushDialog(rowsDialog({title:`${ids.length} Einträge`, box:{l:440,t:150,w:400}, shade:true, rows:[A_("In Ordner verschieben…", ()=>{ popDialog(); openFolderPicker(ids); }), A_("In neuen Ordner…", ()=>{ popDialog(); createFolderFlow(ids); }),
             A_("Aus Ordnern entfernen", ()=>{ popDialog(); ids.forEach(id=>folderOf(id)&&removeFromFolder(id)); S.multi=null; render(); }), A_("Zu Favoriten", ()=>{ popDialog(); ids.forEach(id=>{ entry(id).favorite=true; }); S.multi=null; DataStore.save(); render(); })]})); return; }
@@ -1501,7 +1549,7 @@ function press(k, raw){
     }
   }catch(err){ crashHandler(err); }
 }
-const KEYMAP = {ArrowLeft:"left",ArrowRight:"right",ArrowUp:"up",ArrowDown:"down",a:"left",d:"right",w:"up",s:"down",Enter:"A",Escape:"B",Backspace:"B",x:"X",y:"Y",q:"L",e:"R",p:"LOCK"};
+const KEYMAP = {ArrowLeft:"left",ArrowRight:"right",ArrowUp:"up",ArrowDown:"down",a:"left",d:"right",w:"up",s:"down",Enter:"A",Escape:"B",Backspace:"B",x:"X",y:"Y",q:"L",e:"R",p:"LOCK",z:"ZR"};
 document.addEventListener("keydown", ev=>{
   const top = S.dialogs[S.dialogs.length-1];
   if(top && top.wantsKeys && !ev.key.startsWith("Arrow") && ev.key!=="Escape"){ ev.preventDefault(); top.input(null, ev.key); return; }

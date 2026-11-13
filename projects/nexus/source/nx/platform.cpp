@@ -1,4 +1,5 @@
 #include "platform.hpp"
+#include <cstdlib>
 #include <switch.h>
 
 namespace nexus::plat {
@@ -167,6 +168,26 @@ namespace nexus::plat {
         swkbdClose(&kbd);
         if(R_FAILED(rc)) return false;
         out = buf;
+        return true;
+    }
+
+    bool PlayStats(uint64_t tid, const std::string &userHex, PlayInfo &out) {
+        static int pdmState = 0;   // 0 = unversucht, 1 = bereit, -1 = nicht verfügbar
+        if(pdmState == 0) pdmState = R_SUCCEEDED(pdmqryInitialize()) ? 1 : -1;
+        if(pdmState < 0 || tid == 0) return false;
+        PdmPlayStatistics st = {};
+        Result rc;
+        if(userHex.size() == 32) {
+            AccountUid uid = {};
+            uid.uid[0] = std::strtoull(userHex.substr(0, 16).c_str(), nullptr, 16);
+            uid.uid[1] = std::strtoull(userHex.substr(16, 16).c_str(), nullptr, 16);
+            rc = pdmqryQueryPlayStatisticsByApplicationIdAndUserAccountId(tid, uid, false, &st);
+        }
+        else rc = pdmqryQueryPlayStatisticsByApplicationId(tid, false, &st);
+        if(R_FAILED(rc)) return false;
+        out.minutes = st.playtime / 60000000000ull;
+        out.launches = st.total_launches;
+        out.lastPlayed = st.last_timestamp_user;
         return true;
     }
 

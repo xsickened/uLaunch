@@ -36,6 +36,8 @@ namespace nexus {
             void DropDisk(const std::string &src);
             // Entfernt im Hintergrund alle Cache-Dateien, deren Quelle nicht in inUse steht
             void CollectGarbage(std::vector<std::string> inUse);
+            // Prägende Farbe eines geladenen Bildes (kräftigster häufiger Farbton), false = noch nicht/zu grau
+            bool ColorOf(const std::string &key, uint8_t &r, uint8_t &g, uint8_t &b);
 
         private:
             struct Tex { SDL_Texture *tex; size_t bytes; uint64_t used; };
@@ -52,6 +54,7 @@ namespace nexus {
             size_t budget = 64 * 1024 * 1024, used = 0;
             int maxEdge = 1280;
             std::string diskDir;
+            std::unordered_map<std::string, uint32_t> colors;   // 0xRRGGBB, 0xFFFFFFFF = grau
             uint64_t tick = 0;
 
             void Work();

@@ -37,5 +37,8 @@ namespace nexus::plat {
     uint32_t LaunchApplication(uint64_t tid);
     // Bildschirmtastatur. false, wenn nicht verfügbar (z. B. Applet-Modus) oder abgebrochen.
     bool Keyboard(const std::string &header, const std::string &initial, size_t maxLen, std::string &out);
+    // Spielzeit aus der Systemstatistik (pdm). userHex = 32-stellige Benutzer-ID oder leer (alle Benutzer)
+    struct PlayInfo { uint64_t minutes = 0; uint32_t launches = 0; uint64_t lastPlayed = 0; };
+    bool PlayStats(uint64_t tid, const std::string &userHex, PlayInfo &out);
 
 }

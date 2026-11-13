@@ -173,6 +173,23 @@ namespace ul::menu::ui {
                 void BeforeLeave() override {
                     nexus::BootGuardOk(UmenuBootPath);
                 }
+
+                bool CanLaunchHomebrewAsApp() override {
+                    return g_GlobalSettings.cache_hb_takeover_app_id != os::InvalidApplicationId;
+                }
+
+                uint32_t LaunchHomebrew(const std::string &path, bool asApp) override {
+                    nexus::BootGuardOk(UmenuBootPath);
+                    g_MenuApplication->FadeOutToNonLibraryApplet();
+                    const auto rc = (asApp && this->CanLaunchHomebrewAsApp()) ? smi::LaunchHomebrewApplication(path, path) : smi::LaunchHomebrewLibraryApplet(path, path);
+                    if(R_SUCCEEDED(rc)) {
+                        g_MenuApplication->Finalize();
+                        return 0;
+                    }
+                    g_MenuApplication->FadeIn();
+                    g_MenuApplication->ResetFade();
+                    return rc;
+                }
         };
 
     }

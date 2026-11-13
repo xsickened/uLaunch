@@ -202,7 +202,7 @@ namespace nexus {
     json ThemeSnapshot(const json &settings) {
         json t = settings;
         if(t.is_object()) {
-            for(const char *k: { "ra", "sgdbKey", "sgdb", "library" }) t.erase(k);
+            for(const char *k: { "ra", "sgdbKey", "sgdb", "library", "auto" }) t.erase(k);
         }
         return t;
     }
@@ -252,10 +252,11 @@ namespace nexus {
         const json *ts = JGet(j, "settings");
         if(!ts || !ts->is_object()) return false;
         json merged = ThemeSnapshot(*ts);
-        for(const char *k: { "ra", "sgdbKey", "sgdb", "library" }) {
+        for(const char *k: { "ra", "sgdbKey", "sgdb", "library", "auto" }) {
             const json *v = JGet(current, k);
             if(v) merged[k] = *v;
         }
+        if(const json *pu = JGet(current, "profile.perUser")) JSet(merged, "profile.perUser", *pu);
         result = Settings::Sanitize(merged, nullptr);
         return true;
     }

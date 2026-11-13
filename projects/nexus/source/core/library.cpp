@@ -52,6 +52,18 @@ namespace nexus {
                 if(ra >= 1 && ra < 1e7 && ra == static_cast<double>(static_cast<long long>(ra))) a["raGameId"] = static_cast<long long>(ra);
                 const json *t = JGet(it.value(), "tile");
                 a["tile"] = t ? SanitizeTile(*t) : json::object();
+                const json *stk = JGet(it.value(), "stickers");
+                if(stk && stk->is_array()) {
+                    json keep = json::array();
+                    for(const auto &x: *stk) {
+                        if(!x.is_string()) continue;
+                        const auto v = x.get<std::string>();
+                        bool known = false;
+                        for(const char *k: StickerIds) if(v == k) known = true;
+                        if(known && std::find(keep.begin(), keep.end(), json(v)) == keep.end()) keep.push_back(v);
+                    }
+                    if(!keep.empty()) a["stickers"] = keep;
+                }
                 const std::string cn = SanitizeUtf8(JStr(it.value(), "name", "").substr(0, 80));
                 if(!cn.empty()) a["name"] = cn;
                 const json *art = JGet(it.value(), "art");
@@ -369,6 +381,39 @@ namespace nexus {
         while(!n.empty() && (n.front() == ' ')) n.erase(n.begin());
         if(n.empty()) a.erase("name");
         else a["name"] = n;
+    }
+
+    const char *StickerLabel(const std::string &id) {
+        if(id == "new") return "Neu";
+        if(id == "progress") return "Angefangen";
+        if(id == "done") return "Durchgespielt";
+        if(id == "100") return "100 %";
+        if(id == "mp") return "Multiplayer";
+        if(id == "coop") return "Koop";
+        if(id == "top") return "Top";
+        return "?";
+    }
+
+    std::vector<std::string> Library::Stickers(const std::string &tid) const {
+        std::vector<std::string> out;
+        const json *a = JGet(this->apps, tid);
+        const json *s = a ? JGet(*a, "stickers") : nullptr;
+        if(s && s->is_array()) for(const auto &x: *s) if(x.is_string()) out.push_back(x.get<std::string>());
+        return out;
+    }
+
+    void Library::ToggleSticker(const std::string &tid, const std::string &sticker) {
+        bool known = false;
+        for(const char *k: StickerIds) if(sticker == k) known = true;
+        if(!known || !IsTid(tid)) return;
+        auto &a = this->apps[tid];
+        if(!a.is_object()) a = json::object();
+        if(!a.contains("stickers") || !a["stickers"].is_array()) a["stickers"] = json::array();
+        json &arr = a["stickers"];
+        auto it = std::find(arr.begin(), arr.end(), json(sticker));
+        if(it != arr.end()) arr.erase(it);
+        else arr.push_back(sticker);
+        if(arr.empty()) a.erase("stickers");
     }
 
 }

@@ -220,6 +220,16 @@ namespace nexus {
         this->ra.trophiesHard = th;
         if(this->raNextOk) {
             this->ra.fetched = std::time(nullptr);
+            // neue Erfolge seit der letzten Meldung (beim allerersten Abruf nur merken)
+            if(!this->ra.recent.empty()) {
+                const std::string newest = this->ra.recent.front().date;
+                if(!this->raSeen.empty() && this->d->settings.B("ra.notify") && this->onNewAchievements) {
+                    std::vector<RaRecent> fresh;
+                    for(const auto &r: this->ra.recent) if(r.date > this->raSeen) fresh.push_back(r);
+                    if(!fresh.empty()) this->onNewAchievements(fresh);
+                }
+                if(newest > this->raSeen) this->raSeen = newest;
+            }
             this->RaSaveCache();
         }
     }
@@ -277,6 +287,7 @@ namespace nexus {
         if(const json *g = JGet(j, "games")) ParseRaCompletion(SafeDump(*g), this->ra.games);
         if(const json *r = JGet(j, "recent")) ParseRaRecent(SafeDump(*r), this->ra.recent);
         this->ra.fetched = 0;   // beim nächsten Tick trotzdem aktualisieren
+        this->raSeen = JStr(j, "seen", "");
         long long t = 0, th = 0;
         for(const auto &g: this->ra.games) { t += g.got; th += g.gotHard; }
         this->ra.trophies = t;
@@ -296,6 +307,7 @@ namespace nexus {
             rec.push_back({ { "Title", r.title }, { "GameTitle", r.game }, { "Date", r.date }, { "GameID", r.gameId }, { "Points", r.points }, { "HardcoreMode", r.hardcore ? 1 : 0 } });
         }
         j["recent"] = rec;
+        j["seen"] = this->raSeen;
         WriteFileAtomic(RaCacheFile, SafeDump(j));
     }
 

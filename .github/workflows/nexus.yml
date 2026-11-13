@@ -28,7 +28,8 @@ jobs:
 
     - name: Kern-Tests (Schema, Bibliothek, Speichern, Anordnungen)
       run: |
-        g++ -std=gnu++20 -O1 -Ilibs/json/single_include -Iprojects/nexus/source/core nexus/tests/core_test.cpp projects/nexus/source/core/*.cpp -o /tmp/core_test
+        gcc -O1 -c libs/zip/src/zip.c -o /tmp/zip.o
+        g++ -std=gnu++20 -O1 -Ilibs/json/single_include -Ilibs/zip/src -Iprojects/nexus/source/core nexus/tests/core_test.cpp projects/nexus/source/core/*.cpp /tmp/zip.o -o /tmp/core_test
         /tmp/core_test
 
     - name: libnx master (wie uLaunch)
@@ -58,7 +59,20 @@ jobs:
 
     - name: SD-Paket zusammenstellen
       run: |
-        mkdir -p out/switch/nexus out/nexus/art/backgrounds out/ulaunch/bin/uMenu
+        mkdir -p out/switch/nexus out/nexus/art/backgrounds out/nexus/sounds out/nexus/themes out/ulaunch/bin/uMenu
+        cat > out/nexus/sounds/LIESMICH.txt << 'EOF'
+        Eigene Sounds (ersetzen die eingebauten Klänge), Formate: .wav, .ogg oder .mp3
+          move, select, back, open, launch, lock, unlock, error, toggle   (z. B. select.wav)
+        Musik (Schleife):
+          bgm.mp3   im Menü
+          lock.mp3  auf dem Sperrbildschirm (ohne diese Datei läuft bgm weiter)
+        Ein- und Ausschalten: Einstellungen > Sounds & Musik
+        EOF
+        cat > out/nexus/themes/LIESMICH.txt << 'EOF'
+        Eigene Themes (.json) und Theme-Pakete (.nxtheme, mit Bildern) liegen hier.
+        Ein Paket von jemand anderem einfach in diesen Ordner kopieren, dann in NEXUS:
+        Einstellungen > Themes & System > Eigene Themes > Paket auswählen.
+        EOF
         cp projects/nexus/nexus.nro out/switch/nexus/nexus.nro
         cp SdOut/ulaunch/bin/uMenu/main SdOut/ulaunch/bin/uMenu/main.npdm SdOut/ulaunch/bin/uMenu/romfs.bin out/ulaunch/bin/uMenu/
         cat > out/nexus/art/LIESMICH.txt << 'EOF'

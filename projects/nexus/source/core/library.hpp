@@ -21,6 +21,10 @@ namespace nexus {
     json SanitizeArt(const json &a);
 
     inline bool IsFolderId(const std::string &id) { return id.rfind("fld-", 0) == 0; }
+    // Homebrew-Einträge haben eine 16-stellige ID, die mit "ff" beginnt (aus dem NRO-Pfad berechnet)
+    inline bool IsHomebrewId(const std::string &id) { return id.size() == 16 && id[0] == 'f' && id[1] == 'f'; }
+    constexpr const char *StickerIds[] = { "new", "progress", "done", "100", "mp", "coop", "top" };
+    const char *StickerLabel(const std::string &id);
 
     // Bildausschnitt pro Bilddatei: Zoom (1..4) und Position (0..100 %)
     struct Crop {
@@ -67,6 +71,9 @@ namespace nexus {
             // Eigener Anzeigename eines Titels (leer = Name aus dem System)
             std::string CustomName(const std::string &tid) const;
             void SetCustomName(const std::string &tid, const std::string &name);
+            // Aufkleber (feste Auswahl, siehe StickerIds)
+            std::vector<std::string> Stickers(const std::string &tid) const;
+            void ToggleSticker(const std::string &tid, const std::string &sticker);
             long long RaGameId(const std::string &tid) const;
             void SetRaGameId(const std::string &tid, long long gid);
 

@@ -3,7 +3,10 @@
 #include "../core/layout.hpp"
 #include "../core/particles.hpp"
 #include "../core/store.hpp"
+#include "../nx/anim.hpp"
 #include "../nx/apps.hpp"
+#include "../nx/homebrew.hpp"
+#include "../nx/sound.hpp"
 #include "../nx/gfx.hpp"
 #include "../nx/images.hpp"
 #include "../nx/platform.hpp"
@@ -12,6 +15,7 @@
 #include <array>
 #include <functional>
 #include <memory>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -227,6 +231,36 @@ namespace nexus {
             void ForgetFile(const std::string &path);
             void PrefetchAround();
             bool gcDone = false;
+            // Homebrew, Sounds, GIF, Suche, Mehrfachauswahl, Spielzeit, Spielfarbe, Auto-Theme, Profile
+            Homebrew hbScan;
+            std::unordered_map<std::string, HbInfo> hbMap;
+            int hbVersion = -1;
+            Sound snd;
+            AnimBg anim;
+            std::string searchQuery;
+            bool multi = false;
+            std::set<std::string> multiSel;
+            struct PlayCache { bool ok = false; plat::PlayInfo info; };
+            std::unordered_map<std::string, PlayCache> play;
+            double gameR = -1, gameG = 0, gameB = 0;
+            double autoCheck = 0;
+            std::string lookUser;
+            uint32_t heldNow = 0;
+            void OpenSearch();
+            void OpenMultiMenu();
+            void QuickLaunch();
+            void LaunchHb(const HbInfo &h);
+            void OpenStickers(const std::string &id);
+            void DrawStickers(const Entry &e, const Xf &xf, double w, double h, double op);
+            const PlayCache &Play(const std::string &id);
+            double DrawPlaytime(const Entry &e, double x, double y, double w, double alpha);
+            void UpdateGameColor(double dt);
+            void UpdateAutoTheme(double dt);
+            void SwitchUserLook(const std::string &newUser);
+            void Sfx(const char *ev);
+            std::vector<UserTheme> AllThemes();
+            void OpenThemePicker(const std::string &key);
+            bool ApplyThemeFile(const std::string &path, const std::string &name);
             void LogoMoveInput(const plat::Input &in);
             void QueueMissingArt(bool force);
             void ArtChanged(const std::string &id);

@@ -91,6 +91,26 @@
   },
   {
    "group": "look",
+   "path": "theme.accentSource",
+   "label": "Akzent-Quelle",
+   "type": "enum",
+   "options": [
+    "custom",
+    "game"
+   ],
+   "optionLabels": [
+    "Eigene Farbe(n)",
+    "Aus dem Spielbild (passt sich an)"
+   ],
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "custom",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "look",
    "path": "theme.accentMode",
    "label": "Akzent-Art",
    "type": "enum",
@@ -1784,6 +1804,20 @@
   },
   {
    "group": "logo",
+   "path": "logo.showPlaytime",
+   "label": "Spielzeit unter dem Logo",
+   "type": "bool",
+   "options": null,
+   "optionLabels": null,
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": true,
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "logo",
    "path": "logo.safeArea",
    "label": "Sicherheitsbereich (verdeckt keine Kacheln)",
    "type": "bool",
@@ -2349,6 +2383,156 @@
    "hidden": false
   },
   {
+   "group": "sound",
+   "path": "sound.enabled",
+   "label": "Menü-Sounds",
+   "type": "bool",
+   "options": null,
+   "optionLabels": null,
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": true,
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "sound",
+   "path": "sound.style",
+   "label": "Klang",
+   "type": "enum",
+   "options": [
+    "soft",
+    "click",
+    "retro",
+    "glass"
+   ],
+   "optionLabels": [
+    "Weich",
+    "Klick",
+    "Retro (8-Bit)",
+    "Glas"
+   ],
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "soft",
+   "conditional": true,
+   "hidden": false
+  },
+  {
+   "group": "sound",
+   "path": "sound.volume",
+   "label": "Lautstärke Sounds",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": 0.05,
+   "max": 1,
+   "step": 0.05,
+   "default": 0.5,
+   "conditional": true,
+   "hidden": false
+  },
+  {
+   "group": "sound",
+   "path": "sound.bgm",
+   "label": "Musik (sdmc:/nexus/sounds/bgm.mp3 / lock.mp3)",
+   "type": "bool",
+   "options": null,
+   "optionLabels": null,
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": true,
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "sound",
+   "path": "sound.bgmVolume",
+   "label": "Lautstärke Musik",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": 0.05,
+   "max": 1,
+   "step": 0.05,
+   "default": 0.4,
+   "conditional": true,
+   "hidden": false
+  },
+  {
+   "group": "auto",
+   "path": "auto.enabled",
+   "label": "Tag- und Nacht-Theme automatisch",
+   "type": "bool",
+   "options": null,
+   "optionLabels": null,
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": false,
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "auto",
+   "path": "auto.dayStart",
+   "label": "Tag beginnt um",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": 0,
+   "max": 23,
+   "step": 1,
+   "default": 7,
+   "conditional": true,
+   "hidden": false
+  },
+  {
+   "group": "auto",
+   "path": "auto.nightStart",
+   "label": "Nacht beginnt um",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": 0,
+   "max": 23,
+   "step": 1,
+   "default": 20,
+   "conditional": true,
+   "hidden": false
+  },
+  {
+   "group": "auto",
+   "path": "auto.dayTheme",
+   "label": "",
+   "type": "str",
+   "options": null,
+   "optionLabels": null,
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "",
+   "conditional": false,
+   "hidden": true
+  },
+  {
+   "group": "auto",
+   "path": "auto.nightTheme",
+   "label": "",
+   "type": "str",
+   "options": null,
+   "optionLabels": null,
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "",
+   "conditional": false,
+   "hidden": true
+  },
+  {
    "group": "idle",
    "path": "idle.mode",
    "label": "Bei Inaktivität",
@@ -2411,13 +2595,15 @@
     "gradient",
     "animated",
     "color",
-    "image"
+    "image",
+    "gif"
    ],
    "optionLabels": [
     "Farbverlauf",
     "Animierter Verlauf",
     "Volltonfarbe",
-    "Eigenes Bild"
+    "Eigenes Bild",
+    "Animiertes Bild (GIF, braucht mehr Akku)"
    ],
    "min": null,
    "max": null,
@@ -2802,6 +2988,20 @@
    "max": null,
    "step": null,
    "default": "slideUp",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "profile",
+   "path": "profile.perUser",
+   "label": "Eigene Darstellung & Favoriten pro Benutzer",
+   "type": "bool",
+   "options": null,
+   "optionLabels": null,
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": false,
    "conditional": false,
    "hidden": false
   },
@@ -3369,6 +3569,34 @@
   },
   {
    "group": "ra",
+   "path": "ra.notify",
+   "label": "Neue Erfolge melden",
+   "type": "bool",
+   "options": null,
+   "optionLabels": null,
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": true,
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "ra",
+   "path": "ra.almostPct",
+   "label": "„Fast gemeistert“ ab",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": 50,
+   "max": 95,
+   "step": 5,
+   "default": 80,
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "ra",
    "path": "ra.lockRecent",
    "label": "Letzter Erfolg auf dem Sperrbildschirm",
    "type": "bool",
@@ -3460,6 +3688,90 @@
    "max": null,
    "step": null,
    "default": "name",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "lib",
+   "path": "library.hbScan",
+   "label": "Homebrew aus sdmc:/switch anzeigen",
+   "type": "bool",
+   "options": null,
+   "optionLabels": null,
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": true,
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "lib",
+   "path": "library.hbMode",
+   "label": "Homebrew starten als",
+   "type": "enum",
+   "options": [
+    "applet",
+    "app"
+   ],
+   "optionLabels": [
+    "Applet (wenig Speicher)",
+    "Anwendung (voller Speicher, wie mit R)"
+   ],
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "applet",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "lib",
+   "path": "library.stickers",
+   "label": "Aufkleber auf Kacheln",
+   "type": "bool",
+   "options": null,
+   "optionLabels": null,
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": true,
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "lib",
+   "path": "library.stickerPos",
+   "label": "Position der Aufkleber",
+   "type": "enum",
+   "options": [
+    "bottomLeft",
+    "bottomRight",
+    "topRight"
+   ],
+   "optionLabels": [
+    "Unten links",
+    "Unten rechts",
+    "Oben rechts"
+   ],
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "bottomLeft",
+   "conditional": true,
+   "hidden": false
+  },
+  {
+   "group": "lib",
+   "path": "library.quickLaunch",
+   "label": "ZL + A startet das zuletzt gespielte Spiel",
+   "type": "bool",
+   "options": null,
+   "optionLabels": null,
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": true,
    "conditional": false,
    "hidden": false
   },

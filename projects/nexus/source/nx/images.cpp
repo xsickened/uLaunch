@@ -1,6 +1,7 @@
 #include "images.hpp"
 #include <SDL2/SDL_image.h>
 #include <algorithm>
+#include <cmath>
 #include <cctype>
 #include <cstdio>
 #include <dirent.h>
@@ -150,6 +151,45 @@ namespace nexus {
                 if(conv) SDL_FreeSurface(conv);
                 if(small) SDL_FreeSurface(small);
             }
+            uint32_t dom = 0xFFFFFFFFu;
+            if(s) {
+                // prägende Farbe bestimmen (Farbton-Histogramm, gewichtet nach Sättigung und Helligkeit)
+                SDL_Surface *c32 = SDL_ConvertSurfaceFormat(s, SDL_PIXELFORMAT_RGBA32, 0);
+                if(c32) {
+                    double w[12] = {}, sr[12] = {}, sg[12] = {}, sb[12] = {};
+                    SDL_LockSurface(c32);
+                    const int step = std::max(1, static_cast<int>(std::sqrt(static_cast<double>(c32->w) * c32->h / 4000.0)));
+                    for(int y = 0; y < c32->h; y += step) {
+                        const uint8_t *row = static_cast<const uint8_t *>(c32->pixels) + y * c32->pitch;
+                        for(int x = 0; x < c32->w; x += step) {
+                            const uint8_t *p = row + x * 4;
+                            if(p[3] < 128) continue;
+                            const double r = p[0] / 255.0, g = p[1] / 255.0, b = p[2] / 255.0;
+                            const double mx = std::max({ r, g, b }), mn = std::min({ r, g, b }), d = mx - mn;
+                            if(mx < 0.15 || d / std::max(mx, 1e-6) < 0.2) continue;
+                            double hh = mx == r ? std::fmod((g - b) / d, 6.0) : mx == g ? (b - r) / d + 2 : (r - g) / d + 4;
+                            hh = hh < 0 ? hh + 6 : hh;
+                            const int bin = std::min(11, static_cast<int>(hh * 2));
+                            const double wt = (d / mx) * mx;
+                            w[bin] += wt; sr[bin] += p[0] * wt; sg[bin] += p[1] * wt; sb[bin] += p[2] * wt;
+                        }
+                    }
+                    SDL_UnlockSurface(c32);
+                    SDL_FreeSurface(c32);
+                    int best = 0;
+                    double total = 0;
+                    for(int i = 0; i < 12; i++) { total += w[i]; if(w[i] > w[best]) best = i; }
+                    if(total > 5 && w[best] > 0) {
+                        double r = sr[best] / w[best] / 255, g = sg[best] / w[best] / 255, b = sb[best] / w[best] / 255;
+                        // kräftiger und heller machen, damit es als Akzent taugt
+                        const double mx = std::max({ r, g, b, 1e-6 }), mn = std::min({ r, g, b });
+                        const double sat = (mx - mn) / mx, ns = std::max(sat, 0.55), nv = std::max(mx, 0.85);
+                        auto fix = [&](double c) { const double rel = (mx - c) / std::max(mx - mn, 1e-6) * ns; return std::clamp(nv * (1 - rel), 0.0, 1.0); };
+                        if(mx - mn > 1e-6) { r = fix(r); g = fix(g); b = fix(b); }
+                        dom = (static_cast<uint32_t>(r * 255) << 16) | (static_cast<uint32_t>(g * 255) << 8) | static_cast<uint32_t>(b * 255);
+                    }
+                }
+            }
             if(s && cacheIt) {
                 // verkleinertes Bild speichern (tmp -> umbenennen, damit nie halbe Dateien geladen werden)
                 SDL_Surface *rgba = SDL_ConvertSurfaceFormat(s, SDL_PIXELFORMAT_RGBA32, 0);
@@ -174,6 +214,7 @@ namespace nexus {
                 }
             }
             std::lock_guard<std::mutex> lk(this->mtx);
+            if(s) this->colors[key] = dom;
             if(s) this->decoded.push_back({ key, s });
             else {
                 this->failed.push_back(key);
@@ -275,6 +316,14 @@ namespace nexus {
             closedir(d);
             for(const auto &f: drop) std::remove(f.c_str());
         }).detach();
+    }
+
+    bool ImageCache::ColorOf(const std::string &key, uint8_t &r, uint8_t &g, uint8_t &b) {
+        std::lock_guard<std::mutex> lk(this->mtx);
+        auto it = this->colors.find(key);
+        if(it == this->colors.end() || it->second == 0xFFFFFFFFu) return false;
+        r = (it->second >> 16) & 0xFF; g = (it->second >> 8) & 0xFF; b = it->second & 0xFF;
+        return true;
     }
 
 }

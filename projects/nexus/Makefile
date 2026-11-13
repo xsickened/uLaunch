@@ -12,7 +12,7 @@ include $(DEVKITPRO)/libnx/switch_rules
 
 TARGET		:=	nexus
 BUILD		:=	build
-SOURCES		:=	source source/core source/nx source/ui
+SOURCES		:=	source source/core source/nx source/ui ../../libs/zip/src
 DATA		:=	data
 INCLUDES	:=	source
 
@@ -25,7 +25,7 @@ ICON		:=	icon.jpg
 ARCH	:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
 
 CFLAGS	:=	-g -O2 -ffunction-sections -Wall $(ARCH) $(DEFINES)
-CFLAGS	+=	$(INCLUDE) -D__SWITCH__ `sdl2-config --cflags` -I$(TOPDIR)/../../libs/json/single_include -I$(TOPDIR)/../../libs/stb
+CFLAGS	+=	$(INCLUDE) -D__SWITCH__ `sdl2-config --cflags` -I$(TOPDIR)/../../libs/json/single_include -I$(TOPDIR)/../../libs/stb -I$(TOPDIR)/../../libs/zip/src
 
 CXXFLAGS	:= $(CFLAGS) -std=gnu++20
 
@@ -33,7 +33,7 @@ ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
 # freetype und harfbuzz hängen gegenseitig voneinander ab -> als Gruppe linken
-LIBS	:= -lcurl -lSDL2_ttf -lSDL2_image -Wl,--start-group -lharfbuzz -lfreetype -lbz2 -lpng -lz -Wl,--end-group -lcurl -lz -lwebp -ljpeg `sdl2-config --libs` -lnx
+LIBS	:= -lcurl -lSDL2_mixer -lopusfile -lopus -lmodplug -lmpg123 -lvorbisidec -logg -lSDL2_ttf -lSDL2_image -Wl,--start-group -lharfbuzz -lfreetype -lbz2 -lpng -lz -Wl,--end-group -lcurl -lz -lwebp -ljpeg `sdl2-config --libs` -lnx
 
 LIBDIRS	:= $(PORTLIBS) $(LIBNX)
 

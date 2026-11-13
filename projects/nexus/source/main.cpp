@@ -38,7 +38,7 @@ int main(int, char **) {
         Log("Abgesicherter Modus (L=%d, Wächter=%d)", holdL ? 1 : 0, guard ? 1 : 0);
     }
 
-    if(SDL_Init(SDL_INIT_VIDEO) != 0) {
+    if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0) {
         Log("SDL_Init fehlgeschlagen: %s", SDL_GetError());
         plat::Exit();
         return 1;

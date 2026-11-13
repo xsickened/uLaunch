@@ -6,7 +6,7 @@
 
 namespace nexus {
 
-    const char *const SectionIds[7] = { "start", "all", "fav", "folders", "recent", "homebrew", "settings" };
+    const char *const SectionIds[8] = { "start", "all", "fav", "folders", "recent", "homebrew", "almost", "settings" };
     const char *const Palette[11] = { "#3ee0c8", "#ff5d73", "#ffb347", "#7c8cff", "#5fd35f", "#e86cff", "#ffffff", "#000000", "#222831", "#00a2ff", "#ffd447" };
 
     const json *JGet(const json &o, const std::string &path) {
@@ -99,7 +99,7 @@ namespace nexus {
         }
         json secs = json::array();
         for(const auto *id: SectionIds) {
-            secs.push_back({ { "id", id }, { "visible", true } });
+            secs.push_back({ { "id", id }, { "visible", std::string(id) != "almost" } });
         }
         out["sections"] = secs;
         return out;
@@ -160,7 +160,7 @@ namespace nexus {
         }
         for(const auto *id: SectionIds) {
             if(std::find(seen.begin(), seen.end(), id) == seen.end()) {
-                secs.push_back({ { "id", id }, { "visible", true } });
+                secs.push_back({ { "id", id }, { "visible", std::string(id) != "almost" } });
             }
         }
         out["sections"] = secs;
@@ -258,6 +258,7 @@ namespace nexus {
                 else if(e.unit == "deg") std::snprintf(buf, sizeof(buf), "%d\u00b0", static_cast<int>(std::lround(d)));
                 else if(e.unit == "unit") std::snprintf(buf, sizeof(buf), "%d px", static_cast<int>(std::lround(d * 24)));
                 else if(e.unit == "x") std::snprintf(buf, sizeof(buf), "x%.2f", d);
+                else if(e.unit == "h") std::snprintf(buf, sizeof(buf), "%d:00 Uhr", static_cast<int>(std::lround(d)));
                 else if(e.unit == "s") std::snprintf(buf, sizeof(buf), "%d s", static_cast<int>(std::lround(d)));
                 else if(e.step < 1) std::snprintf(buf, sizeof(buf), "%.2f", d);
                 else std::snprintf(buf, sizeof(buf), "%d", static_cast<int>(std::lround(d)));

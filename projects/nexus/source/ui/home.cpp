@@ -19,6 +19,7 @@ namespace nexus {
             if(id == "folders") return "Ordner";
             if(id == "recent") return "Zuletzt gespielt";
             if(id == "homebrew") return "Homebrew";
+            if(id == "almost") return "Fast gemeistert";
             if(id == "settings") return "Einstellungen";
             return "?";
         }
@@ -46,6 +47,13 @@ namespace nexus {
         this->online.Init(this->d);
         this->online.onArtChanged = [this](const std::string &id) { this->ArtChanged(id); };
         this->online.onFileObsolete = [this](const std::string &f) { this->ForgetFile(f); };
+        this->online.onNewAchievements = [this](const std::vector<RaRecent> &list) {
+            const auto &r = list.front();
+            this->Toast(list.size() == 1 ? "Neu freigeschaltet: „" + r.title + "“ (" + r.game + ")" : std::to_string(list.size()) + " neue Erfolge, zuletzt „" + r.title + "“");
+            this->Sfx("unlock");
+        };
+        if(this->d->settings.B("library.hbScan")) this->hbScan.Start(im);
+        this->snd.Init(h == nullptr);
         this->img->SetDiskCache(std::string(CacheDir) + "/img");
         EnsureDir(std::string(ArtDir) + "/backgrounds");
         this->accentP = AccentFrom(this->d->settings);
@@ -127,6 +135,8 @@ namespace nexus {
     std::string Home::DisplayName(const std::string &id) {
         const auto custom = this->d->library.CustomName(id);
         if(!custom.empty()) return custom;
+        auto hb = this->hbMap.find(id);
+        if(hb != this->hbMap.end()) return hb->second.name;
         auto it = this->appMap.find(id);
         return (it == this->appMap.end() || it->second.name.empty()) ? id : it->second.name;
     }
@@ -134,6 +144,14 @@ namespace nexus {
     // ------------------------------------------------------------------ Daten
 
     void Home::SyncApps() {
+        if(this->hbScan.Version() != this->hbVersion) {
+            int v = 0;
+            const auto list = this->hbScan.Snapshot(v);
+            this->hbVersion = v;
+            this->hbMap.clear();
+            for(const auto &h: list) this->hbMap[h.id] = h;
+            this->listDirty = true;
+        }
         if(this->apps->Version() == this->appsVersion) return;
         int v = 0;
         const auto snap = this->apps->Snapshot(v);
@@ -191,7 +209,17 @@ namespace nexus {
         std::vector<Entry> out;
         auto appEntry = [&](const std::string &id) -> bool {
             auto it = this->appMap.find(id);
-            if(it == this->appMap.end()) return false;
+            if(it == this->appMap.end()) {
+                auto hb = this->hbMap.find(id);
+                if(hb == this->hbMap.end()) return false;
+                Entry e;
+                e.id = id;
+                const auto custom = lib.CustomName(id);
+                e.name = custom.empty() ? hb->second.name : custom;
+                e.iconKey = hb->second.iconKey;
+                out.push_back(e);
+                return true;
+            }
             Entry e;
             e.id = id;
             const auto custom = lib.CustomName(id);
@@ -251,6 +279,34 @@ namespace nexus {
                 if(ids.size() > 12) ids.resize(12);
                 for(const auto &i: ids) appEntry(i);
             }
+            else if(this->section == "homebrew") {
+                std::vector<std::string> ids;
+                for(const auto &[id, h]: this->hbMap) ids.push_back(id);
+                for(const auto &i: byName(ids)) appEntry(i);
+            }
+            else if(this->section == "almost") {
+                // RetroAchievements: Spiele kurz vor dem Meistern, die mit dem höchsten Fortschritt zuerst
+                const double th = this->d->settings.N("ra.almostPct") / 100.0;
+                const bool hard = this->d->settings.S("ra.pointsType") == "hardcore";
+                std::vector<std::pair<double, std::string>> ids;
+                for(const auto &i: this->installed) {
+                    const RaGame *g = this->online.RaGameFor(i, this->DisplayName(i));
+                    if(!g || g->max <= 0) continue;
+                    const double p = static_cast<double>(hard ? g->gotHard : g->got) / g->max;
+                    if(p >= th && p < 1.0) ids.push_back({ p, i });
+                }
+                std::sort(ids.begin(), ids.end(), [](const auto &a, const auto &b) { return a.first > b.first; });
+                for(const auto &[p, i]: ids) appEntry(i);
+            }
+        }
+        if(!this->searchQuery.empty()) {
+            // Suche: alle Spiele, Homebrew und Ordner, deren Name den Begriff enthält
+            out.clear();
+            const std::string q = Lower(this->searchQuery);
+            for(const auto &f: lib.folders) if(Lower(f.name).find(q) != std::string::npos) folderEntry(f);
+            std::vector<std::string> ids = this->installed;
+            for(const auto &[id, h]: this->hbMap) ids.push_back(id);
+            for(const auto &i: byName(ids)) if(Lower(this->DisplayName(i)).find(q) != std::string::npos) appEntry(i);
         }
         // Liste geändert? (für Einblend-Animation)
         bool same = out.size() == this->list.size();
@@ -305,6 +361,7 @@ namespace nexus {
         if(this->list.empty()) return;
         i = std::clamp(i, 0, static_cast<int>(this->list.size()) - 1);
         if(i == this->focus) return;
+        this->Sfx("move");
         this->focus = i;
         this->layoutDirty = true;
         this->wobbleT = 0;
@@ -413,6 +470,11 @@ namespace nexus {
             return;
         }
         if(any) this->idleT = 0;
+        this->heldNow = in.held;
+        if((in.held & plat::BtnZL) && (in.down & plat::BtnA) && this->screen == Screen::Main && !this->locked && this->dialogs.empty() && !this->crop.active && !this->logoMove.active && this->d->settings.B("library.quickLaunch")) {
+            this->QuickLaunch();
+            return;
+        }
         if(this->crop.active) { this->CropInput(in); return; }
         if(this->logoMove.active) { this->LogoMoveInput(in); return; }
         if(in.tap) this->Tap(in.tapX, in.tapY);
@@ -434,14 +496,14 @@ namespace nexus {
         }
         if(this->screen == Screen::Profile) { this->ProfilePress(b); return; }
         if(this->locked) {
-            if(!this->unlocking && (b & (BtnA | BtnB | BtnX | BtnY))) { this->unlocking = true; this->unlockT = 0; }
+            if(!this->unlocking && (b & (BtnA | BtnB | BtnX | BtnY))) { this->unlocking = true; this->unlockT = 0; this->Sfx("unlock"); }
             return;
         }
         if(b == BtnPlus) {
             if(this->host && this->dialogs.empty() && !this->moving) this->OpenQuickMenu();
             return;
         }
-        if(b == BtnMinus) { this->CloseAll(); this->locked = true; this->unlocking = false; return; }
+        if(b == BtnMinus) { this->CloseAll(); this->locked = true; this->unlocking = false; this->Sfx("lock"); return; }
         if(!this->dialogs.empty()) {
             auto dl = this->dialogs.back();
             auto rows = dl->rows();
@@ -490,10 +552,15 @@ namespace nexus {
             case BtnRight: this->SetFocus(Navigate(this->lay, this->d->settings, this->focus, 1, 0)); break;
             case BtnUp: this->SetFocus(Navigate(this->lay, this->d->settings, this->focus, 0, -1)); break;
             case BtnDown: this->SetFocus(Navigate(this->lay, this->d->settings, this->focus, 0, 1)); break;
-            case BtnL: case BtnZL: this->CycleSection(-1); break;
-            case BtnR: case BtnZR: this->CycleSection(1); break;
-            case BtnA: this->Activate(); break;
+            case BtnL: this->CycleSection(-1); this->Sfx("move"); break;
+            case BtnR: this->CycleSection(1); this->Sfx("move"); break;
+            case BtnZL: break;   // Modifikator (ZL + A = Schnellstart)
+            case BtnZR: this->OpenSearch(); break;
+            case BtnA: this->Sfx("select"); this->Activate(); break;
             case BtnB:
+                this->Sfx("back");
+                if(this->multi) { this->multi = false; this->multiSel.clear(); this->Toast("Mehrfachauswahl beendet."); break; }
+                if(!this->searchQuery.empty() && this->openFolder.empty()) { this->searchQuery.clear(); this->listDirty = true; this->focus = 0; this->entryAnim = true; break; }
                 if(!this->openFolder.empty()) {
                     const auto fid = this->openFolder;
                     this->openFolder.clear();
@@ -504,7 +571,7 @@ namespace nexus {
                     this->layoutDirty = true;
                 }
                 break;
-            case BtnX: if(!this->list.empty()) this->OpenContext(); break;
+            case BtnX: this->Sfx("open"); if(this->multi) this->OpenMultiMenu(); else if(!this->list.empty()) this->OpenContext(); break;
             case BtnY:
                 if(!this->list.empty() && !this->list[this->focus].folder) {
                     this->d->library.ToggleFav(this->list[this->focus].id);
@@ -520,6 +587,12 @@ namespace nexus {
     void Home::Activate() {
         if(this->list.empty()) return;
         const auto &e = this->list[this->focus];
+        if(this->multi) {
+            if(e.folder) { this->Toast("Ordner können nicht mit ausgewählt werden."); return; }
+            if(this->multiSel.count(e.id)) this->multiSel.erase(e.id); else this->multiSel.insert(e.id);
+            this->Sfx("toggle");
+            return;
+        }
         if(e.folder) {
             this->openFolder = e.id;
             this->focus = 0;
@@ -528,6 +601,8 @@ namespace nexus {
             this->listDirty = true;
             return;
         }
+        auto hbIt = this->hbMap.find(e.id);
+        if(hbIt != this->hbMap.end()) { this->LaunchHb(hbIt->second); return; }
         auto it = this->appMap.find(e.id);
         if(it == this->appMap.end()) return;
         if(this->host) {
@@ -763,6 +838,8 @@ namespace nexus {
                     this->listDirty = true; this->logoId.clear(); this->MarkDirty();
                     this->Toast("Originalname wiederhergestellt.");
                 } });
+                rows.push_back(Row{ "Aufkleber …", nullptr, nullptr, [this, e]() { this->Pop(); this->OpenStickers(e.id); } });
+                rows.push_back(Row{ "Mehrere auswählen …", nullptr, nullptr, [this, e]() { this->Pop(); this->multi = true; this->multiSel = { e.id }; } });
                 rows.push_back(Row{ "Zu Ordner hinzufügen …", nullptr, nullptr, [this, e]() { this->Pop(); this->OpenFolderPicker({ e.id }); } });
                 if(!this->openFolder.empty()) rows.push_back(Row{ "Aus Ordner entfernen", nullptr, nullptr, [this, e]() {
                     this->Pop(); this->d->library.RemoveFromFolder(e.id); this->listDirty = true; this->MarkDirty();
@@ -872,7 +949,10 @@ namespace nexus {
             if(p == "logo.posX" || p == "logo.posY") return fr;
             if(p == "logo.anchorX" || p == "logo.anchorY" || p == "logo.offsetX" || p == "logo.offsetY" || p == "logo.safeArea") return !fr;
         }
-        if(p == "home.image") return s.S("home.bgType") == "image";
+        if(p == "home.image") return s.S("home.bgType") == "image" || s.S("home.bgType") == "gif";
+        if(p.rfind("sound.", 0) == 0 && p != "sound.enabled" && p != "sound.bgm") return p == "sound.bgmVolume" ? s.B("sound.bgm") : s.B("sound.enabled");
+        if(p == "library.stickerPos") return s.B("library.stickers");
+        if(p == "auto.dayStart" || p == "auto.nightStart") return s.B("auto.enabled");
         if(p == "lock.image") return s.S("lock.bgType") == "image";
         if(p == "profile.image") return s.S("profile.bgType") == "image";
         const auto am = s.S("theme.accentMode");
@@ -1051,7 +1131,8 @@ namespace nexus {
                                         if(pick.empty()) JSet(this->d->settings.data, path, json(nullptr));
                                         else this->d->settings.Set(path, json(pick));
                                         changed();
-                                        if(!pick.empty() && path.rfind("aura.", 0) != 0 && path.rfind("bgfx.", 0) != 0) this->OpenCropEditor(pick, "Bildausschnitt", ScreenW / ScreenH);
+                                        const bool gif = pick.size() > 4 && (pick.compare(pick.size() - 4, 4, ".gif") == 0 || pick.compare(pick.size() - 4, 4, ".GIF") == 0);
+                                        if(!pick.empty() && !gif && path.rfind("aura.", 0) != 0 && path.rfind("bgfx.", 0) != 0) this->OpenCropEditor(pick, "Bildausschnitt", ScreenW / ScreenH);
                                     }, "Kein Bild");
                             } });
                         if(!this->d->settings.S(e.path).empty() && e.path.rfind("aura.", 0) != 0 && e.path.rfind("bgfx.", 0) != 0) {
@@ -1066,6 +1147,17 @@ namespace nexus {
                         [this, ep, changed](int dir) { this->d->settings.Step(*ep, dir); changed(); }, nullptr });
                 }
                 if(gid == "logo") rows.insert(rows.begin(), Row{ "Logo frei verschieben (Stick) …", nullptr, nullptr, [this]() { this->StartLogoMove(); } });
+                if(gid == "auto") {
+                    for(const char *key: { "auto.dayTheme", "auto.nightTheme" }) {
+                        const std::string k = key;
+                        rows.push_back(Row{ k == "auto.dayTheme" ? "Tag-Theme" : "Nacht-Theme", [this, k]() {
+                                const auto p = this->d->settings.S(k);
+                                if(p.empty()) return std::string("nicht gewählt");
+                                for(const auto &t: this->AllThemes()) if(t.path == p) return t.name;
+                                return std::string("fehlt");
+                            }, nullptr, [this, k]() { this->OpenThemePicker(k); } });
+                    }
+                }
                 if(gid == "lib") for(auto &rw: this->SgdbRows()) rows.push_back(rw);
                 if(gid == "ra") for(auto &rw: this->RaRows()) rows.push_back(rw);
                 if(gid == "lock") rows.push_back(Row{ "Sperrbildschirm jetzt anzeigen (−)", nullptr, nullptr, [this]() { this->CloseAll(); this->locked = true; this->unlocking = false; } });
@@ -1082,6 +1174,7 @@ namespace nexus {
     void Home::Update(double dt) {
         this->time += dt;
         this->accentP = AccentFrom(this->d->settings);
+        if(this->d->settings.S("theme.accentSource") == "game" && this->gameR >= 0) this->accentP.c1 = Rgb{ this->gameR, this->gameG, this->gameB };
         this->g->fontScale = this->d->settings.N("ui.fontScale");
         this->g->paint = this->AccentFn(0, 0, ScreenW, ScreenH);
         this->online.Tick();
@@ -1101,6 +1194,11 @@ namespace nexus {
             if(!this->auraC.enabled) this->fx.parts.erase(std::remove_if(this->fx.parts.begin(), this->fx.parts.end(), [](const Particle &p) { return p.layer < 2; }), this->fx.parts.end());
             if(this->bgC.type == "none") this->fx.parts.erase(std::remove_if(this->fx.parts.begin(), this->fx.parts.end(), [](const Particle &p) { return p.layer >= 2; }), this->fx.parts.end());
             this->UpdateIdle(dt, false);
+            this->snd.Configure(st.B("sound.enabled"), st.S("sound.style"), st.N("sound.volume"), st.B("sound.bgm"), st.N("sound.bgmVolume"));
+            this->snd.SetMusic(this->locked ? "lock" : "menu");
+            this->snd.Tick(dt);
+            this->UpdateGameColor(dt);
+            this->UpdateAutoTheme(dt);
             if(!this->startApplied && this->appsVersion > 0) this->ApplyStartSection();
             if(!this->gcDone && this->appsVersion > 0 && !this->apps->Busy() && this->time > 15) {
                 this->gcDone = true;
@@ -1207,6 +1305,14 @@ namespace nexus {
         const auto type = s.S("home.bgType");
         if(type == "color") this->g->Rect(0, 0, ScreenW, ScreenH, ParseCol(s.S("home.color")));
         else if(type == "image" && this->DrawBgImage(s.S("home.image"), 0, 1.0)) {}
+        else if(type == "gif" && !s.S("home.image").empty() && [&]() {
+            const auto p = s.S("home.image");
+            if(this->anim.Path() != p) this->anim.Load(p, this->applet ? 12u * 1024 * 1024 : 48u * 1024 * 1024);
+            SDL_Texture *t = this->anim.Frame(this->r, this->time);
+            if(!t) return false;
+            this->g->Image(t, 0, 0, ScreenW, ScreenH, 1.0, true);
+            return true;
+        }()) {}
         else {
             const int p = std::clamp(static_cast<int>(s.N("home.preset")), 0, 7);
             Col c0 = ParseCol(Presets[p][0]), c1 = ParseCol(Presets[p][1]), c2 = ParseCol(Presets[p][2]);
@@ -1372,7 +1478,13 @@ namespace nexus {
         const double alpha = this->logoAlpha * s.N("logo.opacity");
         if(s.B("logo.shadow")) this->g->Image(tex, x + 3, y + 6, w, h, alpha * 0.5, true, Col{ 0, 0, 0, 255 });
         this->g->Image(tex, x, y, w, h, alpha, true);
-        if(!e.folder) this->DrawRaUnderLogo(e, x, std::min(y + h + 10, by1 - 40), w, alpha);
+        if(!e.folder) {
+            double ly = std::min(y + h + 10, by1 - 40);
+            const RaGame *rg = this->d->settings.B("ra.enabled") && this->d->settings.B("ra.showUnderLogo") ? this->online.RaGameFor(e.id, e.name) : nullptr;
+            this->DrawRaUnderLogo(e, x, ly, w, alpha);
+            if(rg && rg->max > 0) ly += 40;
+            this->DrawPlaytime(e, x, ly, w, alpha);
+        }
     }
 
     void Home::DrawTiles() {
@@ -1490,6 +1602,15 @@ namespace nexus {
                     this->g->Icon("fav", xf.cx - ds.w * xf.sc * xf.squash / 2 + 14, xf.cy - ds.h * xf.sc / 2 + 14, 16, Col{ 255, 212, 71, static_cast<uint8_t>(255 * op) }, true);
                 }
                 if(!e.folder && std::abs(xf.rot) < 0.5) this->DrawRaBadge(e, xf, ds.w * xf.sc * xf.squash, ds.h * xf.sc, op);
+                if(!e.folder && std::abs(xf.rot) < 0.5) this->DrawStickers(e, xf, ds.w * xf.sc * xf.squash, ds.h * xf.sc, op);
+                if(this->multi && this->multiSel.count(e.id)) {
+                    this->g->Shape(xf, rad, hex, Col{ 0, 0, 0, static_cast<uint8_t>(90 * op) });
+                    this->g->ShapeRing(xf, rad, hex, 4, WithA(this->Accent(), op));
+                    this->g->Circle(xf.cx + ds.w * xf.sc * xf.squash / 2 - 18, xf.cy - ds.h * xf.sc / 2 + 18, 13, WithA(this->Accent(), op));
+                    const double kx = xf.cx + ds.w * xf.sc * xf.squash / 2 - 18, ky = xf.cy - ds.h * xf.sc / 2 + 18;
+                    this->g->Line(kx - 6, ky, kx - 2, ky + 5, 3, Col{ 0, 0, 0, static_cast<uint8_t>(255 * op) });
+                    this->g->Line(kx - 2, ky + 5, kx + 6, ky - 5, 3, Col{ 0, 0, 0, static_cast<uint8_t>(255 * op) });
+                }
             }
             if(this->host && !e.folder && std::abs(xf.rot) < 0.5) {
                 auto ai = this->appMap.find(e.id);
@@ -1524,6 +1645,13 @@ namespace nexus {
             }
         }
         this->DrawParticles(1);
+        if(!this->searchQuery.empty() && this->openFolder.empty()) {
+            this->g->Text("Suche: „" + this->searchQuery + "“ · " + std::to_string(this->list.size()) + " Treffer   ·   B = Suche beenden   ·   ZR = neu suchen", 14, 60, this->Env().topH, this->MutedCol());
+        }
+        if(this->multi) {
+            this->g->RoundRect(440, 70, 400, 30, 15, this->Accent());
+            this->g->Text(std::to_string(this->multiSel.size()) + " ausgewählt · A wählen · X Aktionen · B Ende", 13, 640, 76, Col{ 0, 0, 0, 255 }, 1, 0, true);
+        }
         if(!this->openFolder.empty()) {
             auto *f = this->d->library.FindFolder(this->openFolder);
             this->g->Text(std::string(SectionName(this->section)) + "  ›  " + (f ? f->name : "") + "   ·   B = zurück", 14, 60, this->Env().topH, this->MutedCol());
@@ -1667,6 +1795,7 @@ namespace nexus {
             h.push_back({ "X", "Optionen" });
             h.push_back({ "Y", "Favorit" });
             h.push_back({ "L/R", "Bereich" });
+            h.push_back({ "ZR", "Suche" });
             h.push_back({ "−", "Sperren" });
             h.push_back({ "+", this->host ? "Menü" : "Beenden" });
         }
@@ -1893,6 +2022,7 @@ namespace nexus {
         else {
             this->locked = false;
             if(this->host) this->currentUser = this->host->CurrentUser();
+            this->SwitchUserLook(this->currentUser.id);
             this->entryAnim = true;
             this->listDirty = true;
         }
@@ -1925,6 +2055,7 @@ namespace nexus {
         this->Save();
         Log("Start %s (%s)", id.c_str(), name.c_str());
         if(this->host) this->host->BeforeLeave();
+        this->Sfx("launch");
         const uint32_t rc = this->host ? this->host->Launch(tid) : plat::LaunchApplication(tid);
         Log("Start Ergebnis 0x%X", rc);
         if(rc != 0) {

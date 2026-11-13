@@ -23,6 +23,8 @@ def unit(e):
     if e.get("max", 0) <= 1.0001 and e.get("min", 0) >= 0 and e.get("step", 1) < 1 and not p.endswith("waveFreq"): return "%"
     if p.endswith(("Spread", "tilt", "Angle")): return "deg"
     if p.endswith("Cycle"): return "s"
+    if p.endswith("Pct"): return "%raw"
+    if p.startswith("auto.") and p.endswith("Start"): return "h"
     if p.startswith("ui.") and p.endswith(("Size", "Height", "Border")): return "px"
     if p.endswith("Repeat"): return "x"
     if p.endswith(("height", "gap")): return "unit"

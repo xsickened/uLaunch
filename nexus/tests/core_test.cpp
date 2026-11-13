@@ -4,12 +4,15 @@
 #include "accent.hpp"
 #include "online_parse.hpp"
 #include "particles.hpp"
+#include "themepack.hpp"
+#include "nro.hpp"
 #include "library.hpp"
 #include "store.hpp"
 #include "layout.hpp"
 #include <cassert>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <cstdlib>
 #include <random>
 
@@ -61,7 +64,7 @@ int main() {
         bool settingsVisible = false;
         for(const auto &id: s.VisibleSections()) if(id == "settings") settingsVisible = true;
         CHECK(settingsVisible);
-        CHECK(s.data["sections"].size() == 7);
+        CHECK(s.data["sections"].size() == 8);
     }
 
     // 3. Bibliothek: jeder installierte Titel genau einmal erreichbar
@@ -412,6 +415,75 @@ int main() {
         CHECK(e.library.CustomName("0100000000020000").size() <= 80 && !e.library.CustomName("0100000000020000").empty());
         e.library.SetCustomName("0100000000010000", "   ");
         CHECK(e.library.CustomName("0100000000010000").empty());
+    }
+
+    // 14. Theme-Pakete (.nxtheme) mit Bildern, Aufkleber, neue Bereiche
+    {
+        if(std::system("rm -rf /tmp/nexus_test/pk && mkdir -p /tmp/nexus_test/pk/src") != 0) std::printf("Hinweis: Testordner\n");
+        WriteFileAtomic("/tmp/nexus_test/pk/src/bg.png", std::string("PNGDATA-1234567890", 18));
+        json st = Settings::Defaults();
+        JSet(st, "home.image", json("/tmp/nexus_test/pk/src/bg.png"));
+        JSet(st, "lock.image", json("/tmp/nexus_test/pk/src/fehlt.jpg"));
+        JSet(st, "theme.accent", json("#123456"));
+        JSet(st, "sgdbKey", json("geheim-123456"));
+        std::string err;
+        CHECK(ExportThemePack("/tmp/nexus_test/pk/mein.nxtheme", "Mein Paket", st, err));
+        std::string nm;
+        CHECK(ReadThemePackName("/tmp/nexus_test/pk/mein.nxtheme", nm) && nm == "Mein Paket");
+        json cur = Settings::Defaults(); JSet(cur, "sgdbKey", json("mein-key-99999"));
+        json res;
+        CHECK(ApplyThemePack("/tmp/nexus_test/pk/mein.nxtheme", "/tmp/nexus_test/pk/art", cur, res, err));
+        CHECK(*JGet(res, "theme.accent") == "#123456" && *JGet(res, "sgdbKey") == "mein-key-99999");
+        const std::string hi = JGet(res, "home.image")->get<std::string>();
+        std::string data; ReadFile(hi, data);
+        CHECK(hi.find("/tmp/nexus_test/pk/art/themes/mein-paket/") == 0 && data == "PNGDATA-1234567890");
+        CHECK(JGet(res, "lock.image")->is_null());
+        std::string raw; ReadFile("/tmp/nexus_test/pk/mein.nxtheme", raw);
+        CHECK(raw.find("geheim") == std::string::npos);
+        CHECK(!ReadThemePackName("/tmp/nexus_test/pk/src/bg.png", nm));
+        CHECK(!ApplyThemePack("/tmp/nexus_test/pk/fehlt.nxtheme", "/tmp/x", cur, res, err));
+
+        Library lib;
+        lib.ToggleSticker("0100000000010000", "done");
+        lib.ToggleSticker("0100000000010000", "quatsch");
+        lib.ToggleSticker("0100000000010000", "mp");
+        CHECK(lib.Stickers("0100000000010000").size() == 2);
+        lib.ToggleSticker("0100000000010000", "done");
+        CHECK(lib.Stickers("0100000000010000").size() == 1 && lib.Stickers("0100000000010000")[0] == "mp");
+        CHECK(IsHomebrewId("ff0123456789abcd") && !IsHomebrewId("0100000000010000"));
+        json secs = Settings::Defaults()["sections"];
+        bool almostHidden = false;
+        for(const auto &x: secs) if(x["id"] == "almost") almostHidden = !x["visible"].get<bool>();
+        CHECK(almostHidden);
+    }
+
+    // 15. NRO-Metadaten
+    {
+        if(std::system("rm -rf /tmp/nexus_test/sw && mkdir -p /tmp/nexus_test/sw/tool") != 0) std::printf("Hinweis\n");
+        // künstliche NRO: Header, dann ASET mit Icon und NACP
+        std::string f(0x100, '\0');
+        std::memcpy(&f[0x10], "NRO0", 4);
+        const uint32_t size = 0x100; std::memcpy(&f[0x18], &size, 4);
+        std::string aset(0x38, '\0');
+        std::memcpy(&aset[0], "ASET", 4);
+        const uint64_t iconOff = 0x38, iconSize = 4, nacpOff = 0x38 + 4, nacpSize = 0x4000;
+        std::memcpy(&aset[0x08], &iconOff, 8); std::memcpy(&aset[0x10], &iconSize, 8);
+        std::memcpy(&aset[0x18], &nacpOff, 8); std::memcpy(&aset[0x20], &nacpSize, 8);
+        std::string nacp(0x4000, '\0');
+        std::memcpy(&nacp[0], "Tool EN", 7);
+        std::memcpy(&nacp[4 * 0x300], "Werkzeug", 8);
+        std::memcpy(&nacp[4 * 0x300 + 0x200], "Kevin", 5);
+        std::memcpy(&nacp[0x3060], "1.2.3", 5);
+        WriteFileAtomic("/tmp/nexus_test/sw/tool/tool.nro", f + aset + "ICON" + nacp);
+        WriteFileAtomic("/tmp/nexus_test/sw/kaputt.nro", "nicht wirklich");
+        WriteFileAtomic("/tmp/nexus_test/sw/notiz.txt", "x");
+        const auto list = FindNros("/tmp/nexus_test/sw", 100);
+        CHECK(list.size() == 2);
+        NroMeta m;
+        CHECK(ParseNro("/tmp/nexus_test/sw/tool/tool.nro", m, true));
+        CHECK(m.name == "Werkzeug" && m.author == "Kevin" && m.version == "1.2.3" && m.icon.size() == 4 && IsHomebrewId(m.id));
+        CHECK(!ParseNro("/tmp/nexus_test/sw/kaputt.nro", m, true));
+        CHECK(HomebrewId("a") != HomebrewId("b") && HomebrewId("a") == HomebrewId("a"));
     }
 
     std::printf(g_Fail ? "%d Fehler\n" : "Alle Kern-Tests bestanden.\n", g_Fail);

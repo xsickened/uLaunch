@@ -39,6 +39,7 @@ namespace nexus {
             int AutoRemaining() const { return static_cast<int>(this->autoQueue.size()) + (this->autoBusy ? 1 : 0); }
             std::function<void(const std::string &id)> onArtChanged;
             std::function<void(const std::string &file)> onFileObsolete;   // ersetzte Download-Datei löschen
+            std::function<void(const std::vector<RaRecent> &)> onNewAchievements;
 
             // ---------------- RetroAchievements
             struct RaState {
@@ -69,6 +70,7 @@ namespace nexus {
             int raPendingParts = 0;
             bool raNextOk = true;
             std::time_t lastRaTry = 0;
+            std::string raSeen;   // Datum des neuesten bereits gemeldeten Erfolgs
 
             struct AutoJob { std::string id, name; bool grid, hero, logo; long long gid; };
             std::deque<AutoJob> autoQueue;

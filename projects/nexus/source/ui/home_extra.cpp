@@ -1,5 +1,6 @@
 // NEXUS HOME: Bildauswahl, SteamGridDB, RetroAchievements, Tastatur-Aufschub
 #include "home.hpp"
+#include "../core/themepack.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -16,7 +17,7 @@ namespace nexus {
         bool IsImageFile(const std::string &n) {
             std::string l = n;
             for(auto &c: l) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            for(const char *e: { ".jpg", ".jpeg", ".png", ".webp" }) {
+            for(const char *e: { ".jpg", ".jpeg", ".png", ".webp", ".gif" }) {
                 const std::string x(e);
                 if(l.size() > x.size() && l.compare(l.size() - x.size(), x.size(), x) == 0) return true;
             }
@@ -95,6 +96,8 @@ namespace nexus {
 
     void Home::Shutdown() {
         this->online.Shutdown();
+        this->hbScan.Stop();
+        this->snd.Shutdown();
         if(this->dirtySave) this->Save();
     }
 
@@ -446,11 +449,69 @@ namespace nexus {
 
     // ------------------------------------------------------------------ Eigene Themes
 
+    std::vector<UserTheme> Home::AllThemes() {
+        auto list = ListUserThemes(ThemesDir);
+        DIR *d = opendir(ThemesDir);
+        if(d) {
+            std::vector<std::string> packs;
+            while(dirent *e = readdir(d)) {
+                const std::string n = e->d_name;
+                if(n.size() > 8 && n.compare(n.size() - 8, 8, ".nxtheme") == 0) packs.push_back(n);
+            }
+            closedir(d);
+            std::sort(packs.begin(), packs.end());
+            for(const auto &p: packs) {
+                std::string name;
+                const std::string full = std::string(ThemesDir) + "/" + p;
+                if(ReadThemePackName(full, name)) list.push_back(UserTheme{ name + " (Paket)", full });
+            }
+        }
+        return list;
+    }
+
+    bool Home::ApplyThemeFile(const std::string &path, const std::string &name) {
+        json result;
+        std::string err;
+        const bool pack = path.size() > 8 && path.compare(path.size() - 8, 8, ".nxtheme") == 0;
+        if(!(pack ? ApplyThemePack(path, ArtDir, this->d->settings.data, result, err) : ApplyUserTheme(path, this->d->settings.data, result))) {
+            this->Toast("Theme konnte nicht geladen werden" + (err.empty() ? std::string(".") : ": " + err));
+            return false;
+        }
+        this->d->settings.data = result;
+        this->listDirty = true; this->layoutDirty = true;
+        this->MarkDirty();
+        this->Toast("Theme „" + name + "“ geladen.");
+        return true;
+    }
+
+    void Home::OpenThemePicker(const std::string &key) {
+        auto dl = std::make_shared<Dialog>();
+        dl->title = key == "auto.dayTheme" ? "Tag-Theme wählen" : "Nacht-Theme wählen";
+        dl->sub = "Eigene Themes speicherst du unter Themes & System → Eigene Themes.";
+        dl->w = 520; dl->x = this->DialogX(520); dl->y = 90; dl->shade = true;
+        dl->rows = [this, key]() {
+            std::vector<Row> rows;
+            rows.push_back(Row{ "Keins", nullptr, nullptr, [this, key]() { this->d->settings.Set(key, json("")); this->MarkDirty(); this->Pop(); } });
+            for(const auto &t: this->AllThemes()) {
+                const UserTheme th = t;
+                rows.push_back(Row{ th.name, nullptr, nullptr, [this, key, th]() {
+                    this->d->settings.Set(key, json(th.path));
+                    JSet(this->d->settings.data, "auto.lastPhase", json(""));   // sofort neu prüfen
+                    this->autoCheck = 0;
+                    this->MarkDirty();
+                    this->Pop();
+                } });
+            }
+            return rows;
+        };
+        this->Push(dl);
+    }
+
     void Home::OpenThemes() {
         auto dl = std::make_shared<Dialog>();
         dl->title = "Eigene Themes";
-        dl->sub = "Gespeichert in sdmc:/nexus/themes/ – Updates löschen sie nicht. Schlüssel, RetroAchievements-Konto und Bibliothek bleiben beim Laden unverändert.";
-        dl->w = 600; dl->x = this->DialogX(600); dl->y = 74; dl->shade = true;
+        dl->sub = "Gespeichert in sdmc:/nexus/themes/. Pakete (.nxtheme) enthalten die eigenen Bilder und lassen sich weitergeben: Datei einfach in diesen Ordner kopieren.";
+        dl->w = 640; dl->x = this->DialogX(640); dl->y = 74; dl->shade = true;
         dl->h = ScreenH - dl->y - this->Env().botH - 8;
         dl->rows = [this]() {
             std::vector<Row> rows;
@@ -458,32 +519,37 @@ namespace nexus {
                 this->AskText("Name des Themes", this->d->settings.S("theme.name"), 40, [this](std::string name) {
                     if(name.empty()) return;
                     this->d->settings.Set("theme.name", json(name));
-                    std::string path;
-                    if(SaveUserTheme(ThemesDir, name, this->d->settings.data, &path)) this->Toast("Theme „" + name + "“ gespeichert.");
+                    if(SaveUserTheme(ThemesDir, name, this->d->settings.data, nullptr)) this->Toast("Theme „" + name + "“ gespeichert.");
                     else this->Toast("Speichern fehlgeschlagen (SD-Karte?).");
                     this->MarkDirty();
                 });
             } });
-            const auto list = ListUserThemes(ThemesDir);
+            rows.push_back(Row{ "Als Paket mit Bildern exportieren (.nxtheme) …", nullptr, nullptr, [this]() {
+                this->AskText("Name des Pakets", this->d->settings.S("theme.name"), 40, [this](std::string name) {
+                    if(name.empty()) return;
+                    std::string slug;
+                    for(const unsigned char c: name) { if(std::isalnum(c)) slug += static_cast<char>(std::tolower(c)); else if(!slug.empty() && slug.back() != '-') slug += '-'; }
+                    if(slug.empty()) slug = "theme";
+                    EnsureDir(ThemesDir);
+                    std::string err;
+                    const std::string file = std::string(ThemesDir) + "/" + slug + ".nxtheme";
+                    if(ExportThemePack(file, name, this->d->settings.data, err)) this->Toast("Paket gespeichert: " + file);
+                    else this->Toast("Export fehlgeschlagen: " + err);
+                });
+            } });
+            const auto list = this->AllThemes();
             if(list.empty()) rows.push_back(Row{ "Noch keine eigenen Themes gespeichert.", nullptr, nullptr, nullptr });
             else rows.push_back(Row{ "Laden (A) · Löschen (X)", nullptr, nullptr, nullptr, true });
             for(const auto &t: list) {
                 const UserTheme th = t;
-                rows.push_back(Row{ th.name, nullptr, nullptr, [this, th]() {
-                    json result;
-                    if(!ApplyUserTheme(th.path, this->d->settings.data, result)) { this->Toast("Theme-Datei ist beschädigt."); return; }
-                    this->d->settings.data = result;
-                    this->listDirty = true; this->layoutDirty = true;
-                    this->MarkDirty();
-                    this->Toast("Theme „" + th.name + "“ geladen.");
-                } });
+                rows.push_back(Row{ th.name, nullptr, nullptr, [this, th]() { this->ApplyThemeFile(th.path, th.name); } });
             }
             return rows;
         };
         dl->onX = [this, dl]() {
-            const auto list = ListUserThemes(ThemesDir);
-            // Zeilen: 0 = Speichern, 1 = Überschrift, ab 2 die Themes
-            const int i = dl->sel - 2;
+            const auto list = this->AllThemes();
+            // Zeilen: 0 Speichern, 1 Exportieren, 2 Überschrift, ab 3 die Themes
+            const int i = dl->sel - 3;
             if(i < 0 || i >= static_cast<int>(list.size())) return;
             const UserTheme th = list[i];
             this->Confirm("Theme „" + th.name + "“ löschen?", "Die Datei wird von der SD-Karte entfernt.", "Löschen", [this, th]() {

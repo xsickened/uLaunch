@@ -36,6 +36,9 @@ namespace nexus {
             virtual void OnUnlock() = 0;
             virtual std::vector<SysAction> SystemActions() = 0;
             virtual void BeforeLeave() = 0;                       // vor jedem Verlassen der Oberfläche (Startwächter zurücksetzen)
+            // Homebrew (.nro) über uLaunch starten; asApp = als Anwendung (voller Speicher, sofern eingerichtet)
+            virtual uint32_t LaunchHomebrew(const std::string &path, bool asApp) = 0;
+            virtual bool CanLaunchHomebrewAsApp() = 0;
     };
 
 }

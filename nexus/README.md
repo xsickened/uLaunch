@@ -36,3 +36,13 @@ Der Originalcode von uLaunch ist in diesem Branch unverändert. NEXUS-Code kommt
 - **Bildschirmschoner:** Abdunkeln, Diashow der Spielbilder, große Uhr oder Sperrbildschirm nach X Minuten.
 - **Weitere Optionen:** Fokusrahmen-Breite, andere Kacheln abdunkeln, Titel bei Fokus, Sekunden, Begrüßung, eigener Text auf dem Sperrbildschirm, Startbereich beim Öffnen.
 - **Übergänge:** Zwischen Profilauswahl, Sperrbildschirm und Hauptmenü blendet uLaunch nicht mehr über; NEXUS bleibt sichtbar und animiert selbst.
+
+## v0.5
+
+- **Suche** (ZR), **Schnellstart** (ZL + A = zuletzt gespieltes Spiel), **Mehrfachauswahl** (X → „Mehrere auswählen …“).
+- **Homebrew als Kacheln:** `sdmc:/switch/**.nro` mit Namen und Icons aus der NRO (`core/nro.cpp`), Start als Applet oder Anwendung über uLaunch.
+- **Spielzeit** unter dem Logo (Systemstatistik `pdm`, pro Benutzer).
+- **Sounds & Musik:** eingebaute Klänge (4 Stile, zur Laufzeit erzeugt), eigene Dateien und Musik in `sdmc:/nexus/sounds/`.
+- **Akzent aus dem Spielbild** (Farbanalyse beim Laden), **Tag-/Nacht-Theme**, **GIF-Hintergrund**.
+- **Aufkleber** (Neu, Angefangen, Durchgespielt, 100 %, Multiplayer, Koop, Top), **Theme-Pakete** `.nxtheme` (ZIP mit Bildern), **Darstellung & Favoriten pro Benutzer**.
+- **RetroAchievements:** Meldung neuer Erfolge, Bereich „Fast gemeistert“.
