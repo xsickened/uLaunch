@@ -393,6 +393,7 @@ namespace nexus {
 
     void Home::HandleInput(const plat::Input &in) {
         if(this->crop.active) { this->CropInput(in); return; }
+        if(this->logoMove.active) { this->LogoMoveInput(in); return; }
         if(in.tap) this->Tap(in.tapX, in.tapY);
         const uint32_t order[] = { plat::BtnUp, plat::BtnDown, plat::BtnLeft, plat::BtnRight, plat::BtnA, plat::BtnB, plat::BtnX, plat::BtnY, plat::BtnL, plat::BtnR, plat::BtnZL, plat::BtnZR, plat::BtnMinus, plat::BtnPlus };
         for(const uint32_t b: order) if(in.down & b) this->Press(b);
@@ -817,6 +818,11 @@ namespace nexus {
         if(p == "ui.panelColor") return s.S("theme.panelStyle") == "custom";
         if(p == "lock.textCustom") return s.S("lock.textColor") == "custom";
         if(p == "hero.maskSize") return s.S("hero.mask") != "none";
+        {
+            const bool fr = s.S("logo.placement") == "free";
+            if(p == "logo.posX" || p == "logo.posY") return fr;
+            if(p == "logo.anchorX" || p == "logo.anchorY" || p == "logo.offsetX" || p == "logo.offsetY" || p == "logo.safeArea") return !fr;
+        }
         if(p == "home.image") return s.S("home.bgType") == "image";
         if(p == "lock.image") return s.S("lock.bgType") == "image";
         if(p == "profile.image") return s.S("profile.bgType") == "image";
@@ -1003,6 +1009,7 @@ namespace nexus {
                     rows.push_back(Row{ e.label, [this, ep]() { return this->d->settings.Display(*ep); },
                         [this, ep, changed](int dir) { this->d->settings.Step(*ep, dir); changed(); }, nullptr });
                 }
+                if(gid == "logo") rows.insert(rows.begin(), Row{ "Logo frei verschieben (Stick) …", nullptr, nullptr, [this]() { this->StartLogoMove(); } });
                 if(gid == "lib") for(auto &rw: this->SgdbRows()) rows.push_back(rw);
                 if(gid == "ra") for(auto &rw: this->RaRows()) rows.push_back(rw);
                 if(gid == "lock") rows.push_back(Row{ "Sperrbildschirm jetzt anzeigen (−)", nullptr, nullptr, [this]() { this->CloseAll(); this->locked = true; this->unlocking = false; } });
@@ -1095,6 +1102,10 @@ namespace nexus {
         this->DrawHints();
         this->DrawDialogs();
         if(this->crop.active) this->DrawCropEditor();
+        if(this->logoMove.active) {
+            this->g->RoundRect(ScreenW / 2 - 470, ScreenH - 64, 940, 40, 20, Col{ 0, 0, 0, 200 });
+            this->g->Text("Logo verschieben: Stick/Steuerkreuz   ·   R/L = größer/kleiner   ·   Y = Mitte   ·   A = speichern   ·   B = abbrechen", 14, ScreenW / 2, ScreenH - 54, Col{ 238, 242, 247, 255 }, 1, 920);
+        }
         if(this->locked) this->DrawLock();
         this->DrawToast();
     }
@@ -1224,8 +1235,11 @@ namespace nexus {
         // Bereich für das Logo (Sicherheitsbereich: verdeckt keine Kacheln)
         const auto env = this->Env();
         const LArea A = ComputeArea(s, env);
+        const bool freePos = s.S("logo.placement") == "free";
+        const bool safe = s.B("logo.safeArea") && !freePos;
         double bx0 = 0, bx1 = ScreenW, by0 = env.topH, by1 = ScreenH - env.botH;
-        if(s.B("logo.safeArea")) {
+        if(freePos) { by0 = 0; by1 = ScreenH; }
+        if(safe) {
             if(A.v) {
                 if(A.side == "right") bx1 = A.x0 - 20;
                 else if(A.side == "left") bx0 = A.x1 + 20;
@@ -1242,7 +1256,7 @@ namespace nexus {
         double w = isImg ? 460 * s.N("logo.scale") : tw * 0.9 * s.N("logo.scale");
         double h = w * th / tw;
         const double bw = bx1 - bx0, bh = by1 - by0;
-        if(s.B("logo.safeArea") && (w > bw - 20 || h > bh)) {
+        if(safe && (w > bw - 20 || h > bh)) {
             const double k = std::max(0.1, std::min((bw - 20) / w, bh / h));
             w *= k; h *= k;
         }
@@ -1251,7 +1265,12 @@ namespace nexus {
         double y = ay == "top" ? by0 + 16 : ay == "middle" ? (by0 + by1 - h) / 2 : by1 - h;
         x += s.N("logo.offsetX");
         y += s.N("logo.offsetY");
-        if(s.B("logo.safeArea")) {
+        if(freePos) {
+            // frei: Mittelpunkt in Prozent des Bildschirms
+            x = ScreenW * s.N("logo.posX") / 100.0 - w / 2;
+            y = ScreenH * s.N("logo.posY") / 100.0 - h / 2;
+        }
+        else if(safe) {
             x = std::clamp(x, bx0, std::max(bx0, bx1 - w));
             y = std::clamp(y, by0, std::max(by0, by1 - h));
         }

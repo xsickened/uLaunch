@@ -330,16 +330,19 @@ const SPEC = [
   {g:"hero", p:"hero.kenBurns", l:"Langsamer Zoom (Ken Burns)", t:"bool", d:false},
   // Logo
   {g:"logo", p:"logo.visible", l:"Logo anzeigen", t:"bool", d:true},
-  {g:"logo", p:"logo.anchorX", l:"Horizontal", t:"enum", o:["left","center","right"], ol:["Links","Mitte","Rechts"], d:"left"},
-  {g:"logo", p:"logo.anchorY", l:"Vertikal", t:"enum", o:["top","middle","bottom"], ol:["Oben","Mitte","Unten"], d:"top"},
-  {g:"logo", p:"logo.offsetX", l:"Versatz X", t:"num", min:-400, max:400, step:10, f:px, d:0},
-  {g:"logo", p:"logo.offsetY", l:"Versatz Y", t:"num", min:-300, max:300, step:10, f:px, d:0},
+  {g:"logo", p:"logo.placement", l:"Platzierung", t:"enum", o:["anchor","free"], ol:["An Kante ausrichten","Frei (überall auf dem Bildschirm)"], d:"anchor"},
+  {g:"logo", p:"logo.posX", l:"Position waagerecht", t:"num", min:0, max:100, step:1, f:v=>v+" %", d:25, w:()=>ST().logo.placement==="free"},
+  {g:"logo", p:"logo.posY", l:"Position senkrecht", t:"num", min:0, max:100, step:1, f:v=>v+" %", d:30, w:()=>ST().logo.placement==="free"},
+  {g:"logo", p:"logo.anchorX", l:"Horizontal", t:"enum", o:["left","center","right"], ol:["Links","Mitte","Rechts"], d:"left", w:()=>ST().logo.placement!=="free"},
+  {g:"logo", p:"logo.anchorY", l:"Vertikal", t:"enum", o:["top","middle","bottom"], ol:["Oben","Mitte","Unten"], d:"top", w:()=>ST().logo.placement!=="free"},
+  {g:"logo", p:"logo.offsetX", l:"Versatz X", t:"num", min:-1280, max:1280, step:10, f:px, d:0, w:()=>ST().logo.placement!=="free"},
+  {g:"logo", p:"logo.offsetY", l:"Versatz Y", t:"num", min:-720, max:720, step:10, f:px, d:0, w:()=>ST().logo.placement!=="free"},
   {g:"logo", p:"logo.scale", l:"Größe", t:"num", min:.4, max:2, step:.05, f:pct, d:1},
   {g:"logo", p:"logo.opacity", l:"Deckkraft", t:"num", min:.1, max:1, step:.05, f:pct, d:1},
   {g:"logo", p:"logo.anim", l:"Einblendung", t:"enum", o:["slide","fade","zoom","none"], ol:["Gleiten","Blenden","Zoom","Keine"], d:"slide"},
   {g:"logo", p:"logo.float", l:"Schwebebewegung", t:"bool", d:true},
   {g:"logo", p:"logo.shadow", l:"Schatten", t:"bool", d:true},
-  {g:"logo", p:"logo.safeArea", l:"Sicherheitsbereich (verdeckt keine Kacheln)", t:"bool", d:true},
+  {g:"logo", p:"logo.safeArea", l:"Sicherheitsbereich (verdeckt keine Kacheln)", t:"bool", d:true, w:()=>ST().logo.placement!=="free"},
   // Home-Hintergrund
   {g:"home", p:"home.bgType", l:"Art", t:"enum", o:["gradient","animated","color","image"], ol:["Farbverlauf","Animierter Verlauf","Volltonfarbe","Eigenes Bild"], d:"gradient"},
   {g:"home", p:"home.preset", l:"Verlauf", t:"num", min:0, max:7, step:1, f:v=>"Vorlage "+(v+1), d:0, w:()=>["gradient","animated"].includes(S.data.settings.home.bgType)},
@@ -981,13 +984,14 @@ const FocusPresentationManager = {
     const pos = ST().layout.position; return pos==="bottom" ? above : pos==="top" ? below : ((above.y1-above.y0) >= (below.y1-below.y0) ? above : below);
   },
   placeLogo(){
-    const ls = ST().logo, logo = $("#logo"), B = this.logoBox();
+    const ls = ST().logo, logo = $("#logo"), free = ls.placement==="free", B = free ? {x0:0,x1:SW,y0:0,y1:SH} : this.logoBox();
     let w = 460*ls.scale, h = w/3; const bw = B.x1-B.x0, bh = B.y1-B.y0;
-    if(ls.safeArea && (w > bw-20 || h > bh)){ const k = Math.max(.1, Math.min((bw-20)/w, bh/h)); w *= k; h *= k; }
+    if(!free && ls.safeArea && (w > bw-20 || h > bh)){ const k = Math.max(.1, Math.min((bw-20)/w, bh/h)); w *= k; h *= k; }
     let x = ls.anchorX==="left" ? B.x0+50 : ls.anchorX==="center" ? (B.x0+B.x1-w)/2 : B.x1-w-50;
     let y = ls.anchorY==="top" ? B.y0+16 : ls.anchorY==="middle" ? (B.y0+B.y1-h)/2 : B.y1-h;
     x += ls.offsetX; y += ls.offsetY;
-    if(ls.safeArea){ x = clamp(x, B.x0, Math.max(B.x0, B.x1-w)); y = clamp(y, B.y0, Math.max(B.y0, B.y1-h)); }
+    if(free){ x = SW*(ls.posX??25)/100 - w/2; y = SH*(ls.posY??30)/100 - h/2; }
+    else if(ls.safeArea){ x = clamp(x, B.x0, Math.max(B.x0, B.x1-w)); y = clamp(y, B.y0, Math.max(B.y0, B.y1-h)); }
     Object.assign(logo.style, {left:x+"px", top:y+"px", width:w+"px"}); logo.style.setProperty("--logoOpacity", ls.opacity);
     const ri = $("#raInfo"); Object.assign(ri.style, {left:x+"px", width:w+"px", top:(ls.visible ? y+h+8 : y)+"px", textAlign: ls.anchorX==="left"?"left":ls.anchorX==="center"?"center":"right"});
     logo.classList.toggle("float", ls.float && animOn() && !ST().anim.reduce); logo.classList.toggle("shadow", ls.shadow);

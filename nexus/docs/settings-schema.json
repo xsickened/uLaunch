@@ -1514,6 +1514,54 @@
   },
   {
    "group": "logo",
+   "path": "logo.placement",
+   "label": "Platzierung",
+   "type": "enum",
+   "options": [
+    "anchor",
+    "free"
+   ],
+   "optionLabels": [
+    "An Kante ausrichten",
+    "Frei (überall auf dem Bildschirm)"
+   ],
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "anchor",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "logo",
+   "path": "logo.posX",
+   "label": "Position waagerecht",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": 0,
+   "max": 100,
+   "step": 1,
+   "default": 25,
+   "conditional": true,
+   "hidden": false
+  },
+  {
+   "group": "logo",
+   "path": "logo.posY",
+   "label": "Position senkrecht",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": 0,
+   "max": 100,
+   "step": 1,
+   "default": 30,
+   "conditional": true,
+   "hidden": false
+  },
+  {
+   "group": "logo",
    "path": "logo.anchorX",
    "label": "Horizontal",
    "type": "enum",
@@ -1531,7 +1579,7 @@
    "max": null,
    "step": null,
    "default": "left",
-   "conditional": false,
+   "conditional": true,
    "hidden": false
   },
   {
@@ -1553,7 +1601,7 @@
    "max": null,
    "step": null,
    "default": "top",
-   "conditional": false,
+   "conditional": true,
    "hidden": false
   },
   {
@@ -1563,11 +1611,11 @@
    "type": "num",
    "options": null,
    "optionLabels": null,
-   "min": -400,
-   "max": 400,
+   "min": -1280,
+   "max": 1280,
    "step": 10,
    "default": 0,
-   "conditional": false,
+   "conditional": true,
    "hidden": false
   },
   {
@@ -1577,11 +1625,11 @@
    "type": "num",
    "options": null,
    "optionLabels": null,
-   "min": -300,
-   "max": 300,
+   "min": -720,
+   "max": 720,
    "step": 10,
    "default": 0,
-   "conditional": false,
+   "conditional": true,
    "hidden": false
   },
   {
@@ -1675,7 +1723,7 @@
    "max": null,
    "step": null,
    "default": true,
-   "conditional": false,
+   "conditional": true,
    "hidden": false
   },
   {

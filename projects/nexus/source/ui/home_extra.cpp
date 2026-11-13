@@ -248,6 +248,58 @@ namespace nexus {
         this->g->Text("Stick/Steuerkreuz = verschieben   ·   R/ZR = näher   ·   L/ZL = weiter   ·   Y = zurücksetzen   ·   A = speichern   ·   B = abbrechen", 14, ScreenW / 2, ScreenH - 40, Col{ 200, 208, 220, 255 }, 1, 1220);
     }
 
+    // ------------------------------------------------------------------ Logo frei verschieben
+
+    void Home::StartLogoMove() {
+        if(this->list.empty()) { this->Toast("Zum Verschieben eine Kachel fokussieren (Startseite)."); return; }
+        const json *lg = JGet(this->d->settings.data, "logo");
+        this->logoMove.backup = lg ? *lg : json::object();
+        auto &s = this->d->settings;
+        if(s.S("logo.placement") != "free") {
+            // Startpunkt: ungefähr dort, wo das Logo gerade steht
+            const auto ax = s.S("logo.anchorX"), ay = s.S("logo.anchorY");
+            s.Set("logo.posX", json(ax == "left" ? 25.0 : ax == "center" ? 50.0 : 75.0));
+            s.Set("logo.posY", json(ay == "top" ? 22.0 : ay == "middle" ? 50.0 : 70.0));
+            s.Set("logo.placement", json("free"));
+        }
+        s.Set("logo.visible", json(true));
+        this->CloseAll();
+        this->logoMove.active = true;
+    }
+
+    void Home::LogoMoveInput(const plat::Input &in) {
+        using namespace plat;
+        auto &s = this->d->settings;
+        const double dt = std::clamp(this->frameDt, 0.0, 0.05);
+        double x = s.N("logo.posX"), y = s.N("logo.posY"), sc = s.N("logo.scale");
+        const double mv = 30.0 * dt;
+        if(in.held & BtnLeft) x -= mv;
+        if(in.held & BtnRight) x += mv;
+        if(in.held & BtnUp) y -= mv;
+        if(in.held & BtnDown) y += mv;
+        if(in.held & (BtnR | BtnZR)) sc += 0.6 * dt;
+        if(in.held & (BtnL | BtnZL)) sc -= 0.6 * dt;
+        if(in.down & BtnY) { x = 50; y = 50; }
+        s.Set("logo.posX", json(std::round(std::clamp(x, 0.0, 100.0) * 10) / 10));
+        s.Set("logo.posY", json(std::round(std::clamp(y, 0.0, 100.0) * 10) / 10));
+        s.Set("logo.scale", json(std::clamp(sc, 0.4, 2.0)));
+        if(in.down & BtnA) {
+            this->logoMove.active = false;
+            // Werte auf das Raster des Schemas bringen
+            s.Set("logo.posX", json(std::round(s.N("logo.posX"))));
+            s.Set("logo.posY", json(std::round(s.N("logo.posY"))));
+            s.Set("logo.scale", json(std::round(s.N("logo.scale") * 20) / 20));
+            this->MarkDirty();
+            this->Toast("Logo-Position gespeichert (Einstellungen → Fokus: Logo → Platzierung).");
+        }
+        else if(in.down & BtnB) {
+            this->d->settings.data["logo"] = this->logoMove.backup;
+            this->d->settings.data = Settings::Sanitize(this->d->settings.data, nullptr);
+            this->logoMove.active = false;
+            this->Toast("Verschieben abgebrochen.");
+        }
+    }
+
     // ------------------------------------------------------------------ Eigene Themes
 
     void Home::OpenThemes() {

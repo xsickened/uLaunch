@@ -97,6 +97,7 @@ namespace nexus {
             bool autoArtQueued = false;
             AccentParams accentP;
             // Bildausschnitt-Editor (Zoom, Schnitt)
+            struct LogoMove { bool active = false; json backup; } logoMove;
             struct CropEdit { bool active = false; std::string path, title; double aspect = 16.0 / 9.0; Crop c, backup; std::function<void()> done; } crop;
 
             // Zustand
@@ -204,6 +205,8 @@ namespace nexus {
             void DrawCropEditor();
             double TileAspect() const;
             void OpenThemes();
+            void StartLogoMove();
+            void LogoMoveInput(const plat::Input &in);
             void QueueMissingArt(bool force);
             void ArtChanged(const std::string &id);
             std::vector<Row> SgdbRows();
