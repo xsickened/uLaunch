@@ -28,6 +28,8 @@ namespace nexus::plat {
             if(b & HidNpadButton_AnyRight) o |= BtnRight;
             if(b & HidNpadButton_AnyUp) o |= BtnUp;
             if(b & HidNpadButton_AnyDown) o |= BtnDown;
+            if(b & HidNpadButton_StickL) o |= BtnLStick;
+            if(b & HidNpadButton_StickR) o |= BtnRStick;
             return o;
         }
     }

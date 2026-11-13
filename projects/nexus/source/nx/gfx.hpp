@@ -59,7 +59,9 @@ namespace nexus {
             void RectFn(double x, double y, double w, double h, const ColFn &fn, double alpha, int segs = 12);
             int TextFn(const std::string &s, int size, double x, double y, const ColFn &fn, double alpha, int align = 0, bool bold = false, int maxW = 0);
             // Bild mit Zuschnitt (Zoom/Position) und Deckkraft pro Punkt (weiche Ränder): fade(u, v) mit u, v in 0..1
-            void ImageEx(SDL_Texture *tex, double x, double y, double w, double h, double alpha, double zoom, double posX, double posY, const std::function<double(double, double)> &fade = nullptr, Col tint = Col{});
+            void ImageEx(SDL_Texture *tex, double x, double y, double w, double h, double alpha, double zoom, double posX, double posY, const std::function<double(double, double)> &fade = nullptr, Col tint = Col{}, bool flipV = false);
+            // Viereck mit Farbe pro Ecke (Reihenfolge: oben links, oben rechts, unten rechts, unten links)
+            void Quad(const SDL_FPoint p[4], const Col c[4]);
 
             // Partikel: eingebaute Formen als weiße Sprites (Farbe über die Eckpunkte), gebündelt gezeichnet
             struct Sprite { float x, y, size, rot; Col c; };

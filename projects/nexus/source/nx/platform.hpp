@@ -9,7 +9,8 @@ namespace nexus::plat {
         BtnA = 1u << 0, BtnB = 1u << 1, BtnX = 1u << 2, BtnY = 1u << 3,
         BtnL = 1u << 4, BtnR = 1u << 5, BtnZL = 1u << 6, BtnZR = 1u << 7,
         BtnPlus = 1u << 8, BtnMinus = 1u << 9,
-        BtnLeft = 1u << 10, BtnRight = 1u << 11, BtnUp = 1u << 12, BtnDown = 1u << 13
+        BtnLeft = 1u << 10, BtnRight = 1u << 11, BtnUp = 1u << 12, BtnDown = 1u << 13,
+        BtnLStick = 1u << 14, BtnRStick = 1u << 15
     };
 
     struct Input {

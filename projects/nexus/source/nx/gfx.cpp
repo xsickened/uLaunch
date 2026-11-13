@@ -304,7 +304,14 @@ namespace nexus {
         return w;
     }
 
-    void Gfx::ImageEx(SDL_Texture *tex, double x, double y, double w, double h, double alpha, double zoom, double posX, double posY, const std::function<double(double, double)> &fade, Col tint) {
+    void Gfx::Quad(const SDL_FPoint p[4], const Col c[4]) {
+        SDL_Vertex v[4];
+        for(int i = 0; i < 4; i++) v[i] = SDL_Vertex{ p[i], SC(c[i]), { 0, 0 } };
+        const int idx[6] = { 0, 1, 2, 0, 2, 3 };
+        SDL_RenderGeometry(this->r, nullptr, v, 4, idx, 6);
+    }
+
+    void Gfx::ImageEx(SDL_Texture *tex, double x, double y, double w, double h, double alpha, double zoom, double posX, double posY, const std::function<double(double, double)> &fade, Col tint, bool flipV) {
         if(!tex || w <= 0 || h <= 0) return;
         int tw = 0, th = 0;
         SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
@@ -321,7 +328,7 @@ namespace nexus {
                 const double a = alpha * (fade ? std::clamp(fade(u, v), 0.0, 1.0) : 1.0);
                 const SDL_Color col{ tint.r, tint.g, tint.b, static_cast<uint8_t>(a * tint.a) };
                 this->vbuf.push_back(SDL_Vertex{ { static_cast<float>(x + u * w), static_cast<float>(y + v * h) }, col,
-                    { static_cast<float>((sx + u * sw) / tw), static_cast<float>((sy + v * sh) / th) } });
+                    { static_cast<float>((sx + u * sw) / tw), static_cast<float>((sy + (flipV ? 1 - v : v) * sh) / th) } });
             }
         }
         for(int j = 0; j < ny; j++) {

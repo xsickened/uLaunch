@@ -90,6 +90,17 @@ html,body{margin:0;height:100%;background:#05070b;color:#eef2f7;font-family:syst
 #ring{position:absolute;left:0;top:0;transition:transform var(--tileMs) var(--ease), width var(--tileMs) var(--ease), height var(--tileMs) var(--ease), opacity .2s;transform-origin:center;display:none}
 #ring.box{box-shadow:0 0 0 6px rgba(0,0,0,.45),0 0 24px var(--accent)}
 #ring.glow.box{box-shadow:0 0 46px 8px var(--accent)}
+.tile .in.case{overflow:visible;border-radius:4px!important;background:var(--body,#c8d2e1);transform:perspective(900px) rotateY(var(--ca,18deg));transition:transform .35s var(--ease);box-shadow:calc(-1*var(--cd,12px)) 0 0 0 var(--spine,#23262e),0 12px 26px rgba(0,0,0,.55)!important}
+.tile .in.case img.cover{position:absolute;left:var(--ci,3%);top:calc(var(--ci,3%) + var(--band,0%));width:calc(100% - 2*var(--ci,3%));height:calc(100% - 2*var(--ci,3%) - var(--band,0%));border-radius:2px}
+.tile .in.case::after{content:"";position:absolute;left:0;right:0;top:0;height:var(--band,0%);background:var(--bandc,transparent);border-radius:4px 4px 0 0}
+.tile .in.case.shine::before{content:"";position:absolute;inset:0;z-index:3;pointer-events:none;background:linear-gradient(120deg,rgba(255,255,255,.28),rgba(255,255,255,.06) 40%,transparent 60%);border-radius:4px}
+.tile .in.case.reflect{-webkit-box-reflect:below 4px linear-gradient(transparent 60%,rgba(255,255,255,.3))}
+.tile .in.cs-jewel{--body:rgba(200,210,225,.3);--spine:#23262e;outline:2px solid rgba(235,240,248,.5)}
+.tile .in.cs-dvd{--body:#0e0e10;--spine:#18181c;--ci:4.5%}
+.tile .in.cs-red{--body:#cd1622;--spine:#a50e1a;--ci:4%;--band:9%;--bandc:#e61e2a}
+.tile .in.cs-bluray{--body:#164eb4;--spine:#103a8c;--ci:4%;--band:11%;--bandc:#1e60d2}
+.tile .in.cs-steel{--body:linear-gradient(135deg,#d8dce4,#8c929e);--spine:#70767f;--ci:0%;outline:2px solid rgba(235,240,248,.8)}
+.tile .in.cs-cartridge{--body:#3e4048;--spine:#2c2e34;--ci:12%;border-radius:10px!important}
 .fxc{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
 #idleScr{position:absolute;inset:0;z-index:30;display:none;background:#000;color:#fff;overflow:hidden}
 #idleScr.dim{background:rgba(0,0,0,.66)}
@@ -402,6 +413,21 @@ const SPEC = [
   {g:"auto", p:"auto.nightStart", l:"Nacht beginnt um", t:"num", min:0, max:23, step:1, f:v=>v+":00 Uhr", d:20, w:()=>ST().auto.enabled},
   {g:"auto", p:"auto.dayTheme", l:"", t:"str", d:"", hidden:true},
   {g:"auto", p:"auto.nightTheme", l:"", t:"str", d:"", hidden:true},
+  // Startanimation
+  {g:"launch", p:"launch.anim", l:"Animation beim Starten", t:"enum", o:["zoom","fade","slideLeft","slideRight","slideUp","slideDown","spin","flip","iris","none"], ol:["Cover zoomt auf","Ausblenden","Nach links schieben","Nach rechts schieben","Nach oben schieben","Nach unten schieben","Drehen","Umdrehen (3D)","Kreisblende","Keine"], d:"zoom"},
+  {g:"launch", p:"launch.durationMs", l:"Dauer", t:"num", min:150, max:2000, step:50, f:ms, d:550, w:()=>ST().launch.anim!=="none"},
+  {g:"launch", p:"launch.easing", l:"Verlauf", t:"enum", o:["inOut","in","out","linear","back"], ol:["Weich","Beschleunigen","Abbremsen","Gleichmäßig","Mit Schwung"], d:"inOut", w:()=>ST().launch.anim!=="none"},
+  {g:"launch", p:"launch.spinTurns", l:"Umdrehungen", t:"num", min:.5, max:3, step:.5, f:v=>String(v).replace(".",","), d:1, w:()=>ST().launch.anim==="spin"},
+  {g:"launch", p:"launch.color", l:"Endet in", t:"enum", o:["black","ui","accent","white","hero"], ol:["Schwarz","Grundfarbe","Akzentfarbe","Weiß","Spielbild"], d:"black", w:()=>ST().launch.anim!=="none"},
+  {g:"launch", p:"launch.showLogo", l:"Logo/Name groß einblenden", t:"bool", d:true, w:()=>ST().launch.anim!=="none"},
+  {g:"launch", p:"launch.holdMs", l:"Am Ende stehen lassen", t:"num", min:0, max:1000, step:50, f:ms, d:150, w:()=>ST().launch.anim!=="none"},
+  // Zoom
+  {g:"zoom", p:"zoom.button", l:"Taste für Zoom", t:"enum", o:["rstick","lstick","zr","zl","y","minus","none"], ol:["Rechten Stick drücken","Linken Stick drücken","ZR (statt Suche)","ZL (statt Schnellstart)","Y (statt Favorit)","− (statt Sperren)","Keine"], d:"rstick"},
+  {g:"zoom", p:"zoom.mode", l:"Verhalten", t:"enum", o:["cycle","hold"], ol:["Stufen durchschalten","Halten = näher"], d:"cycle"},
+  {g:"zoom", p:"zoom.maxScale", l:"Größte Stufe", t:"num", min:1.1, max:2.5, step:.1, f:pct, d:1.6},
+  {g:"zoom", p:"zoom.minScale", l:"Kleinste Stufe", t:"num", min:.5, max:1, step:.1, f:pct, d:1},
+  {g:"zoom", p:"zoom.steps", l:"Stufen", t:"num", min:1, max:5, step:1, f:v=>String(v), d:2, w:()=>ST().zoom.mode==="cycle"},
+  {g:"zoom", p:"zoom.levelScale", l:"", t:"num", min:.5, max:2.5, step:.01, f:pct, d:1, hidden:true},
   // Bildschirmschoner
   {g:"idle", p:"idle.mode", l:"Bei Inaktivität", t:"enum", o:["off","dim","slideshow","clock","lock"], ol:["Nichts","Abdunkeln","Diashow der Spielbilder","Große Uhr","Sperrbildschirm"], d:"off"},
   {g:"idle", p:"idle.minutes", l:"Nach", t:"num", min:1, max:30, step:1, f:v=>v+" min", d:5, w:()=>ST().idle.mode!=="off"},
@@ -462,6 +488,12 @@ const SPEC = [
   {g:"tiles", p:"tileDefaults.fit", l:"Cover-Zuschnitt", t:"enum", o:["cover","contain"], ol:["Füllen","Einpassen"], d:"cover"},
   {g:"tiles", p:"tileDefaults.posX", l:"Bildposition X", t:"num", min:0, max:100, step:5, f:v=>v+" %", d:50},
   {g:"tiles", p:"tileDefaults.posY", l:"Bildposition Y", t:"num", min:0, max:100, step:5, f:v=>v+" %", d:50},
+  {g:"tiles", p:"tileDefaults.caseStyle", l:"Hülle (3D)", t:"enum", o:["none","jewel","dvd","red","bluray","steel","cartridge"], ol:["Keine (nur Cover)","CD-Hülle (Jewel Case)","DVD-Hülle (schwarz)","Spielhülle (rot)","Blu-ray-Hülle (blau)","Steelbook (Metall)","Modul (Cartridge)"], d:"none"},
+  {g:"tiles", p:"tileDefaults.caseAngle", l:"Hülle: Drehung", t:"num", min:0, max:40, step:5, f:deg, d:18},
+  {g:"tiles", p:"tileDefaults.caseDepth", l:"Hülle: Dicke", t:"num", min:0, max:30, step:2, f:px, d:12},
+  {g:"tiles", p:"tileDefaults.caseShine", l:"Hülle: Glanz", t:"bool", d:true},
+  {g:"tiles", p:"tileDefaults.caseReflect", l:"Hülle: Spiegelung am Boden", t:"bool", d:false},
+  {g:"tiles", p:"tileDefaults.caseFocusTurn", l:"Gewählte Hülle dreht sich zu dir", t:"bool", d:true},
   // Bibliothek
   // RetroAchievements (nur Anzeige; Freischalten passiert weiterhin im Emulator/TICO)
   {g:"ra", p:"ra.enabled", l:"RetroAchievements anzeigen", t:"bool", d:false},
@@ -491,7 +523,7 @@ const SPEC = [
   {g:"lib", p:"sgdb.autoMissing", l:"Fehlende Bilder automatisch laden", t:"bool", d:false},
   {g:"lib", p:"sgdbKey", l:"", t:"str", d:"", hidden:true},
 ];
-const GROUPS = [["look","Darstellung & Schrift"],["ui","Textboxen & Schrift"],["aura","Kachel-Aura (Partikel)"],["bgfx","Hintergrund-Effekte"],["idle","Bildschirmschoner"],["sound","Sounds & Musik"],["auto","Automatischer Themewechsel"],["top","Kopfzeile, Symbole & Hinweise"],["layout","Anordnung der Kacheln"],["anim","Animationen"],["tiles","Kacheln (Standard)"],["hero","Fokus: Hintergrund"],["logo","Fokus: Logo"],["home","Home-Hintergrund"],["lock","Sperrbildschirm"],["profile","Profilauswahl"],["sections","Bereiche (Reihenfolge & Sichtbarkeit)"],["lib","Bibliothek & SteamGridDB"],["ra","RetroAchievements"],["sys","Themes, Backup & System"]];
+const GROUPS = [["look","Darstellung & Schrift"],["ui","Textboxen & Schrift"],["aura","Kachel-Aura (Partikel)"],["bgfx","Hintergrund-Effekte"],["idle","Bildschirmschoner"],["launch","Startanimation"],["zoom","Zoom"],["sound","Sounds & Musik"],["auto","Automatischer Themewechsel"],["top","Kopfzeile, Symbole & Hinweise"],["layout","Anordnung der Kacheln"],["anim","Animationen"],["tiles","Kacheln (Standard)"],["hero","Fokus: Hintergrund"],["logo","Fokus: Logo"],["home","Home-Hintergrund"],["lock","Sperrbildschirm"],["profile","Profilauswahl"],["sections","Bereiche (Reihenfolge & Sichtbarkeit)"],["lib","Bibliothek & SteamGridDB"],["ra","RetroAchievements"],["sys","Themes, Backup & System"]];
 const TILE_SPEC = SPEC.filter(s=>s.g==="tiles").map(s=>({...s, p:s.p.replace("tileDefaults.","")}));
 const SECTION_IDS = Object.keys(SECTION_NAMES);
 function defaultSettings(){ const s = {}; SPEC.forEach(x=>setP(s, x.p, clone(x.d))); s.sections = SECTION_IDS.map(id=>({id, visible:id!=="almost"})); return s; }
@@ -850,7 +882,7 @@ function area(){
 }
 function tileUnits(e, maxH){
   const t = tileCfg(e); const size = ST().layout.uniform ? ST().tileDefaults.size : t.size; const ratioK = ST().layout.uniform ? ST().tileDefaults.ratio : t.ratio;
-  const h = clamp(size==="custom" ? (t.customH||7) : (SIZES[size]||7), 3, maxH);
+  const h = clamp(Math.round((size==="custom" ? (t.customH||7) : (SIZES[size]||7)) * (ST().zoom ? ST().zoom.levelScale||1 : 1)), 3, maxH);
   const ratio = ratioK==="custom" ? (t.customRatio||1) : (RATIOS[ratioK]||1);
   return {w:Math.max(2, Math.round(h*ratio)), h, ratio};
 }
@@ -1037,7 +1069,9 @@ function render(){
       const badge = e.kind==="folder"?`<div class="badge" style="color:${e.accent}">▣ ${e.items.length}</div>`:e.kind==="forwarder"?`<div class="badge">TICO</div>`:e.kind==="homebrew"?`<div class="badge">NRO</div>`:"";
       const clip = it.hex ? "clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);" : `border-radius:${t.radius}px;`;
       if(isList) return `<div class="tile li" draggable="true" data-i="${i}"><div class="in" style="border-radius:${t.radius}px;box-shadow:${shadow}"><img class="cover" src="${img}" onerror="this.src=PLACEHOLDER"><div style="min-width:0"><div class="nm">${esc(e.name)}</div><div class="kd">${e.kind==="folder"?"Ordner · "+e.items.length+" Einträge":e.kind==="forwarder"?"TICO-Forwarder · "+esc(e.platform):e.kind==="homebrew"?"Homebrew":"Spiel"}</div></div>${badge}${e.favorite?`<div class="fav">★</div>`:""}${sel?`<div class="sel"></div>`:""}</div></div>`;
-      return `<div class="tile" draggable="true" data-i="${i}" style="opacity:${t.opacity}"><div class="in" style="${clip}box-shadow:${it.hex?"none":shadow}"><img class="cover" src="${img}" onerror="this.src=PLACEHOLDER" style="object-fit:${t.fit};object-position:${t.posX}% ${t.posY}%">${t.showTitle?`<div class="ttl">${esc(e.name)}</div>`:""}${raBadge(e)}${stickerHtml(e)}${badge}${e.favorite?`<div class="fav">★</div>`:""}${sel?`<div class="sel"></div>`:""}</div></div>`;
+      const cs = (!it.hex && t.caseStyle && t.caseStyle!=="none") ? ` case cs-${t.caseStyle}${t.caseShine?" shine":""}${t.caseReflect?" reflect":""}` : "";
+      const csStyle = cs ? `--cd:${t.caseDepth}px;--ca:${t.caseAngle}deg;` : "";
+      return `<div class="tile" draggable="true" data-i="${i}" style="opacity:${t.opacity}"><div class="in${cs}" style="${clip}${csStyle}box-shadow:${it.hex?"none":shadow}"><img class="cover" src="${img}" onerror="this.src=PLACEHOLDER" style="object-fit:${t.fit};object-position:${t.posX}% ${t.posY}%">${t.showTitle?`<div class="ttl">${esc(e.name)}</div>`:""}${raBadge(e)}${stickerHtml(e)}${badge}${e.favorite?`<div class="fav">★</div>`:""}${sel?`<div class="sel"></div>`:""}</div></div>`;
     }).join("") || `<div class="empty" style="top:${(area().y0+area().y1)/2}px">Keine Einträge in diesem Bereich.</div>`;
     bindTiles();
     const doEntry = S.entry && animOn() && !ST().anim.reduce && ST().anim.entry!=="none";
@@ -1058,6 +1092,7 @@ function place(phase){
   const els = $("#tiles").querySelectorAll(".tile"); const s = ST().anim; const idle = animOn() && !s.reduce ? s.idle : "none";
   els.forEach((el,i)=>{ const it = S.items[i]; if(!it) return; const foc = i===S.focus; const t = tileCfg(S.list[i]);
     el.style.width = it.w+"px"; el.style.height = it.h+"px"; el.style.zIndex = foc ? 1000 : it.z;
+    { const inn = el.querySelector(".in.case"); if(inn) inn.style.setProperty("--ca", ((foc && t.caseFocusTurn) ? 0 : t.caseAngle)+"deg"); }
     el.style.pointerEvents = it.op < .05 ? "none" : "";
     let tr = tileTransform(it, i, foc), op = it.op * (S.list[i].kind ? t.opacity : 1);
     if(phase==="from"){ const e = s.entry; op = 0;
@@ -1201,7 +1236,28 @@ $("#fatalBtn").onclick = ()=>{ const keep = S.data; keep.settings = defaultSetti
 window.addEventListener("error", ev=>{ if(ev.message && !/ResizeObserver/.test(ev.message)) console.warn("NEXUS window.onerror", ev.message); });
 
 /* ---------------- SystemAdapter (simuliert) ---------------- */
-const SystemAdapter = { launch(e){ e.lastPlayed = Date.now(); DataStore.save();
+function launchFx(e, done){
+  const L = ST().launch; SFX.play("launch");
+  if(L.anim==="none" || !animOn()){ done(); return; }
+  const it = S.items[S.focus] || {x:540,y:220,w:200,h:280};
+  const end = L.color==="white"?"#ffffff":L.color==="ui"?ST().theme.ui:L.color==="accent"?getComputedStyle($("#stage")).getPropertyValue("--accent"):"#000";
+  const heroUrl = L.color==="hero" ? FocusPresentationManager.heroFor(e) : null; const endBg = heroUrl ? `url("${heroUrl}") center/cover` : end;
+  const ease = {inOut:"cubic-bezier(.65,0,.35,1)",in:"cubic-bezier(.32,0,.67,0)",out:"cubic-bezier(.33,1,.68,1)",linear:"linear",back:"cubic-bezier(.34,1.56,.64,1)"}[L.easing]||"ease";
+  const fx = document.createElement("div"); fx.style.cssText="position:absolute;inset:0;z-index:40;pointer-events:none;overflow:hidden"; $("#stage").appendChild(fx);
+  const opt = {duration:L.durationMs, easing:ease, fill:"forwards"}; const layer = document.createElement("div"); layer.style.cssText=`position:absolute;inset:0;background:${endBg}`;
+  const a = L.anim;
+  if(a==="fade"){ fx.appendChild(layer); layer.animate([{opacity:0},{opacity:1}], opt); }
+  else if(a.startsWith("slide")){ fx.appendChild(layer); const from={slideLeft:"translateX(100%)",slideRight:"translateX(-100%)",slideUp:"translateY(100%)",slideDown:"translateY(-100%)"}[a]; layer.animate([{transform:from},{transform:"none"}], opt); }
+  else if(a==="iris"){ const c=document.createElement("div"); const cx=it.x+it.w/2, cy=it.y+it.h/2; c.style.cssText=`position:absolute;left:${cx}px;top:${cy}px;width:3000px;height:3000px;margin:-1500px 0 0 -1500px;border-radius:50%;box-shadow:0 0 0 3000px ${end}`; fx.appendChild(c); c.animate([{transform:"scale(1)"},{transform:"scale(0)"}], opt); }
+  else { const bg=document.createElement("div"); bg.style.cssText=`position:absolute;inset:0;background:${end}`; fx.appendChild(bg); bg.animate([{opacity:0},{opacity:.8}], opt);
+    const img=document.createElement("div"); img.style.cssText=`position:absolute;left:${it.x}px;top:${it.y}px;width:${it.w}px;height:${it.h}px;border-radius:10px;background:url("${ArtworkManager.url(e,"cover")}") center/cover`; fx.appendChild(img);
+    const sc = Math.max(1280/it.w, 720/it.h); const tx = 640-(it.x+it.w/2), ty = 360-(it.y+it.h/2);
+    const endTf = `translate(${tx}px,${ty}px) scale(${sc})` + (a==="spin"?` rotate(${360*L.spinTurns}deg)`:"") + (a==="flip"?" rotateY(180deg)":"");
+    img.animate([{transform:"none"},{transform:endTf}], opt); layer.style.opacity=0; fx.appendChild(layer); layer.animate([{opacity:0,offset:0},{opacity:0,offset:.75},{opacity:1,offset:1}], opt); }
+  if(L.showLogo){ const t=document.createElement("div"); t.textContent=e.name; t.style.cssText=`position:absolute;left:0;right:0;top:46%;text-align:center;font-size:40px;font-weight:700;color:${L.color==="white"?"#14141a":"#fff"};text-shadow:0 4px 20px rgba(0,0,0,.5)`; fx.appendChild(t); t.animate([{opacity:0,transform:"scale(.85)"},{opacity:0,offset:.2},{opacity:1,transform:"scale(1)"}], opt); }
+  setTimeout(()=>{ done(); setTimeout(()=>fx.animate([{opacity:1},{opacity:0}],{duration:400,fill:"forwards"}).onfinish=()=>fx.remove(), 500); }, L.durationMs + L.holdMs);
+}
+const SystemAdapter = { launch(e){ launchFx(e, ()=>SystemAdapter.doLaunch(e)); }, doLaunch(e){ e.lastPlayed = Date.now(); DataStore.save();
   toast(e.kind==="homebrew" ? `SystemAdapter → LaunchHomebrew("${e.nroPath}") – simuliert` : `SystemAdapter → LaunchApplication(0x${e.titleId})${e.kind==="forwarder"?" · Emulation übernimmt TICO":""} – simuliert`); } };
 
 /* ---------------- Dialog-System ---------------- */
@@ -1522,8 +1578,13 @@ function cycleSection(d){ const vis = ST().sections.filter(s=>s.visible).map(s=>
 
 /* ---------------- Eingabe ---------------- */
 let lastInput = 0;
+function zoomKey(k){ const b=ST().zoom.button; return ({rstick:"RS",lstick:"LS",zr:"ZR",zl:"ZL",y:"Y",minus:"LOCK"})[b]===k; }
+function cycleZoom(){ const z=ST().zoom, mn=z.minScale, mx=Math.max(z.maxScale,mn+.05), n=Math.max(1,z.steps); let next=mn;
+  for(let k=0;k<=n;k++){ const lv=mn+(mx-mn)*k/n; if(lv>z.levelScale+.01){ next=lv; break; } }
+  z.levelScale=Math.round(next*100)/100; DataStore.save(); computeLayout(); place(); toast(`Zoom ${Math.round(next*100)} %`); SFX.play("toggle"); }
 function press(k, raw){
   try{
+    if(!S.dialogs.length && zoomKey(k)){ lastInput=performance.now(); cycleZoom(); return; }
     lastInput = performance.now();
     if(IdleSaver.on){ IdleSaver.stop(); return; }
     SFX.play({left:"move",right:"move",up:"move",down:"move",L:"move",R:"move",A:"select",B:"back",X:"open",LOCK:"lock",ZR:"open"}[k]||"");
@@ -1549,7 +1610,7 @@ function press(k, raw){
     }
   }catch(err){ crashHandler(err); }
 }
-const KEYMAP = {ArrowLeft:"left",ArrowRight:"right",ArrowUp:"up",ArrowDown:"down",a:"left",d:"right",w:"up",s:"down",Enter:"A",Escape:"B",Backspace:"B",x:"X",y:"Y",q:"L",e:"R",p:"LOCK",z:"ZR"};
+const KEYMAP = {ArrowLeft:"left",ArrowRight:"right",ArrowUp:"up",ArrowDown:"down",a:"left",d:"right",w:"up",s:"down",Enter:"A",Escape:"B",Backspace:"B",x:"X",y:"Y",q:"L",e:"R",p:"LOCK",z:"ZR",c:"RS",v:"LS"};
 document.addEventListener("keydown", ev=>{
   const top = S.dialogs[S.dialogs.length-1];
   if(top && top.wantsKeys && !ev.key.startsWith("Arrow") && ev.key!=="Escape"){ ev.preventDefault(); top.input(null, ev.key); return; }

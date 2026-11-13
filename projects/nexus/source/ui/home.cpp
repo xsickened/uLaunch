@@ -463,6 +463,7 @@ namespace nexus {
     }
 
     void Home::HandleInput(const plat::Input &in) {
+        if(this->launchFx.active) return;
         const bool any = in.down != 0 || in.tap;
         if(this->idleActive) {
             // erste Eingabe beendet nur den Bildschirmschoner
@@ -476,6 +477,18 @@ namespace nexus {
             return;
         }
         if(this->crop.active) { this->CropInput(in); return; }
+        if(const uint32_t zb = this->ZoomBit(); zb && this->screen == Screen::Main && !this->locked && this->dialogs.empty() && !this->logoMove.active) {
+            if(this->d->settings.S("zoom.mode") == "hold") this->zoomHeld = (in.held & zb) != 0;
+            else if(in.down & zb) this->CycleZoom();
+            if(in.down & zb) {
+                plat::Input rest = in;
+                rest.down &= ~zb;
+                if(rest.tap) this->Tap(rest.tapX, rest.tapY);
+                const uint32_t order[] = { plat::BtnUp, plat::BtnDown, plat::BtnLeft, plat::BtnRight, plat::BtnA, plat::BtnB, plat::BtnX, plat::BtnY, plat::BtnL, plat::BtnR, plat::BtnZL, plat::BtnZR, plat::BtnMinus, plat::BtnPlus };
+                for(const uint32_t b: order) if(rest.down & b) this->Press(b);
+                return;
+            }
+        }
         if(this->logoMove.active) { this->LogoMoveInput(in); return; }
         if(in.tap) this->Tap(in.tapX, in.tapY);
         const uint32_t order[] = { plat::BtnUp, plat::BtnDown, plat::BtnLeft, plat::BtnRight, plat::BtnA, plat::BtnB, plat::BtnX, plat::BtnY, plat::BtnL, plat::BtnR, plat::BtnZL, plat::BtnZR, plat::BtnMinus, plat::BtnPlus };
@@ -1198,6 +1211,17 @@ namespace nexus {
             this->snd.SetMusic(this->locked ? "lock" : "menu");
             this->snd.Tick(dt);
             this->UpdateGameColor(dt);
+            this->UpdateZoom(dt);
+            if(this->launchFx.active) {
+                this->launchFx.t += dt;
+                const double total = (st.S("launch.anim") == "none" ? 0.0 : (st.N("launch.durationMs") + st.N("launch.holdMs")) / 1000.0);
+                if(this->launchFx.t >= total) {
+                    this->launchFx.active = false;
+                    auto go = std::move(this->launchFx.go);
+                    this->launchFx.go = nullptr;
+                    if(go) go();
+                }
+            }
             this->UpdateAutoTheme(dt);
             if(!this->startApplied && this->appsVersion > 0) this->ApplyStartSection();
             if(!this->gcDone && this->appsVersion > 0 && !this->apps->Busy() && this->time > 15) {
@@ -1257,6 +1281,11 @@ namespace nexus {
                 if(fx == "tilt") trot -= 3;
             }
             const double tsq = std::max(0.12, std::cos(it.ry * kPi / 180.0));
+            {
+                const double ta = (foc && JBool(t, "caseFocusTurn", true)) ? 0.0 : JNum(t, "caseAngle", 18);
+                if(ds.caseA < 0 || speed <= 0) ds.caseA = ta;
+                else ds.caseA += (ta - ds.caseA) * std::min(1.0, dt * 9);
+            }
             if(ds.delay > 0) { ds.delay -= dt; continue; }
             struct Ch { double &v; double &vel; double t; };
             Ch chans[] = { { ds.x, ds.vx, it.x }, { ds.y, ds.vy, ty }, { ds.w, ds.vw, it.w }, { ds.h, ds.vh, it.h }, { ds.rot, ds.vrot, trot }, { ds.squash, ds.vsq, tsq }, { ds.sc, ds.vsc, tsc }, { ds.op, ds.vop, it.op } };
@@ -1292,6 +1321,7 @@ namespace nexus {
         if(this->idleActive) this->DrawIdle();
         this->DrawDialogs();
         if(this->crop.active) this->DrawCropEditor();
+        if(this->launchFx.active) this->DrawLaunchFx();
         if(this->logoMove.active) {
             this->g->RoundRect(ScreenW / 2 - 470, ScreenH - 64, 940, 40, 20, Col{ 0, 0, 0, 200 });
             this->g->Text("Logo verschieben: Stick/Steuerkreuz   ·   R/L = größer/kleiner   ·   Y = Mitte   ·   A = speichern   ·   B = abbrechen", 14, ScreenW / 2, ScreenH - 54, Col{ 238, 242, 247, 255 }, 1, 920);
@@ -1563,7 +1593,9 @@ namespace nexus {
                     if(c.set) { posX = c.x; posY = c.y; zoom = c.zoom; }
                 }
                 else if(!e.folder && !e.iconKey.empty()) tex = this->img->Get(e.iconKey, 2);
-                if(tex) this->g->ShapeTex(tex, xf, rad, hex, op, cover, posX, posY, Col{}, zoom);
+                const std::string caseStyle = JStr(t, "caseStyle", "none");
+                if(tex && caseStyle != "none" && !hex) this->DrawCase(caseStyle, t, tex, xf, ds, op, rad, cover, posX, posY, zoom);
+                else if(tex) this->g->ShapeTex(tex, xf, rad, hex, op, cover, posX, posY, Col{}, zoom);
                 else if(e.folder) {
                     // Ordnerkachel: Akzentfläche + bis zu 4 Icons
                     this->g->Shape(xf, rad, hex, WithA(ParseCol(e.accent), op));
@@ -1627,7 +1659,7 @@ namespace nexus {
                 if((tg == "focus" && foc) || tg == "all" || (tg == "fav" && !e.folder && this->d->library.IsFav(e.id)))
                     this->auraRects.push_back(EmitRect{ xf.cx, xf.cy, ds.w * xf.sc * xf.squash, ds.h * xf.sc });
             }
-            if(foc) { focusXf = xf; focusRad = rad; focusHex = hex; haveFocus = true; }
+            if(foc) { focusXf = xf; focusRad = rad; focusHex = hex; haveFocus = true; this->lastFocusXf = xf; this->haveLastFocus = true; }
         }
         // Ebene 5: Fokusmarkierung (eigene Ebene, nicht Teil der Kachel)
         if(haveFocus) {
@@ -2051,11 +2083,14 @@ namespace nexus {
     }
 
     void Home::DoLaunch(uint64_t tid, const std::string &id, const std::string &name) {
+        this->StartLaunchFx(id, name, [this, tid, id, name]() { this->RealLaunch(tid, id, name); });
+    }
+
+    void Home::RealLaunch(uint64_t tid, const std::string &id, const std::string &name) {
         this->d->library.MarkLaunched(id, static_cast<double>(std::time(nullptr)));
         this->Save();
         Log("Start %s (%s)", id.c_str(), name.c_str());
         if(this->host) this->host->BeforeLeave();
-        this->Sfx("launch");
         const uint32_t rc = this->host ? this->host->Launch(tid) : plat::LaunchApplication(tid);
         Log("Start Ergebnis 0x%X", rc);
         if(rc != 0) {

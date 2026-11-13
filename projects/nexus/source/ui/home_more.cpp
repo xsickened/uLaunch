@@ -103,16 +103,15 @@ namespace nexus {
         auto go = [this, h, asApp]() {
             this->d->library.MarkLaunched(h.id, static_cast<double>(std::time(nullptr)));
             this->Save();
-            this->Sfx("launch");
             Log("Homebrew starten: %s (%s)", h.path.c_str(), asApp ? "Anwendung" : "Applet");
             const uint32_t rc = this->host->LaunchHomebrew(h.path, asApp);
             if(rc != 0) { char b[96]; std::snprintf(b, sizeof(b), "Start fehlgeschlagen (0x%X).", rc); this->Toast(b); this->Sfx("error"); }
         };
         if(asApp && this->host->HasSuspended()) {
-            this->Confirm("Laufendes Spiel schließen?", "Homebrew als Anwendung braucht den Platz des geöffneten Spiels.", "Schließen und starten", [this, go]() { this->host->CloseSuspended(); go(); });
+            this->Confirm("Laufendes Spiel schließen?", "Homebrew als Anwendung braucht den Platz des geöffneten Spiels.", "Schließen und starten", [this, go, h]() { this->host->CloseSuspended(); this->StartLaunchFx(h.id, h.name, go); });
             return;
         }
-        go();
+        this->StartLaunchFx(h.id, h.name, go);
     }
 
     // ------------------------------------------------------------------ Aufkleber

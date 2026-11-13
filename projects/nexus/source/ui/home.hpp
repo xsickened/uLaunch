@@ -63,6 +63,7 @@ namespace nexus {
         double x = 0, y = 0, w = 0, h = 0, rot = 0, squash = 1, sc = 1, op = 0;
         double vx = 0, vy = 0, vw = 0, vh = 0, vrot = 0, vsq = 0, vsc = 0, vop = 0;
         double delay = 0;
+        double caseA = -1;   // aktuelle Drehung der 3D-Hülle (Grad)
         bool init = false;
     };
 
@@ -258,6 +259,19 @@ namespace nexus {
             void UpdateAutoTheme(double dt);
             void SwitchUserLook(const std::string &newUser);
             void Sfx(const char *ev);
+            // 3D-Hüllen, Startanimation, Zoom
+            void DrawCase(const std::string &style, const json &t, SDL_Texture *tex, Xf &xf, const Disp &ds, double op, double rad, bool cover, double posX, double posY, double zoom);
+            struct LaunchFx { bool active = false; double t = 0; std::string id, name; std::function<void()> go; Xf from; bool haveFrom = false; } launchFx;
+            Xf lastFocusXf;
+            bool haveLastFocus = false;
+            void StartLaunchFx(const std::string &id, const std::string &name, std::function<void()> go);
+            void DrawLaunchFx();
+            void RealLaunch(uint64_t tid, const std::string &id, const std::string &name);
+            double zoomTarget = -1;
+            bool zoomHeld = false;
+            uint32_t ZoomBit() const;
+            void CycleZoom();
+            void UpdateZoom(double dt);
             std::vector<UserTheme> AllThemes();
             void OpenThemePicker(const std::string &key);
             bool ApplyThemeFile(const std::string &path, const std::string &name);

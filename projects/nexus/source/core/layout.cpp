@@ -100,7 +100,9 @@ namespace nexus {
         const bool uniform = s.B("layout.uniform");
         const auto size = uniform ? s.S("tileDefaults.size") : it.size;
         const auto rk = uniform ? s.S("tileDefaults.ratio") : it.ratio;
-        h = std::clamp(size == "custom" ? it.customH : SizeUnits(size), 3.0, std::max(3.0, maxH));
+        // Zoom der Ansicht (Taste frei belegbar) vergrößert alle Kacheln
+        const double zoom = std::clamp(s.N("zoom.levelScale"), 0.5, 2.5);
+        h = std::clamp(std::round((size == "custom" ? it.customH : SizeUnits(size)) * zoom), 3.0, std::max(3.0, maxH));
         ratio = rk == "custom" ? std::clamp(it.customRatio, 0.4, 2.5) : RatioOf(rk);
         w = std::max(2.0, std::round(h * ratio));
     }
