@@ -68,6 +68,7 @@ namespace nexus {
             Apps *apps = nullptr;
             NexusData *d = nullptr;
             bool applet = false;
+            bool exitRequested = false;   // nach erfolgreicher Startanfrage sofort sauber beenden
 
             // Zustand
             std::string section = "start";

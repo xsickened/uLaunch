@@ -76,14 +76,18 @@ int main(int, char **) {
     uint64_t started = last;
     bool bootOk = false;
     plat::Input in;
+    uint64_t frames = 0, lastBeat = started;
+    Log("Hauptschleife startet (Modus: %s)", applet ? "Applet" : "Anwendung");
     while(plat::Loop()) {
         const uint64_t now = SDL_GetTicks64();
         const double dt = static_cast<double>(now - last) / 1000.0;
         last = now;
         plat::PollInput(in, now);
         images.Pump(ren, 6);
-        if(!home.Frame(in, dt)) break;
+        if(!home.Frame(in, dt)) { Log("Beenden angefordert nach %lu Bildern", static_cast<unsigned long>(frames)); break; }
         SDL_RenderPresent(ren);
+        if(++frames == 1) Log("Erstes Bild gezeichnet");
+        if(now - lastBeat > 30000) { Log("läuft: %lu Bilder, Textur-Cache %lu MB", static_cast<unsigned long>(frames), static_cast<unsigned long>(images.UsedBytes() / (1024 * 1024))); lastBeat = now; }
         if(!bootOk && now - started > 3000) {
             BootGuardOk(BootFile);   // Start erfolgreich
             bootOk = true;
@@ -91,7 +95,8 @@ int main(int, char **) {
     }
 
     home.Save();
-    if(!bootOk) BootGuardOk(BootFile);   // sauber beendet zählt ebenfalls als erfolgreich
+    if(!bootOk) BootGuardOk(BootFile);
+    if(frames == 0) Log("Hauptschleife ohne Bild beendet (appletMainLoop=false)");   // sauber beendet zählt ebenfalls als erfolgreich
     Log("NEXUS beendet");
     apps.Stop();
     images.Stop();

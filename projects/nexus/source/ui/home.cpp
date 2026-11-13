@@ -253,6 +253,7 @@ namespace nexus {
     }
 
     void Home::SwitchSection(const std::string &s) {
+        Log("Bereich: %s", s.c_str());
         if(s == "settings") {
             this->CloseAll();
             this->OpenSettings();
@@ -295,11 +296,12 @@ namespace nexus {
         catch(...) {
             this->CrashReset("unbekannter Fehler");
         }
-        if(wantExit && this->dirtySave) this->Save();
-        return !wantExit;
+        if((wantExit || this->exitRequested) && this->dirtySave) this->Save();
+        return !wantExit && !this->exitRequested;
     }
 
     void Home::CrashReset(const std::string &what) {
+        Log("CrashReset (%d): %s", this->crashCount + 1, what.c_str());
         Log("FEHLER: %s", what.c_str());
         this->crashCount++;
         this->dialogs.clear();
@@ -431,8 +433,15 @@ namespace nexus {
         if(it == this->appMap.end()) return;
         this->d->library.MarkLaunched(e.id, static_cast<double>(std::time(nullptr)));
         this->Save();
+        Log("Startanfrage %s (%s)", e.id.c_str(), e.name.c_str());
         const uint32_t rc = plat::LaunchApplication(it->second.tid);
-        if(rc == 0) this->Toast("Starte " + e.name + " …");
+        Log("Startanfrage Ergebnis 0x%X", rc);
+        if(rc == 0) {
+            // Das System wechselt jetzt zum Spiel und entzieht der App die Anzeige.
+            // Weiterzeichnen würde zum Absturz 2349-0004 führen -> sofort sauber beenden.
+            this->Toast("Starte " + e.name + " …");
+            this->exitRequested = true;
+        }
         else {
             char buf[200];
             std::snprintf(buf, sizeof(buf), "Start aus der Test-App nicht möglich (0x%X). Starten klappt, sobald NEXUS das HOME-Menü ist.", rc);
