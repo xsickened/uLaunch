@@ -1,4 +1,5 @@
 #include "gfx.hpp"
+#include <SDL2/SDL_ttf.h>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>

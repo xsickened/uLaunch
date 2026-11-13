@@ -1,6 +1,9 @@
 #pragma once
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_ttf.h>
+// Nur Vorwärtsdeklaration: uMenu/Plutonium bringt eine eigene SDL_ttf-Variante mit, deren Header mit dem
+// Standard-Header kollidiert. Die eigentlichen TTF-Aufrufe stehen in gfx.cpp.
+struct _TTF_Font;
+typedef struct _TTF_Font TTF_Font;
 #include <cstdint>
 #include <list>
 #include <map>
