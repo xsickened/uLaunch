@@ -62,6 +62,8 @@ namespace nexus {
             void ImageEx(SDL_Texture *tex, double x, double y, double w, double h, double alpha, double zoom, double posX, double posY, const std::function<double(double, double)> &fade = nullptr, Col tint = Col{}, bool flipV = false);
             // Viereck mit Farbe pro Ecke (Reihenfolge: oben links, oben rechts, unten rechts, unten links)
             void Quad(const SDL_FPoint p[4], const Col c[4]);
+            // Freies Dreiecksnetz (z. B. perspektivisch projizierte 3D-Flächen), tex darf nullptr sein
+            void Mesh(SDL_Texture *tex, const std::vector<SDL_Vertex> &v, const std::vector<int> &idx);
 
             // Partikel: eingebaute Formen als weiße Sprites (Farbe über die Eckpunkte), gebündelt gezeichnet
             struct Sprite { float x, y, size, rot; Col c; };

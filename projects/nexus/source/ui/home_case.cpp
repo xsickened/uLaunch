@@ -1,7 +1,10 @@
 // NEXUS HOME: 3D-Hüllen für Kacheln, Startanimationen, Zoom der Startseite
 #include "home.hpp"
+#include "case3d.hpp"
 #include <algorithm>
 #include <cmath>
+#include <functional>
+#include <vector>
 
 namespace nexus {
 
@@ -17,90 +20,29 @@ namespace nexus {
             return t < 0.5 ? 4 * t * t * t : 1 - std::pow(-2 * t + 2, 3) / 2;
         }
 
-        Col Shade(Col c, double k, double op) {
-            return Col{ static_cast<uint8_t>(std::clamp(c.r * k, 0.0, 255.0)), static_cast<uint8_t>(std::clamp(c.g * k, 0.0, 255.0)), static_cast<uint8_t>(std::clamp(c.b * k, 0.0, 255.0)), static_cast<uint8_t>(std::clamp(c.a * op, 0.0, 255.0)) };
-        }
     }
 
-    // ------------------------------------------------------------------ 3D-Hüllen
+    // ------------------------------------------------------------------ 3D-Hüllen (Darstellung: case3d.cpp)
 
-    void Home::DrawCase(const std::string &style, const json &t, SDL_Texture *tex, Xf &xf, const Disp &ds, double op, double rad, bool cover, double posX, double posY, double zoom) {
-        const bool flat = std::abs(xf.rot) > 0.5;   // gedrehte Anordnungen (Halbkreis): ohne Seitenfläche
-        const double signedA = std::clamp(ds.caseInit ? ds.caseA : JNum(t, "caseAngle", 18), -60.0, 60.0);
-        const double dir = signedA < 0 ? -1.0 : 1.0;   // +1: Rücken links, -1: Rücken rechts
-        const double ang = std::fabs(signedA) * kPi / 180.0;
-        const double depth = JNum(t, "caseDepth", 12) * xf.sc;
-        const double H = xf.h * xf.sc;
-        const double side = flat ? 0 : depth * std::sin(ang) + (depth > 0 ? depth * 0.18 : 0);
-        Xf f = xf;
-        f.squash = xf.squash * std::cos(ang);
-        f.cx = xf.cx + dir * side / 2;
-        const double fw = xf.w * xf.sc * f.squash;
-        const double fl = f.cx - fw / 2, fr = f.cx + fw / 2, ft = xf.cy - H / 2, fb = xf.cy + H / 2;
-        // Material je Hülle
-        Col body{ 200, 210, 225, 70 }, spine{ 35, 38, 46, 255 }, band{ 0, 0, 0, 0 };
-        double inset = 0.03, bandH = 0, crad = std::min(rad, 4.0);
-        bool frame = false;
-        if(style == "dvd") { body = { 14, 14, 16, 255 }; spine = { 24, 24, 28, 255 }; inset = 0.045; }
-        else if(style == "red") { body = { 205, 22, 34, 255 }; spine = { 165, 14, 26, 255 }; inset = 0.04; bandH = 0.09; band = { 230, 30, 42, 255 }; }
-        else if(style == "bluray") { body = { 22, 78, 180, 255 }; spine = { 16, 58, 140, 255 }; inset = 0.04; bandH = 0.11; band = { 30, 96, 210, 255 }; }
-        else if(style == "steel") { body = { 160, 166, 176, 255 }; spine = { 112, 118, 128, 255 }; inset = 0.0; frame = true; crad = std::max(crad, 6.0); }
-        else if(style == "cartridge") { body = { 62, 64, 72, 255 }; spine = { 44, 46, 52, 255 }; inset = 0.12; crad = std::max(rad, 10.0); }
-        else frame = true;   // jewel
-        // Seitenfläche (Rücken) mit Perspektive: hintere Kante etwas kürzer
-        if(side > 0.5) {
-            const double persp = H * 0.035 * std::sin(ang) * 2;
-            const double edge = dir > 0 ? fl + 1 : fr - 1, outer = dir > 0 ? fl - side : fr + side;
-            const SDL_FPoint p[4] = { { static_cast<float>(outer), static_cast<float>(ft + persp) }, { static_cast<float>(edge), static_cast<float>(ft) },
-                                      { static_cast<float>(edge), static_cast<float>(fb) }, { static_cast<float>(outer), static_cast<float>(fb - persp) } };
-            const Col cs[4] = { Shade(spine, 0.65, op), Shade(spine, 1.0, op), Shade(spine, 1.0, op), Shade(spine, 0.65, op) };
-            this->g->Quad(p, cs);
-        }
-        // Hüllenkörper und Cover
-        this->g->Shape(f, crad, false, WithA(body, op));
-        Xf cv = f;
-        cv.w = xf.w * (1 - 2 * inset);
-        cv.h = xf.h * (1 - 2 * inset - bandH);
-        cv.cy = xf.cy + (bandH * H) / 2;
-        this->g->ShapeTex(tex, cv, std::max(0.0, crad - 2), false, op, cover, posX, posY, Col{}, zoom);
-        if(bandH > 0) {
-            Xf b = f;
-            b.h = xf.h * bandH;
-            b.cy = ft + H * bandH / 2;
-            this->g->Shape(b, crad, false, WithA(band, op));
-            Xf stripe = b;
-            stripe.h = b.h * 0.18;
-            stripe.cy = b.cy + b.h * xf.sc * 0.32;
-            this->g->Shape(stripe, 0, false, Col{ 255, 255, 255, static_cast<uint8_t>(150 * op) });
-        }
-        if(style == "jewel" && !flat) {
-            // Scharnier links auf der Vorderseite
-            Xf hinge = f;
-            hinge.w = xf.w * 0.06;
-            hinge.cx = dir > 0 ? fl + xf.w * 0.06 * xf.sc * f.squash / 2 : fr - xf.w * 0.06 * xf.sc * f.squash / 2;
-            this->g->Shape(hinge, 0, false, Col{ 20, 22, 26, static_cast<uint8_t>(170 * op) });
-        }
-        if(style == "cartridge") {
-            // Griffmulde oben
-            Xf notch = f;
-            notch.w = xf.w * 0.5; notch.h = xf.h * 0.05;
-            notch.cy = ft + H * 0.05;
-            this->g->Shape(notch, 3, false, Col{ 30, 32, 36, static_cast<uint8_t>(255 * op) });
-        }
-        if(frame) this->g->ShapeRing(f, crad, false, 2 * xf.sc, Col{ 235, 240, 248, static_cast<uint8_t>((style == "steel" ? 200 : 120) * op) });
-        // Glanz
-        if(JBool(t, "caseShine", true) && !flat) {
-            const SDL_FPoint p[4] = { { static_cast<float>(fl), static_cast<float>(ft) }, { static_cast<float>(fr), static_cast<float>(ft) },
-                                      { static_cast<float>(fr), static_cast<float>(fb) }, { static_cast<float>(fl), static_cast<float>(fb) } };
-            const Col cs[4] = { Col{ 255, 255, 255, static_cast<uint8_t>(70 * op) }, Col{ 255, 255, 255, static_cast<uint8_t>(18 * op) },
-                                Col{ 255, 255, 255, 0 }, Col{ 255, 255, 255, static_cast<uint8_t>(10 * op) } };
-            this->g->Quad(p, cs);
-        }
-        // Spiegelung am Boden
-        if(JBool(t, "caseReflect", false) && !flat) {
-            this->g->ImageEx(tex, fl, fb + 3, fw, H, op * 0.35, zoom, posX, posY, [](double, double v) { return std::max(0.0, 1.0 - v / 0.4); }, Col{}, true);
-        }
-        xf = f;   // Fokusrahmen und Abzeichen folgen der Vorderseite
+    void Home::DrawCase(const std::string &style, const json &t, SDL_Texture *tex, Xf &xf, const Disp &ds, double op, double, bool, double posX, double posY, double zoom, const std::string &title, bool focused) {
+        CaseInput in;
+        in.style = style;
+        in.fit = JBool(t, "caseFit", true);
+        in.depth = JNum(t, "caseDepth", 12);
+        in.angle = ds.caseInit ? ds.caseA : JNum(t, "caseAngle", 18);
+        in.lean = ds.lean;
+        in.lift = ds.caseInit ? ds.lift : 0;
+        in.shine = JBool(t, "caseShine", true);
+        in.reflect = JBool(t, "caseReflect", false);
+        in.spineText = JBool(t, "caseSpineText", true);
+        in.shadow = JBool(t, "shadow", true);
+        in.live = this->d->settings.B("anim.enabled") && !this->d->settings.B("anim.reduce");
+        in.focused = focused;
+        in.time = this->time;
+        in.op = op;
+        in.posX = posX; in.posY = posY; in.zoom = zoom;
+        in.title = title;
+        RenderCase(*this->g, tex, xf, in);
     }
 
     // ------------------------------------------------------------------ Startanimation

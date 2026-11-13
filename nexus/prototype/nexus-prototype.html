@@ -98,6 +98,9 @@ html,body{margin:0;height:100%;background:#05070b;color:#eef2f7;font-family:syst
 .tile .in.cs-jewel{--body:rgba(200,210,225,.3);--spine:#23262e;outline:2px solid rgba(235,240,248,.5)}
 .tile .in.cs-dvd{--body:#0e0e10;--spine:#18181c;--ci:4.5%}
 .tile .in.cs-red{--body:#cd1622;--spine:#a50e1a;--ci:4%;--band:9%;--bandc:#e61e2a}
+.tile .in.cs-ps5{--body:#16449a;--spine:#14161c;--ci:1.5%;--band:8%;--bandc:#f6f6f8}
+.tile .in.cs-ps4{--body:#184aa0;--spine:#12141a;--ci:1.5%;--band:7.5%;--bandc:#003a98}
+.tile .in.cs-xbox{--body:#107016;--spine:#101012;--ci:1.5%;--band:7.5%;--bandc:#0e0e10}
 .tile .in.cs-bluray{--body:#164eb4;--spine:#103a8c;--ci:4%;--band:11%;--bandc:#1e60d2}
 .tile .in.cs-steel{--body:linear-gradient(135deg,#d8dce4,#8c929e);--spine:#70767f;--ci:0%;outline:2px solid rgba(235,240,248,.8)}
 .tile .in.cs-cartridge{--body:#3e4048;--spine:#2c2e34;--ci:12%;border-radius:10px!important}
@@ -488,13 +491,16 @@ const SPEC = [
   {g:"tiles", p:"tileDefaults.fit", l:"Cover-Zuschnitt", t:"enum", o:["cover","contain"], ol:["Füllen","Einpassen"], d:"cover"},
   {g:"tiles", p:"tileDefaults.posX", l:"Bildposition X", t:"num", min:0, max:100, step:5, f:v=>v+" %", d:50},
   {g:"tiles", p:"tileDefaults.posY", l:"Bildposition Y", t:"num", min:0, max:100, step:5, f:v=>v+" %", d:50},
-  {g:"tiles", p:"tileDefaults.caseStyle", l:"Hülle (3D)", t:"enum", o:["none","jewel","dvd","red","bluray","steel","cartridge"], ol:["Keine (nur Cover)","CD-Hülle (Jewel Case)","DVD-Hülle (schwarz)","Spielhülle (rot)","Blu-ray-Hülle (blau)","Steelbook (Metall)","Modul (Cartridge)"], d:"none"},
-  {g:"tiles", p:"tileDefaults.caseAngle", l:"Hülle: Drehung", t:"num", min:0, max:40, step:5, f:deg, d:18},
+  {g:"tiles", p:"tileDefaults.caseStyle", l:"Hülle (3D)", t:"enum", o:["none","red","ps5","ps4","xbox","dvd","bluray","jewel","steel","cartridge"], ol:["Keine (nur Cover)","Nintendo Switch (rot)","PlayStation 5 (blau, weiße Leiste)","PlayStation 4 (blau)","Xbox Series (grün)","DVD-Hülle (schwarz)","Blu-ray-Hülle (blau)","CD-Hülle (Jewel Case)","Steelbook (Metall)","Modul (Cartridge)"], d:"none"},
+  {g:"tiles", p:"tileDefaults.caseAngle", l:"Hülle: Drehung", t:"num", min:0, max:60, step:5, f:deg, d:25},
   {g:"tiles", p:"tileDefaults.caseArrange", l:"Hülle: Anordnung", t:"enum", o:["left","right","focus","center","awayFocus","awayCenter","alternate","wave"], ol:["Alle nach links gedreht","Alle nach rechts gedreht","Zur gewählten Kachel hin","Zur Bildschirmmitte hin","Von der gewählten Kachel weg","Von der Mitte weg","Abwechselnd","Welle"], d:"left"},
-  {g:"tiles", p:"tileDefaults.caseDepth", l:"Hülle: Dicke", t:"num", min:0, max:30, step:2, f:px, d:12},
+  {g:"tiles", p:"tileDefaults.caseDepth", l:"Hülle: Dicke (12 = wie echt)", t:"num", min:0, max:30, step:2, f:px, d:12},
   {g:"tiles", p:"tileDefaults.caseShine", l:"Hülle: Glanz", t:"bool", d:true},
   {g:"tiles", p:"tileDefaults.caseReflect", l:"Hülle: Spiegelung am Boden", t:"bool", d:false},
   {g:"tiles", p:"tileDefaults.caseFocusTurn", l:"Gewählte Hülle dreht sich zu dir", t:"bool", d:true},
+  {g:"tiles", p:"tileDefaults.caseFit", l:"Hülle: echte Maße der Originalhülle", t:"bool", d:true},
+  {g:"tiles", p:"tileDefaults.caseSpineText", l:"Hülle: Titel auf dem Rücken", t:"bool", d:true},
+  {g:"tiles", p:"tileDefaults.caseSway", l:"Hülle: neigt sich beim Scrollen", t:"bool", d:true},
   // Bibliothek
   // RetroAchievements (nur Anzeige; Freischalten passiert weiterhin im Emulator/TICO)
   {g:"ra", p:"ra.enabled", l:"RetroAchievements anzeigen", t:"bool", d:false},

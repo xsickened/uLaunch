@@ -64,6 +64,9 @@ namespace nexus {
         double vx = 0, vy = 0, vw = 0, vh = 0, vrot = 0, vsq = 0, vsc = 0, vop = 0;
         double delay = 0;
         double caseA = 0;    // aktuelle Drehung der 3D-Hülle (Grad, mit Vorzeichen)
+        double caseV = 0;    // Drehgeschwindigkeit (Feder)
+        double lean = 0, leanV = 0;   // Neigung durch den Schwung beim Scrollen (Grad)
+        double lift = 0, liftV = 0;   // gewählte Hülle kommt nach vorn (Tiefe in px)
         bool caseInit = false;
         bool init = false;
     };
@@ -261,7 +264,7 @@ namespace nexus {
             void SwitchUserLook(const std::string &newUser);
             void Sfx(const char *ev);
             // 3D-Hüllen, Startanimation, Zoom
-            void DrawCase(const std::string &style, const json &t, SDL_Texture *tex, Xf &xf, const Disp &ds, double op, double rad, bool cover, double posX, double posY, double zoom);
+            void DrawCase(const std::string &style, const json &t, SDL_Texture *tex, Xf &xf, const Disp &ds, double op, double rad, bool cover, double posX, double posY, double zoom, const std::string &title, bool focused);
             struct LaunchFx { bool active = false; double t = 0; std::string id, name; std::function<void()> go; Xf from; bool haveFrom = false; } launchFx;
             Xf lastFocusXf;
             bool haveLastFocus = false;

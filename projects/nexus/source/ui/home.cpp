@@ -9,6 +9,18 @@
 namespace nexus {
 
     namespace {
+
+        // Kritisch gedämpfte Feder: folgt dem Ziel ohne Überschwingen und behält die Geschwindigkeit,
+        // wenn sich das Ziel ändert (z. B. Tasten gehalten beim Scrollen) -> keine ruckartigen Wechsel
+        void SmoothDamp(double &cur, double &vel, double target, double smoothTime, double dt) {
+            smoothTime = std::max(0.0001, smoothTime);
+            const double omega = 2.0 / smoothTime, x = omega * dt;
+            const double e = 1.0 / (1.0 + x + 0.48 * x * x + 0.235 * x * x * x);
+            const double change = cur - target, temp = (vel + omega * change) * dt;
+            vel = (vel - omega * temp) * e;
+            cur = target + (change + temp) * e;
+            if(!std::isfinite(cur) || !std::isfinite(vel)) { cur = target; vel = 0; }
+        }
         constexpr double kPi = 3.14159265358979323846;
         // Erst true, wenn NEXUS innerhalb von uLaunch (uMenu) läuft und über uSystem startet.
         constexpr bool CanLaunchGames = false;
@@ -1284,8 +1296,15 @@ namespace nexus {
             {
                 const double fcx = (this->focus >= 0 && this->focus < static_cast<int>(this->lay.items.size())) ? this->lay.items[this->focus].x + this->lay.items[this->focus].w / 2 : ScreenW / 2;
                 const double ta = (foc && JBool(t, "caseFocusTurn", true)) ? 0.0 : CaseAngle(JStr(t, "caseArrange", "left"), JNum(t, "caseAngle", 18), it.x + it.w / 2, fcx, ScreenW / 2, static_cast<int>(i));
-                if(!ds.caseInit || speed <= 0) { ds.caseA = ta; ds.caseInit = true; }
-                else ds.caseA += (ta - ds.caseA) * std::min(1.0, dt * 9);
+                // Hüllen-Physik: Drehung als Feder, Neigung durch den Schwung, gewählte Hülle kommt nach vorn
+                const double leanT = JBool(t, "caseSway", true) ? std::clamp(-ds.vx * 0.011, -16.0, 16.0) : 0.0;
+                const double liftT = foc ? -55.0 * it.sc : 0.0;
+                if(!ds.caseInit || speed <= 0) { ds.caseA = ta; ds.caseV = 0; ds.lean = 0; ds.leanV = 0; ds.lift = liftT; ds.liftV = 0; ds.caseInit = true; }
+                else {
+                    SmoothDamp(ds.caseA, ds.caseV, ta, std::max(0.08, speed * 0.9), dt);
+                    SmoothDamp(ds.lean, ds.leanV, leanT, 0.16, dt);
+                    SmoothDamp(ds.lift, ds.liftV, liftT, std::max(0.08, speed * 0.8), dt);
+                }
             }
             if(ds.delay > 0) { ds.delay -= dt; continue; }
             struct Ch { double &v; double &vel; double t; };
@@ -1297,7 +1316,8 @@ namespace nexus {
                     c.vel += acc * dt;
                     c.v += c.vel * dt;
                 }
-                else c.v += (c.t - c.v) * a;
+                else if(easing == "linear") c.v += (c.t - c.v) * a;
+                else SmoothDamp(c.v, c.vel, c.t, tau * 2.2, dt);
             }
         }
     }
@@ -1579,7 +1599,8 @@ namespace nexus {
                 this->g->Text(e.folder ? "Ordner · " + std::to_string(e.folderCount) + " Einträge" : "Titel-ID " + e.id, 13, ds.x + ds.h + 14, xf.cy + 4, WithA(this->MutedCol(), op));
             }
             else {
-                if(JBool(t, "shadow", true) && !hex) {
+                const bool asCase = JStr(t, "caseStyle", "none") != "none" && !hex && !e.folder;
+                if(JBool(t, "shadow", true) && !hex && !asCase) {
                     Xf sh = xf;
                     sh.cy += 8 * xf.sc;
                     this->g->Shape(sh, rad, false, Col{ 0, 0, 0, static_cast<uint8_t>(90 * op) });
@@ -1595,7 +1616,7 @@ namespace nexus {
                 }
                 else if(!e.folder && !e.iconKey.empty()) tex = this->img->Get(e.iconKey, 2);
                 const std::string caseStyle = JStr(t, "caseStyle", "none");
-                if(tex && caseStyle != "none" && !hex) this->DrawCase(caseStyle, t, tex, xf, ds, op, rad, cover, posX, posY, zoom);
+                if(tex && caseStyle != "none" && !hex) this->DrawCase(caseStyle, t, tex, xf, ds, op, rad, cover, posX, posY, zoom, e.name, foc);
                 else if(tex) this->g->ShapeTex(tex, xf, rad, hex, op, cover, posX, posY, Col{}, zoom);
                 else if(e.folder) {
                     // Ordnerkachel: Akzentfläche + bis zu 4 Icons

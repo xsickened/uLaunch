@@ -316,6 +316,11 @@ namespace nexus {
         SDL_RenderGeometry(this->r, nullptr, v, 4, idx, 6);
     }
 
+    void Gfx::Mesh(SDL_Texture *tex, const std::vector<SDL_Vertex> &v, const std::vector<int> &idx) {
+        if(v.empty() || idx.empty()) return;
+        SDL_RenderGeometry(this->r, tex, v.data(), static_cast<int>(v.size()), idx.data(), static_cast<int>(idx.size()));
+    }
+
     void Gfx::ImageEx(SDL_Texture *tex, double x, double y, double w, double h, double alpha, double zoom, double posX, double posY, const std::function<double(double, double)> &fade, Col tint, bool flipV) {
         if(!tex || w <= 0 || h <= 0) return;
         int tw = 0, th = 0;
