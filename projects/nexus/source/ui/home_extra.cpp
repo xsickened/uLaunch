@@ -161,9 +161,7 @@ namespace nexus {
         std::vector<std::pair<std::string, std::string>> dirs = { { "Bilder dieses Titels", std::string(ArtDir) + "/" + id } };
         if(kind != "logo") dirs.push_back({ "Eigene Hintergründe", std::string(ArtDir) + "/backgrounds" });
         this->OpenImagePicker(title, dirs, kind == "hero", kind == "logo", [this, id, kind](const std::string &path) {
-            this->d->library.SetArtOverride(id, kind, path);
-            this->ArtChanged(id);
-            this->MarkDirty();
+            this->SetArt(id, kind, path);
             if(!path.empty() && kind != "logo") this->OpenCropEditor(path, kind == "grid" ? "Cover-Ausschnitt" : "Hintergrund-Ausschnitt", kind == "grid" ? this->TileAspect() : ScreenW / ScreenH);
         }, "Automatisch (grid/hero/logo-Datei im Titelordner)");
     }
@@ -299,6 +297,35 @@ namespace nexus {
             this->d->settings.data = Settings::Sanitize(this->d->settings.data, nullptr);
             this->logoMove.active = false;
             this->Toast("Verschieben abgebrochen.");
+        }
+    }
+
+    // ------------------------------------------------------------------ Bilder: ersetzen, aufräumen, vorladen
+
+    void Home::SetArt(const std::string &id, const std::string &kind, const std::string &path) {
+        const auto old = this->d->library.ReplaceArt(id, kind, path);
+        if(!old.empty()) this->ForgetFile(old);
+        this->ArtChanged(id);
+        this->MarkDirty();
+    }
+
+    void Home::ForgetFile(const std::string &path) {
+        // ersetzte Download-Datei samt Cache entfernen
+        this->img->DropDisk(path);
+        this->img->Invalidate(path);
+        std::remove(path.c_str());
+        Log("Ersetztes Bild gelöscht: %s", path.c_str());
+    }
+
+    void Home::PrefetchAround() {
+        // Hintergrund, Logo und Cover der Nachbarn schon laden, damit sie beim Weiterblättern sofort da sind
+        const int n = static_cast<int>(this->list.size());
+        for(int dk: { 1, -1, 2, -2 }) {
+            const int i = this->focus + dk;
+            if(i < 0 || i >= n) continue;
+            const auto &a = this->Art(this->list[i].id);
+            if(!a.hero.empty() && this->d->settings.B("hero.enabled")) this->img->Get(a.hero, 5);
+            if(!a.logo.empty() && this->d->settings.B("logo.visible")) this->img->Get(a.logo, 6);
         }
     }
 
@@ -665,8 +692,7 @@ namespace nexus {
                     this->Toast("Wird heruntergeladen …");
                     this->online.Download(im.url, path, [this, id, key, path](bool ok, std::string err) {
                         if(!ok) { this->Toast("Download fehlgeschlagen: " + err); return; }
-                        this->d->library.SetArtOverride(id, key, path);
-                        this->ArtChanged(id);
+                        this->SetArt(id, key, path);
                         this->Toast("Übernommen und gespeichert.");
                     });
                 };
@@ -686,7 +712,10 @@ namespace nexus {
 
     std::vector<Row> Home::RaRows() {
         std::vector<Row> rows;
-        rows.push_back(Row{ "Konto", nullptr, nullptr, nullptr, true });
+        rows.push_back(Row{ "Anmeldung (Benutzername + Web-API-Key statt Passwort)", nullptr, nullptr, nullptr, true });
+        rows.push_back(Row{ "Wo finde ich den Key?", []() { return std::string("retroachievements.org → Einstellungen → Keys"); }, nullptr, [this]() {
+            this->Toast("Kein Passwort nötig: RetroAchievements gibt für Apps einen Web-API-Key aus (Einstellungen → Keys). Dein Passwort bleibt so geheim.");
+        } });
         rows.push_back(Row{ "Benutzername", [this]() { const auto u = this->d->settings.S("ra.user"); return u.empty() ? std::string("nicht hinterlegt") : u; }, nullptr, [this]() {
             this->AskText("RetroAchievements-Benutzername", this->d->settings.S("ra.user"), 60, [this](std::string v) {
                 this->d->settings.Set("ra.user", json(v));
@@ -694,7 +723,7 @@ namespace nexus {
             });
         } });
         rows.push_back(Row{ "Web-API-Key", [this]() { return Masked(this->d->settings.S("ra.key")); }, nullptr, [this]() {
-            this->AskText("RetroAchievements Web-API-Key (retroachievements.org → Einstellungen → Keys)", "", 100, [this](std::string v) {
+            this->AskText("Web-API-Key (NICHT das Passwort) – retroachievements.org → Einstellungen → Keys", "", 100, [this](std::string v) {
                 if(v.empty()) return;
                 this->d->settings.Set("ra.key", json(v));
                 this->Save();

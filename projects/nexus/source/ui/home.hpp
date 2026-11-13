@@ -222,6 +222,10 @@ namespace nexus {
             void DrawIdle();
             void UpdateIdle(double dt, bool input);
             void ApplyStartSection();
+            void SetArt(const std::string &id, const std::string &kind, const std::string &path);
+            void ForgetFile(const std::string &path);
+            void PrefetchAround();
+            bool gcDone = false;
             void LogoMoveInput(const plat::Input &in);
             void QueueMissingArt(bool force);
             void ArtChanged(const std::string &id);

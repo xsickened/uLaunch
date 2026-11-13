@@ -382,6 +382,23 @@ int main() {
         CHECK(ps.parts.empty());
     }
 
+    // 12. Ersetzte Downloads werden freigegeben, eigene Dateien nie
+    {
+        Library lib;
+        const std::string a = "sdmc:/nexus/art/0100000000010000/sgdb-hero-1.png", b = "sdmc:/nexus/art/0100000000010000/sgdb-hero-2.png";
+        CHECK(lib.ReplaceArt("0100000000010000", "hero", a).empty());
+        Crop c; c.zoom = 2; c.set = true; lib.SetCrop(a, c);
+        CHECK(lib.ReplaceArt("0100000000010000", "hero", b) == a);
+        CHECK(!lib.CropOf(a).set);
+        CHECK(lib.ReplaceArt("0100000000010000", "hero", "sdmc:/nexus/art/backgrounds/mein.jpg") == b);
+        CHECK(lib.ReplaceArt("0100000000010000", "hero", "").empty());   // eigenes Bild wird nie gelöscht
+        // dieselbe Datei noch woanders in Benutzung -> nicht löschen
+        lib.ReplaceArt("0100000000010000", "grid", a);
+        lib.ReplaceArt("0100000000020000", "grid", a);
+        CHECK(lib.ReplaceArt("0100000000010000", "grid", b).empty());
+        CHECK(lib.ArtInUse(a) && lib.AllArtOverrides().size() == 2);
+    }
+
     std::printf(g_Fail ? "%d Fehler\n" : "Alle Kern-Tests bestanden.\n", g_Fail);
     return g_Fail ? 1 : 0;
 }

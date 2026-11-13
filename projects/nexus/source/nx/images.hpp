@@ -28,6 +28,15 @@ namespace nexus {
             void Clear();
             size_t UsedBytes() const { return this->used; }
 
+            // Dauerhafter Cache auf der SD-Karte: große Bilder und PNGs werden einmal verkleinert
+            // gespeichert (JPG, mit Transparenz PNG) und danach direkt daraus geladen.
+            void SetDiskCache(const std::string &dir) { this->diskDir = dir; }
+            // Cache-Dateien eines Quellbilds (Grundname ohne Endung; leer, wenn die Quelle fehlt)
+            std::string DiskBase(const std::string &src) const;
+            void DropDisk(const std::string &src);
+            // Entfernt im Hintergrund alle Cache-Dateien, deren Quelle nicht in inUse steht
+            void CollectGarbage(std::vector<std::string> inUse);
+
         private:
             struct Tex { SDL_Texture *tex; size_t bytes; uint64_t used; };
             std::unordered_map<std::string, Tex> textures;
@@ -42,6 +51,7 @@ namespace nexus {
             bool running = false;
             size_t budget = 64 * 1024 * 1024, used = 0;
             int maxEdge = 1280;
+            std::string diskDir;
             uint64_t tick = 0;
 
             void Work();

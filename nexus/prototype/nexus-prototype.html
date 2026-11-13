@@ -1369,6 +1369,8 @@ function openGroup(id){
   if(id==="sections") rows = ()=>ST().sections.map((sec,i)=>({l:SECTION_NAMES[sec.id], get:()=>sec.visible?"sichtbar":"versteckt", set:null, act:()=>{ if(sec.id==="settings"){ toast("Einstellungen bleiben immer erreichbar."); return; } sec.visible=!sec.visible; liveApply(); redraw(); }, move:true, idx:i}));
   else if(id==="sys") rows = sysRows;
   else if(id==="ra") rows = ()=>[...SPEC.filter(s=>s.g==="ra" && !s.hidden).map(specRow), {head:"Konto"},
+    {head:"Anmeldung: Benutzername + Web-API-Key (statt Passwort)"},
+    A_("Wo finde ich den Key? retroachievements.org → Einstellungen → Keys", ()=>toast("Kein Passwort nötig: RetroAchievements gibt für Apps einen Web-API-Key aus. Dein Passwort bleibt so geheim.")),
     A_("Benutzername: "+(ST().ra.user||"nicht hinterlegt"), ()=>openOSK("RetroAchievements-Benutzername", ST().ra.user||"", v=>{ ST().ra.user = v.trim().slice(0,60); DataStore.save(); renderStatus(); redraw(); })),
     A_("Web-API-Key: "+(ST().ra.key?"••••"+ST().ra.key.slice(-4):"nicht hinterlegt"), ()=>openOSK("RetroAchievements Web-API-Key", "", v=>{ ST().ra.key = v.trim().slice(0,120); DataStore.save(); redraw(); toast("Key nur lokal gespeichert, nie im Log. Zu finden auf retroachievements.org unter Einstellungen → Keys."); })),
     A_("Verbindung testen", ()=>toast(ST().ra.user && ST().ra.key ? "Simuliert: Profil geladen. Die Switch-App prüft hier API_GetUserProfile." : "Bitte zuerst Benutzername und Web-API-Key eintragen."))];

@@ -25,7 +25,7 @@ ICON		:=	icon.jpg
 ARCH	:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
 
 CFLAGS	:=	-g -O2 -ffunction-sections -Wall $(ARCH) $(DEFINES)
-CFLAGS	+=	$(INCLUDE) -D__SWITCH__ `sdl2-config --cflags` -I$(TOPDIR)/../../libs/json/single_include
+CFLAGS	+=	$(INCLUDE) -D__SWITCH__ `sdl2-config --cflags` -I$(TOPDIR)/../../libs/json/single_include -I$(TOPDIR)/../../libs/stb
 
 CXXFLAGS	:= $(CFLAGS) -std=gnu++20
 

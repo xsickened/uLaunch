@@ -325,4 +325,32 @@ namespace nexus {
         this->crops[path] = { { "z", std::clamp(c.zoom, 1.0, 4.0) }, { "x", std::clamp(c.x, 0.0, 100.0) }, { "y", std::clamp(c.y, 0.0, 100.0) } };
     }
 
+    std::vector<std::string> Library::AllArtOverrides() const {
+        std::vector<std::string> out;
+        auto add = [&out](const json &art) {
+            if(!art.is_object()) return;
+            for(auto it = art.begin(); it != art.end(); ++it) if(it.value().is_string()) out.push_back(it.value().get<std::string>());
+        };
+        for(auto it = this->apps.begin(); it != this->apps.end(); ++it) { const json *a = JGet(it.value(), "art"); if(a) add(*a); }
+        for(const auto &f: this->folders) add(f.art);
+        return out;
+    }
+
+    bool Library::ArtInUse(const std::string &path) const {
+        for(const auto &p: this->AllArtOverrides()) if(p == path) return true;
+        return false;
+    }
+
+    std::string Library::ReplaceArt(const std::string &id, const std::string &kind, const std::string &path) {
+        const std::string old = this->ArtOverride(id, kind);
+        this->SetArtOverride(id, kind, path);
+        if(old.empty() || old == path) return "";
+        const auto slash = old.find_last_of('/');
+        const std::string file = slash == std::string::npos ? old : old.substr(slash + 1);
+        if(file.rfind("sgdb-", 0) != 0 || old.rfind("sdmc:/nexus/art/", 0) != 0) return "";
+        if(this->ArtInUse(old)) return "";
+        this->crops.erase(old);
+        return old;
+    }
+
 }

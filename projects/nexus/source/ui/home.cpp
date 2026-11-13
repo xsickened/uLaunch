@@ -45,6 +45,8 @@ namespace nexus {
         if(h) this->currentUser = h->CurrentUser();
         this->online.Init(this->d);
         this->online.onArtChanged = [this](const std::string &id) { this->ArtChanged(id); };
+        this->online.onFileObsolete = [this](const std::string &f) { this->ForgetFile(f); };
+        this->img->SetDiskCache(std::string(CacheDir) + "/img");
         EnsureDir(std::string(ArtDir) + "/backgrounds");
         this->accentP = AccentFrom(this->d->settings);
         this->ImportKeys(true);
@@ -1077,6 +1079,21 @@ namespace nexus {
             if(this->bgC.type == "none") this->fx.parts.erase(std::remove_if(this->fx.parts.begin(), this->fx.parts.end(), [](const Particle &p) { return p.layer >= 2; }), this->fx.parts.end());
             this->UpdateIdle(dt, false);
             if(!this->startApplied && this->appsVersion > 0) this->ApplyStartSection();
+            if(!this->gcDone && this->appsVersion > 0 && !this->apps->Busy() && this->time > 15) {
+                this->gcDone = true;
+                // alle Bilder, die in Benutzung sind: eigene Auswahl, Standarddateien der Titel, Hintergründe
+                std::vector<std::string> use = this->d->library.AllArtOverrides();
+                for(const auto &id: this->installed) {
+                    const std::string b = std::string(ArtDir) + "/" + id + "/";
+                    for(const char *n: { "grid.jpg", "grid.png", "hero.jpg", "hero.png", "logo.png", "logo.jpg" }) use.push_back(b + n);
+                }
+                for(const auto &f: this->d->library.folders) {
+                    const std::string b = std::string(ArtDir) + "/" + f.id + "/";
+                    for(const char *n: { "grid.jpg", "grid.png", "hero.jpg", "hero.png", "logo.png", "logo.jpg" }) use.push_back(b + n);
+                }
+                for(const char *p: { "home.image", "lock.image", "profile.image", "aura.image", "bgfx.image" }) { const auto v = st.S(p); if(!v.empty()) use.push_back(v); }
+                this->img->CollectGarbage(use);
+            }
         }
         if(!this->autoArtQueued && this->appsVersion > 0 && !this->apps->Busy()) {
             this->autoArtQueued = true;
@@ -1187,6 +1204,7 @@ namespace nexus {
         else this->heroTimer -= dt;
         if(this->heroTimer <= 0 && fid != this->heroFor) {
             this->heroFor = fid;
+            this->PrefetchAround();
             HeroSlot n;
             if(!fid.empty()) {
                 const auto &a = this->Art(fid);

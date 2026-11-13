@@ -1,6 +1,14 @@
 #include "images.hpp"
 #include <SDL2/SDL_image.h>
 #include <algorithm>
+#include <cctype>
+#include <cstdio>
+#include <dirent.h>
+#include <set>
+#include <sys/stat.h>
+#define STB_IMAGE_WRITE_STATIC
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 
 namespace nexus {
 
@@ -104,12 +112,28 @@ namespace nexus {
                 }
             }
             SDL_Surface *s = nullptr;
+            bool cacheIt = false;
+            std::string base;
             if(isMem) {
                 SDL_RWops *rw = SDL_RWFromConstMem(mem.data(), static_cast<int>(mem.size()));
                 if(rw) s = IMG_Load_RW(rw, 1);
             }
             else if(key.rfind("mem:", 0) != 0) {
-                s = IMG_Load(key.c_str());
+                base = this->DiskBase(key);
+                if(!base.empty()) {
+                    for(const char *ext: { ".jpg", ".png" }) {
+                        struct stat st;
+                        if(stat((base + ext).c_str(), &st) == 0 && st.st_size > 0) { s = IMG_Load((base + ext).c_str()); break; }
+                    }
+                }
+                if(!s) {
+                    s = IMG_Load(key.c_str());
+                    // PNG/WebP und große Bilder lohnen den Cache (Dekodieren/Verkleinern ist langsam)
+                    std::string low = key;
+                    for(auto &ch: low) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+                    const bool slowFmt = low.size() > 4 && (low.compare(low.size() - 4, 4, ".png") == 0 || low.compare(low.size() - 5, 5, ".webp") == 0);
+                    cacheIt = s && !base.empty() && (slowFmt || s->w > this->maxEdge || s->h > this->maxEdge);
+                }
             }
             // Sehr große Bilder verkleinern (Speicherbudget)
             if(s && (s->w > this->maxEdge || s->h > this->maxEdge)) {
@@ -125,6 +149,29 @@ namespace nexus {
                 }
                 if(conv) SDL_FreeSurface(conv);
                 if(small) SDL_FreeSurface(small);
+            }
+            if(s && cacheIt) {
+                // verkleinertes Bild speichern (tmp -> umbenennen, damit nie halbe Dateien geladen werden)
+                SDL_Surface *rgba = SDL_ConvertSurfaceFormat(s, SDL_PIXELFORMAT_RGBA32, 0);
+                if(rgba) {
+                    bool alpha = false;
+                    SDL_LockSurface(rgba);
+                    const uint8_t *px = static_cast<const uint8_t *>(rgba->pixels);
+                    for(int y = 0; y < rgba->h && !alpha; y++) {
+                        const uint8_t *row = px + y * rgba->pitch;
+                        for(int x = 0; x < rgba->w; x++) if(row[x * 4 + 3] < 250) { alpha = true; break; }
+                    }
+                    std::vector<uint8_t> packed(static_cast<size_t>(rgba->w) * rgba->h * 4);
+                    for(int y = 0; y < rgba->h; y++) std::copy(px + y * rgba->pitch, px + y * rgba->pitch + rgba->w * 4, packed.begin() + static_cast<size_t>(y) * rgba->w * 4);
+                    SDL_UnlockSurface(rgba);
+                    const std::string out = base + (alpha ? ".png" : ".jpg"), tmp = out + ".tmp";
+                    mkdir(this->diskDir.c_str(), 0777);
+                    const int ok = alpha ? stbi_write_png(tmp.c_str(), rgba->w, rgba->h, 4, packed.data(), rgba->w * 4)
+                                         : stbi_write_jpg(tmp.c_str(), rgba->w, rgba->h, 4, packed.data(), 90);
+                    if(ok) std::rename(tmp.c_str(), out.c_str());
+                    else std::remove(tmp.c_str());
+                    SDL_FreeSurface(rgba);
+                }
             }
             std::lock_guard<std::mutex> lk(this->mtx);
             if(s) this->decoded.push_back({ key, s });
@@ -179,6 +226,55 @@ namespace nexus {
             SDL_DestroyTexture(oldest->second.tex);
             this->textures.erase(oldest);
         }
+    }
+
+    std::string ImageCache::DiskBase(const std::string &src) const {
+        if(this->diskDir.empty() || src.rfind("sdmc:/", 0) != 0 || src.rfind(this->diskDir, 0) == 0) return "";
+        struct stat st;
+        if(stat(src.c_str(), &st) != 0) return "";
+        // Name aus Pfad, Änderungszeit, Größe und Zielgröße: ändert sich die Quelle, passt der Cache nicht mehr
+        uint64_t h = 1469598103934665603ull;
+        auto mix = [&h](const std::string &v) { for(const unsigned char c: v) { h ^= c; h *= 1099511628211ull; } h ^= 0xff; h *= 1099511628211ull; };
+        mix(src);
+        mix(std::to_string(static_cast<long long>(st.st_mtime)));
+        mix(std::to_string(static_cast<long long>(st.st_size)));
+        mix(std::to_string(this->maxEdge));
+        char buf[24];
+        std::snprintf(buf, sizeof(buf), "%016llx", static_cast<unsigned long long>(h));
+        return this->diskDir + "/" + buf;
+    }
+
+    void ImageCache::DropDisk(const std::string &src) {
+        const auto base = this->DiskBase(src);
+        if(base.empty()) return;
+        std::remove((base + ".jpg").c_str());
+        std::remove((base + ".png").c_str());
+    }
+
+    void ImageCache::CollectGarbage(std::vector<std::string> inUse) {
+        if(this->diskDir.empty()) return;
+        const std::string dir = this->diskDir;
+        const int edge = this->maxEdge;
+        std::thread([dir, edge, inUse]() {
+            ImageCache probe;
+            probe.diskDir = dir;
+            probe.maxEdge = edge;
+            std::set<std::string> keep;
+            for(const auto &p: inUse) {
+                const auto b = probe.DiskBase(p);
+                if(!b.empty()) keep.insert(b.substr(b.find_last_of('/') + 1));
+            }
+            DIR *d = opendir(dir.c_str());
+            if(!d) return;
+            std::vector<std::string> drop;
+            while(dirent *e = readdir(d)) {
+                const std::string n = e->d_name;
+                if(n.size() < 16 || n[0] == '.') continue;
+                if(!keep.count(n.substr(0, 16))) drop.push_back(dir + "/" + n);
+            }
+            closedir(d);
+            for(const auto &f: drop) std::remove(f.c_str());
+        }).detach();
     }
 
 }

@@ -38,6 +38,7 @@ namespace nexus {
             void QueueAutoArt(const std::string &id, const std::string &name, bool grid, bool hero, bool logo, long long gameId = 0, bool force = false);
             int AutoRemaining() const { return static_cast<int>(this->autoQueue.size()) + (this->autoBusy ? 1 : 0); }
             std::function<void(const std::string &id)> onArtChanged;
+            std::function<void(const std::string &file)> onFileObsolete;   // ersetzte Download-Datei löschen
 
             // ---------------- RetroAchievements
             struct RaState {

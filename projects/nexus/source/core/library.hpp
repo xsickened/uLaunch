@@ -56,6 +56,12 @@ namespace nexus {
             // Eigene Bildauswahl (kind = grid | hero | logo). Leerer Pfad = Standard (Ordner art/<id>/)
             std::string ArtOverride(const std::string &id, const std::string &kind);
             void SetArtOverride(const std::string &id, const std::string &kind, const std::string &path);
+            // Wie SetArtOverride, liefert aber die alte Datei zurück, wenn sie von NEXUS heruntergeladen wurde
+            // („sgdb-“) und nirgends mehr verwendet wird – diese darf gelöscht werden. Eigene Dateien nie.
+            std::string ReplaceArt(const std::string &id, const std::string &kind, const std::string &path);
+            bool ArtInUse(const std::string &path) const;
+            // Alle Bilddateien, die als eigene Auswahl eingetragen sind
+            std::vector<std::string> AllArtOverrides() const;
             Crop CropOf(const std::string &path) const;
             void SetCrop(const std::string &path, const Crop &c);
             long long RaGameId(const std::string &tid) const;

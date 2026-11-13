@@ -42,7 +42,7 @@ LIBUCOMMON		:=	$(CURDIR)/../../libs/uCommon
 LIBPU			:=	$(CURDIR)/../../libs/Plutonium/Plutonium
 LIBNX_EXT		:=	$(CURDIR)/../../libs/libnx-ext/libnx-ext
 LIBNX_IPCEXT	:=	$(CURDIR)/../../libs/libnx-ext/libnx-ipcext
-INCLUDES 		+=	/../../libs/json/single_include/nlohmann /../../libs/json/single_include /../../libs/zip/src ../nexus/source
+INCLUDES 		+=	/../../libs/json/single_include/nlohmann /../../libs/json/single_include /../../libs/zip/src ../nexus/source /../../libs/stb
 
 LIBS	:= -lpu -lcurl -lfreetype -lSDL2_mixer -lopusfile -lopus -lmodplug -lmpg123 -lvorbisidec -logg -lSDL2_ttf -lSDL2_gfx -lSDL2_image -lSDL2 -lEGL -lGLESv2 -lglapi -ldrm_nouveau -lwebp -lpng -ljpeg `sdl2-config --libs` `freetype-config --libs` -luCommon -lnx-ipcext -lnx-ext -lbz2 -lharfbuzz -lz -lnx
 

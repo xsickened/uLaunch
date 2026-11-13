@@ -164,7 +164,8 @@ namespace nexus {
             const std::string path = dir + "/sgdb-" + keys[stage] + "-" + std::to_string(im.id) + ImageExt(im.mime, im.url);
             this->Download(im.url, path, [this, job, gameId, stage, path](bool ok, std::string) {
                 if(ok) {
-                    this->d->library.SetArtOverride(job.id, keys[stage], path);
+                    const auto old = this->d->library.ReplaceArt(job.id, keys[stage], path);
+                    if(!old.empty() && this->onFileObsolete) this->onFileObsolete(old);
                     if(this->onArtChanged) this->onArtChanged(job.id);
                 }
                 this->AutoStep(job, gameId, stage + 1);
