@@ -5,6 +5,7 @@
 #include "../nx/gfx.hpp"
 #include "../nx/images.hpp"
 #include "../nx/platform.hpp"
+#include "host.hpp"
 #include <array>
 #include <functional>
 #include <memory>
@@ -56,10 +57,16 @@ namespace nexus {
 
     class Home {
         public:
-            bool Init(SDL_Renderer *r, Gfx *g, ImageCache *img, Apps *apps, NexusData *data, bool safeMode, bool applet);
-            // false = Beenden gewünscht
+            enum class Screen { Main, Profile, Lock };
+
+            bool Init(SDL_Renderer *r, Gfx *g, ImageCache *img, Apps *apps, NexusData *data, bool safeMode, bool applet, Host *host = nullptr);
+            // false = Beenden gewünscht (nur Test-App)
             bool Frame(const plat::Input &in, double dt);
             void Save();
+            void SetScreen(Screen s);
+            Screen GetScreen() const { return this->screen; }
+            void DrawOnly();        // nur zeichnen (verschachtelte Render-Schleifen von uMenu)
+            void OnHome();          // HOME-Taste (über uSystem gemeldet)
 
         private:
             SDL_Renderer *r = nullptr;
@@ -68,6 +75,13 @@ namespace nexus {
             Apps *apps = nullptr;
             NexusData *d = nullptr;
             bool applet = false;
+            Host *host = nullptr;
+            Screen screen = Screen::Main;
+            std::vector<UserInfo> users;
+            UserInfo currentUser;
+            int userFocus = 0;
+            double profileT = 0;
+            bool pendingAutoSelect = false;
             bool exitRequested = false;   // nach erfolgreicher Startanfrage sofort sauber beenden
 
             // Zustand
@@ -161,6 +175,12 @@ namespace nexus {
             bool SettingVisible(const std::string &path) const;
             void ApplyTheme(int idx);
             void CrashReset(const std::string &what);
+            bool FrameInner(const plat::Input &in, double dt);
+            void DoLaunch(uint64_t tid, const std::string &id, const std::string &name);
+            void OpenQuickMenu();
+            void ProfilePress(uint32_t b);
+            void DrawProfile();
+            std::vector<UserInfo> ProfileItems() const;
 
             // Zeichnen
             void Update(double dt);

@@ -5,6 +5,7 @@
 #include <ul/menu/ui/ui_ThemesMenuLayout.hpp>
 #include <ul/menu/ui/ui_SettingsMenuLayout.hpp>
 #include <ul/menu/ui/ui_LockscreenMenuLayout.hpp>
+#include <ul/menu/ui/ui_NexusMenuLayout.hpp>
 #include <ul/menu/ui/ui_BackgroundScreenCapture.hpp>
 #include <ul/menu/smi/smi_Commands.hpp>
 
@@ -36,6 +37,7 @@ namespace ul::menu::ui {
             ThemesMenuLayout::Ref themes_menu_lyt;
             SettingsMenuLayout::Ref settings_menu_lyt;
             LockscreenMenuLayout::Ref lockscreen_menu_lyt;
+            NexusMenuLayout::Ref nexus_menu_lyt;
             pu::ui::extras::Toast::Ref notif_toast;
             bool launch_failed;
             Result pending_gc_mount_rc;
@@ -186,7 +188,8 @@ namespace ul::menu::ui {
 
             inline void NotifyApplicationVerifyProgress(const u64 app_id, const float progress = NAN) {
                 if(this->loaded_menu == MenuType::Main) {
-                    this->GetLayout<MainMenuLayout>()->UpdateApplicationVerifyProgress(app_id, progress);
+                    // NEXUS: nur an das klassische Hauptmenü weiterreichen, wenn es wirklich geladen ist
+                    if((this->main_menu_lyt != nullptr) && (this->GetLayout<MainMenuLayout>() == this->main_menu_lyt)) this->GetLayout<MainMenuLayout>()->UpdateApplicationVerifyProgress(app_id, progress);
                 }
             }
 

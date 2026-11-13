@@ -25,7 +25,7 @@ namespace nexus {
         const std::vector<std::pair<std::string, std::string>> Groups = {
             { "look", "Darstellung & Schrift" }, { "top", "Kopfzeile, Symbole & Hinweise" }, { "layout", "Anordnung der Kacheln" },
             { "anim", "Animationen" }, { "tiles", "Kacheln (Standard)" }, { "hero", "Fokus: Hintergrund" }, { "logo", "Fokus: Logo" },
-            { "home", "Home-Hintergrund" }, { "lock", "Sperrbildschirm" }, { "sections", "Bereiche (Reihenfolge & Sichtbarkeit)" },
+            { "home", "Home-Hintergrund" }, { "lock", "Sperrbildschirm" }, { "profile", "Profilauswahl" }, { "sections", "Bereiche (Reihenfolge & Sichtbarkeit)" },
             { "lib", "Bibliothek" }, { "sys", "Themes & System" }
         };
         const char *const Presets[8][3] = {
@@ -38,9 +38,11 @@ namespace nexus {
 
     // ------------------------------------------------------------------ Grundlagen
 
-    bool Home::Init(SDL_Renderer *rr, Gfx *gg, ImageCache *im, Apps *ap, NexusData *dd, bool safeMode, bool isApplet) {
-        this->r = rr; this->g = gg; this->img = im; this->apps = ap; this->d = dd; this->applet = isApplet;
-        this->locked = this->d->settings.B("lock.enabled") && !safeMode;
+    bool Home::Init(SDL_Renderer *rr, Gfx *gg, ImageCache *im, Apps *ap, NexusData *dd, bool safeMode, bool isApplet, Host *h) {
+        this->r = rr; this->g = gg; this->img = im; this->apps = ap; this->d = dd; this->applet = isApplet; this->host = h;
+        // In uLaunch entscheidet der Unterbau, wann Sperrbildschirm/Profilauswahl kommen
+        this->locked = !h && this->d->settings.B("lock.enabled") && !safeMode;
+        if(h) this->currentUser = h->CurrentUser();
         if(safeMode) this->Toast("Abgesicherter Modus: Darstellung auf Standard gesetzt. Bibliothek ist erhalten.");
         else if(isApplet) this->Toast("Applet-Modus: wenig Speicher. Besser ein Spiel mit gedrückter R-Taste starten.");
         return true;
@@ -283,14 +285,9 @@ namespace nexus {
 
     bool Home::Frame(const plat::Input &in, double dt) {
         bool wantExit = false;
+#if defined(__cpp_exceptions)
         try {
-            if((this->fatal || (!this->locked && this->dialogs.empty())) && (in.down & plat::BtnPlus)) wantExit = true;
-            this->HandleInput(in);
-            this->SyncApps();
-            if(this->listDirty) this->BuildList();
-            if(this->layoutDirty) this->Relayout();
-            this->Update(dt);
-            this->Draw();
+            wantExit = this->FrameInner(in, dt);
         }
         catch(const std::exception &e) {
             this->CrashReset(e.what());
@@ -298,8 +295,36 @@ namespace nexus {
         catch(...) {
             this->CrashReset("unbekannter Fehler");
         }
+#else
+        wantExit = this->FrameInner(in, dt);
+#endif
         if((wantExit || this->exitRequested) && this->dirtySave) this->Save();
         return !wantExit && !this->exitRequested;
+    }
+
+    bool Home::FrameInner(const plat::Input &in, double dt) {
+        bool wantExit = false;
+        if(!this->host && (this->fatal || (!this->locked && this->dialogs.empty())) && (in.down & plat::BtnPlus)) wantExit = true;
+        if(this->screen == Screen::Profile && !this->fatal) {
+            if(this->pendingAutoSelect) {
+                this->pendingAutoSelect = false;
+                if(this->host && this->users.size() == 1) { this->host->SelectUser(this->users[0].id); return false; }
+            }
+            this->HandleInput(in);
+            this->Update(dt);
+            this->g->BeginFrame();
+            this->DrawProfile();
+            this->DrawHints();
+            this->DrawToast();
+            return false;
+        }
+        this->HandleInput(in);
+        this->SyncApps();
+        if(this->listDirty) this->BuildList();
+        if(this->layoutDirty) this->Relayout();
+        this->Update(dt);
+        this->Draw();
+        return wantExit;
     }
 
     void Home::CrashReset(const std::string &what) {
@@ -324,7 +349,7 @@ namespace nexus {
 
     void Home::HandleInput(const plat::Input &in) {
         if(in.tap) this->Tap(in.tapX, in.tapY);
-        const uint32_t order[] = { plat::BtnUp, plat::BtnDown, plat::BtnLeft, plat::BtnRight, plat::BtnA, plat::BtnB, plat::BtnX, plat::BtnY, plat::BtnL, plat::BtnR, plat::BtnZL, plat::BtnZR, plat::BtnMinus };
+        const uint32_t order[] = { plat::BtnUp, plat::BtnDown, plat::BtnLeft, plat::BtnRight, plat::BtnA, plat::BtnB, plat::BtnX, plat::BtnY, plat::BtnL, plat::BtnR, plat::BtnZL, plat::BtnZR, plat::BtnMinus, plat::BtnPlus };
         for(const uint32_t b: order) if(in.down & b) this->Press(b);
     }
 
@@ -340,8 +365,13 @@ namespace nexus {
             }
             return;
         }
+        if(this->screen == Screen::Profile) { this->ProfilePress(b); return; }
         if(this->locked) {
             if(!this->unlocking && (b & (BtnA | BtnB | BtnX | BtnY))) { this->unlocking = true; this->unlockT = 0; }
+            return;
+        }
+        if(b == BtnPlus) {
+            if(this->host && this->dialogs.empty() && !this->moving) this->OpenQuickMenu();
             return;
         }
         if(b == BtnMinus) { this->CloseAll(); this->locked = true; this->unlocking = false; return; }
@@ -433,6 +463,20 @@ namespace nexus {
         }
         auto it = this->appMap.find(e.id);
         if(it == this->appMap.end()) return;
+        if(this->host) {
+            const uint64_t tid = it->second.tid;
+            const std::string id = e.id, name = e.name;
+            if(this->host->SuspendedTid() == tid) { this->host->Resume(); return; }
+            if(this->host->HasSuspended()) {
+                this->Confirm("Laufendes Spiel schließen?", "Es ist bereits ein Spiel geöffnet. Nicht gespeicherter Fortschritt geht dabei verloren.", "Schließen und " + name + " starten", [this, tid, id, name]() {
+                    this->host->CloseSuspended();
+                    this->DoLaunch(tid, id, name);
+                });
+                return;
+            }
+            this->DoLaunch(tid, id, name);
+            return;
+        }
         // Spiele starten ist eine Funktion des HOME-Menüs (bei uLaunch: uSystem als System-Applet).
         // Aus der Test-App (läuft wie ein Spiel) würde das System NEXUS beim Wechsel abrupt beenden
         // -> Abstürze 2349-0004 / 2345-0008. Deshalb in der Test-App bewusst abgeschaltet.
@@ -461,6 +505,16 @@ namespace nexus {
 
     void Home::Tap(float x, float y) {
         if(this->fatal) { this->Press(plat::BtnA); return; }
+        if(this->screen == Screen::Profile) {
+            for(const auto &h: this->rowHits) {
+                if(x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) {
+                    if(h.idx == this->userFocus) this->ProfilePress(plat::BtnA);
+                    else this->userFocus = h.idx;
+                    return;
+                }
+            }
+            return;
+        }
         if(this->locked) { this->Press(plat::BtnA); return; }
         if(!this->dialogs.empty()) {
             const auto &p = this->panelHit;
@@ -703,6 +757,9 @@ namespace nexus {
         if(p == "home.color") return s.S("home.bgType") == "color";
         if(p == "lock.preset") { const auto t = s.S("lock.bgType"); return t == "gradient" || t == "image"; }
         if(p == "lock.color") return s.S("lock.bgType") == "color";
+        if(p == "profile.preset") return s.S("profile.bgType") == "gradient";
+        if(p == "profile.color") return s.S("profile.bgType") == "color";
+        if(p == "topbar.showUser") return this->host != nullptr;
         return true;
     }
 
@@ -799,6 +856,16 @@ namespace nexus {
                 const char *names[] = { "Nexus Dunkel", "Aurora", "Kino", "Rad", "Hell & klar" };
                 std::vector<Row> rows;
                 for(int i = 0; i < 5; i++) rows.push_back(Row{ std::string("Theme: ") + names[i], nullptr, nullptr, [this, i]() { this->ApplyTheme(i); } });
+                if(this->host) {
+                    rows.push_back(Row{ "Konsole", nullptr, nullptr, nullptr, true });
+                    for(const auto &a: this->host->SystemActions()) {
+                        const SysAction act = a;
+                        rows.push_back(Row{ a.label, nullptr, nullptr, [this, act]() {
+                            if(act.confirm.empty()) { this->CloseAll(); act.act(); }
+                            else this->Confirm(act.label + "?", act.confirm, act.label, [this, act]() { this->CloseAll(); act.act(); });
+                        } });
+                    }
+                }
                 rows.push_back(Row{ "Sicherung", nullptr, nullptr, nullptr, true });
                 rows.push_back(Row{ "Jetzt speichern", nullptr, nullptr, [this]() { this->Save(); this->Toast("Gespeichert: sdmc:/nexus/nexus.json"); } });
                 rows.push_back(Row{ "Darstellung auf Standard (Bibliothek bleibt)", nullptr, nullptr, [this]() {
@@ -837,6 +904,7 @@ namespace nexus {
                         [this, ep, changed](int dir) { this->d->settings.Step(*ep, dir); changed(); }, nullptr });
                 }
                 if(gid == "lock") rows.push_back(Row{ "Sperrbildschirm jetzt anzeigen (−)", nullptr, nullptr, [this]() { this->CloseAll(); this->locked = true; this->unlocking = false; } });
+                if(gid == "profile" && this->host) rows.push_back(Row{ "Profil wechseln (zur Profilauswahl)", nullptr, nullptr, [this]() { this->CloseAll(); this->Save(); this->host->Logoff(); } });
                 if(gid == "lib") rows.push_back(Row{ "Bilder neu einlesen", nullptr, nullptr, [this]() { this->art.clear(); this->img->Clear(); this->heroA.key.clear(); this->heroFor.clear(); this->logoId.clear(); this->Toast("Bilder werden neu geladen."); } });
                 return rows;
             };
@@ -857,7 +925,11 @@ namespace nexus {
         }
         if(this->unlocking) {
             this->unlockT += dt;
-            if(this->unlockT > 0.5) { this->locked = false; this->unlocking = false; }
+            if(this->unlockT > 0.5) {
+                this->locked = false;
+                this->unlocking = false;
+                if(this->host && this->screen == Screen::Lock) this->host->OnUnlock();
+            }
         }
         const auto &s = this->d->settings;
         const bool animOn = s.B("anim.enabled");
@@ -1156,6 +1228,15 @@ namespace nexus {
                     this->g->Icon("fav", xf.cx - ds.w * xf.sc * xf.squash / 2 + 14, xf.cy - ds.h * xf.sc / 2 + 14, 16, Col{ 255, 212, 71, static_cast<uint8_t>(255 * op) }, true);
                 }
             }
+            if(this->host && !e.folder && std::abs(xf.rot) < 0.5) {
+                auto ai = this->appMap.find(e.id);
+                if(ai != this->appMap.end() && this->host->SuspendedTid() == ai->second.tid) {
+                    const double bx = xf.cx - ds.w * xf.sc * xf.squash / 2 + 8, by = xf.cy + ds.h * xf.sc / 2 - 30;
+                    const int tw = this->g->TextW("Pausiert", 12, true);
+                    this->g->RoundRect(bx, by, tw + 16, 22, 11, WithA(this->Accent(), op));
+                    this->g->Text("Pausiert", 12, bx + 8, by + 3, Col{ 0, 0, 0, static_cast<uint8_t>(255 * op) }, 0, 0, true);
+                }
+            }
             if(foc) { focusXf = xf; focusRad = rad; focusHex = hex; haveFocus = true; }
         }
         // Ebene 5: Fokusmarkierung (eigene Ebene, nicht Teil der Kachel)
@@ -1227,6 +1308,17 @@ namespace nexus {
             this->g->Text(buf, 16, rx, 18, mc);
             rx -= 16;
         }
+        // Profil (nur in uLaunch)
+        double userW = 0;
+        if(this->host && s.B("topbar.showUser") && !this->currentUser.name.empty()) {
+            const double us = 28 * s.N("icons.size");
+            SDL_Texture *ut = this->currentUser.iconKey.empty() ? nullptr : this->img->Get(this->currentUser.iconKey, 0);
+            Xf ux; ux.cx = 40 + us / 2; ux.cy = 29; ux.w = ux.h = us;
+            if(ut) this->g->ShapeTex(ut, ux, us / 2, false, 1.0, true, 50, 50);
+            else this->g->Circle(ux.cx, ux.cy, us / 2, this->Accent());
+            const int nw = this->g->Text(this->currentUser.name, 15, 40 + us + 8, 19, tc);
+            userW = us + 8 + nw + 18;
+        }
         // Bereiche
         const auto vis = s.VisibleSections();
         std::vector<double> widths;
@@ -1239,7 +1331,7 @@ namespace nexus {
             total += w + 4;
         }
         const auto align = s.S("topbar.align");
-        double x = align == "center" ? (ScreenW - total) / 2 : align == "right" ? rx - total - 10 : 40;
+        double x = align == "center" ? (ScreenW - total) / 2 : align == "right" ? rx - total - 10 : 40 + userW;
         for(size_t i = 0; i < vis.size(); i++) {
             const bool active = vis[i] == this->section && this->openFolder.empty();
             const double w = widths[i];
@@ -1268,13 +1360,14 @@ namespace nexus {
         else if(this->moving) h = { { "←→", "Verschieben" }, { "A", "Übernehmen" }, { "B", "Verwerfen" } };
         else {
             const bool folder = !this->list.empty() && this->list[this->focus].folder;
-            h = { { "A", folder ? "Öffnen" : (CanLaunchGames ? "Starten" : "Starten (später)") } };
+            const bool susp = !folder && !this->list.empty() && this->host && this->appMap.count(this->list[this->focus].id) && this->host->SuspendedTid() == this->appMap[this->list[this->focus].id].tid;
+            h = { { "A", folder ? "Öffnen" : susp ? "Fortsetzen" : ((this->host || CanLaunchGames) ? "Starten" : "Starten (später)") } };
             if(!this->openFolder.empty()) h.push_back({ "B", "Zurück" });
             h.push_back({ "X", "Optionen" });
             h.push_back({ "Y", "Favorit" });
             h.push_back({ "L/R", "Bereich" });
             h.push_back({ "−", "Sperren" });
-            h.push_back({ "+", "Beenden" });
+            h.push_back({ "+", this->host ? "Menü" : "Beenden" });
         }
         double x = ScreenW - 40;
         const Col tc = this->TextCol(), mc = this->MutedCol();
@@ -1435,6 +1528,209 @@ namespace nexus {
         this->g->Text("NEXUS konnte die Oberfläche nicht darstellen.", 24, ScreenW / 2, 280, Col{ 238, 242, 247, 255 }, 1);
         this->g->Text(this->fatalMsg, 14, ScreenW / 2, 324, Col{ 147, 160, 180, 255 }, 1, 1000);
         this->g->Text("A = Darstellung zurücksetzen (Bibliothek bleibt erhalten)   ·   + = Beenden", 16, ScreenW / 2, 380, Col{ 62, 224, 200, 255 }, 1);
+    }
+
+
+    // ------------------------------------------------------------------ uLaunch-Anbindung (Host)
+
+    void Home::SetScreen(Screen s) {
+        Log("Bildschirm: %d", static_cast<int>(s));
+        this->screen = s;
+        this->dialogs.clear();
+        if(s == Screen::Lock) {
+            this->locked = true;
+            this->unlocking = false;
+        }
+        else if(s == Screen::Profile) {
+            this->locked = false;
+            this->users = this->host ? this->host->Users() : std::vector<UserInfo>{};
+            this->userFocus = 0;
+            this->profileT = 0;
+            this->pendingAutoSelect = this->d->settings.B("profile.autoSingle") && this->users.size() == 1;
+        }
+        else {
+            this->locked = false;
+            if(this->host) this->currentUser = this->host->CurrentUser();
+            this->entryAnim = true;
+            this->listDirty = true;
+        }
+    }
+
+    void Home::DrawOnly() {
+        // Wird während blockierender Übergänge von uMenu aufgerufen: keine Eingabe, keine Zustandswechsel
+        if(this->fatal) { this->DrawFatal(); return; }
+        if(this->screen == Screen::Profile) { this->g->BeginFrame(); this->DrawProfile(); return; }
+        if(this->listDirty) this->BuildList();
+        if(this->layoutDirty) this->Relayout();
+        this->Draw();
+    }
+
+    void Home::OnHome() {
+        if(this->screen == Screen::Lock || this->locked) {
+            if(!this->unlocking) { this->unlocking = true; this->unlockT = 0; }
+            return;
+        }
+        if(this->screen == Screen::Profile) return;
+        if(!this->dialogs.empty()) { this->CloseAll(); return; }
+        if(this->moving) { this->Press(plat::BtnB); return; }
+        if(this->host && this->host->HasSuspended()) { this->host->Resume(); return; }
+        if(!this->openFolder.empty() || this->section != "start") { this->SwitchSection("start"); return; }
+        this->SetFocus(0);
+    }
+
+    void Home::DoLaunch(uint64_t tid, const std::string &id, const std::string &name) {
+        this->d->library.MarkLaunched(id, static_cast<double>(std::time(nullptr)));
+        this->Save();
+        Log("Start %s (%s)", id.c_str(), name.c_str());
+        if(this->host) this->host->BeforeLeave();
+        const uint32_t rc = this->host ? this->host->Launch(tid) : plat::LaunchApplication(tid);
+        Log("Start Ergebnis 0x%X", rc);
+        if(rc != 0) {
+            char buf[160];
+            std::snprintf(buf, sizeof(buf), "%s konnte nicht gestartet werden (Fehler 0x%X).", name.c_str(), rc);
+            this->Toast(buf);
+        }
+    }
+
+    void Home::OpenQuickMenu() {
+        auto dl = std::make_shared<Dialog>();
+        dl->title = "Menü";
+        dl->sub = this->currentUser.name.empty() ? "" : "Angemeldet: " + this->currentUser.name;
+        dl->w = 400; dl->x = ScreenW - 420; dl->y = this->Env().topH + 4; dl->shade = true;
+        dl->rows = [this]() {
+            std::vector<Row> rows;
+            if(this->host && this->host->HasSuspended()) {
+                rows.push_back(Row{ "Laufendes Spiel fortsetzen", nullptr, nullptr, [this]() { this->CloseAll(); this->host->Resume(); } });
+                rows.push_back(Row{ "Laufendes Spiel schließen", nullptr, nullptr, [this]() {
+                    this->Confirm("Spiel schließen?", "Nicht gespeicherter Fortschritt geht verloren.", "Schließen", [this]() { this->host->CloseSuspended(); this->Toast("Spiel geschlossen."); });
+                } });
+            }
+            rows.push_back(Row{ "Profil wechseln", nullptr, nullptr, [this]() {
+                auto go = [this]() { this->CloseAll(); this->Save(); this->host->Logoff(); };
+                if(this->host->HasSuspended()) this->Confirm("Profil wechseln?", "Das laufende Spiel wird dabei geschlossen.", "Spiel schließen und wechseln", [this, go]() { this->host->CloseSuspended(); go(); });
+                else go();
+            } });
+            rows.push_back(Row{ "NEXUS-Einstellungen", nullptr, nullptr, [this]() { this->CloseAll(); this->OpenSettings(); } });
+            rows.push_back(Row{ "System", nullptr, nullptr, nullptr, true });
+            for(const auto &a: this->host->SystemActions()) {
+                const SysAction act = a;
+                rows.push_back(Row{ a.label, nullptr, nullptr, [this, act]() {
+                    if(act.confirm.empty()) { this->CloseAll(); this->Save(); act.act(); }
+                    else this->Confirm(act.label + "?", act.confirm, act.label, [this, act]() { this->CloseAll(); this->Save(); act.act(); });
+                } });
+            }
+            return rows;
+        };
+        this->Push(dl);
+    }
+
+    std::vector<UserInfo> Home::ProfileItems() const {
+        std::vector<UserInfo> items = this->users;
+        if(this->d->settings.B("profile.showAddUser")) items.push_back(UserInfo{ "add", "Hinzufügen", "" });
+        return items;
+    }
+
+    void Home::ProfilePress(uint32_t b) {
+        using namespace plat;
+        const auto items = this->ProfileItems();
+        if(items.empty()) return;
+        const bool vert = this->d->settings.S("profile.style") == "list";
+        const int n = static_cast<int>(items.size());
+        if(b == (vert ? BtnUp : BtnLeft)) this->userFocus = (this->userFocus + n - 1) % n;
+        else if(b == (vert ? BtnDown : BtnRight)) this->userFocus = (this->userFocus + 1) % n;
+        else if(b == BtnA) {
+            const auto &u = items[std::clamp(this->userFocus, 0, n - 1)];
+            if(!this->host) return;
+            this->host->BeforeLeave();
+            if(u.id == "add") this->host->AddUser();
+            else this->host->SelectUser(u.id);
+        }
+        else if(b == BtnPlus && this->host) {
+            // Systemfunktionen auch ohne Anmeldung erreichbar (z. B. Ausschalten)
+            this->screen = Screen::Main;
+            this->OpenQuickMenu();
+            this->screen = Screen::Profile;
+        }
+    }
+
+    void Home::DrawProfile() {
+        const auto &s = this->d->settings;
+        this->profileT += this->frameDt;
+        this->rowHits.clear();
+        // Hintergrund
+        const auto bg = s.S("profile.bgType");
+        SDL_Texture *hero = (bg == "hero" && !this->lastHeroKey.empty()) ? this->img->Get(this->lastHeroKey, 0) : nullptr;
+        if(hero) this->g->Image(hero, 0, 0, ScreenW, ScreenH, 1.0, true);
+        else if(bg == "color") this->g->Rect(0, 0, ScreenW, ScreenH, ParseCol(s.S("profile.color")));
+        else if(bg == "gradient") {
+            const int p = std::clamp(static_cast<int>(s.N("profile.preset")), 0, 7);
+            this->g->GradV(0, 0, ScreenW, ScreenH / 2 + 1, ParseCol(Presets[p][0]), ParseCol(Presets[p][1]));
+            this->g->GradV(0, ScreenH / 2, ScreenW, ScreenH / 2, ParseCol(Presets[p][1]), ParseCol(Presets[p][2]));
+        }
+        else this->DrawBackground();
+        this->g->Rect(0, 0, ScreenW, ScreenH, Col{ 0, 0, 0, static_cast<uint8_t>(s.N("profile.dim") * 255) });
+        const Col tc = this->TextCol(), acc = this->Accent();
+        const auto pos = s.S("profile.position");
+        if(s.B("profile.title")) this->g->Text("Wer spielt?", 34, ScreenW / 2, pos == "top" ? 70 : pos == "bottom" ? 120 : 110, tc, 1, 0, true);
+        if(s.B("profile.showClock")) {
+            const std::time_t now = std::time(nullptr);
+            char buf[16];
+            std::strftime(buf, sizeof(buf), s.B("topbar.clock24") ? "%H:%M" : "%I:%M", std::localtime(&now));
+            this->g->Text(buf, 18, ScreenW - 40, 22, tc, 2);
+        }
+        const auto items = this->ProfileItems();
+        const int n = static_cast<int>(items.size());
+        if(n == 0) {
+            this->g->Text("Keine Benutzerprofile gefunden.", 18, ScreenW / 2, ScreenH / 2, tc, 1);
+            return;
+        }
+        this->userFocus = std::clamp(this->userFocus, 0, n - 1);
+        const auto style = s.S("profile.style");
+        const double sz = s.N("profile.iconSize");
+        const bool list = style == "list", cards = style == "cards";
+        const double iw = list ? 440 : sz, ih = list ? 76 : (cards ? sz * 1.25 : sz);
+        const double gap = list ? 12 : (cards ? 24 : 40);
+        const double nameH = (!list && s.B("profile.showNames")) ? 34 : 0;
+        const double totalW = list ? iw : n * iw + (n - 1) * gap;
+        const double totalH = list ? n * ih + (n - 1) * gap : ih + nameH;
+        double y0 = pos == "top" ? 160 : pos == "bottom" ? ScreenH - 90 - totalH : (ScreenH - totalH) / 2 + 30;
+        const double x0 = (ScreenW - totalW) / 2;
+        const bool animOn = s.B("anim.enabled") && s.S("profile.anim") != "none";
+        const auto anim = s.S("profile.anim");
+        for(int i = 0; i < n; i++) {
+            const auto &u = items[i];
+            const double t = animOn ? EaseOut(std::clamp((this->profileT - i * 0.06) / 0.45, 0.0, 1.0)) : 1.0;
+            const double a = t;
+            double dy = anim == "slideUp" ? 60 * (1 - t) : 0;
+            double sc = anim == "pop" ? 0.6 + 0.4 * t : 1.0;
+            const bool foc = i == this->userFocus;
+            if(foc) sc *= 1.08;
+            double cx, cy;
+            if(list) { cx = x0 + iw / 2; cy = y0 + i * (ih + gap) + ih / 2 + dy; }
+            else { cx = x0 + i * (iw + gap) + iw / 2; cy = y0 + ih / 2 + dy; }
+            Xf xf; xf.cx = cx; xf.cy = cy; xf.sc = sc;
+            SDL_Texture *tex = u.iconKey.empty() ? nullptr : this->img->Get(u.iconKey, 0);
+            if(list) {
+                xf.w = iw; xf.h = ih;
+                this->g->Shape(xf, 14, false, WithA(Col{ 127, 127, 127, 255 }, (foc ? 0.32 : 0.16) * a));
+                if(foc) this->g->ShapeRing(xf, 14, false, 3.5, WithA(acc, a));
+                Xf ic; ic.cx = cx - iw / 2 * sc + 14 * sc + 28 * sc; ic.cy = cy; ic.w = ic.h = 56; ic.sc = sc;
+                if(tex) this->g->ShapeTex(tex, ic, 28, false, a, true, 50, 50);
+                else { this->g->Shape(ic, 28, false, WithA(Col{ 127, 127, 127, 255 }, 0.35 * a)); this->g->Text("+", 26, ic.cx, ic.cy - 18, WithA(tc, a), 1); }
+                this->g->Text(u.name, 20, cx - iw / 2 * sc + 90 * sc, cy - 13, WithA(tc, a));
+            }
+            else {
+                xf.w = iw; xf.h = ih;
+                const double rad = cards ? 16 : iw / 2;
+                if(foc) for(int k = 3; k >= 1; k--) this->g->ShapeRing(xf, rad, false, 4 + k * 5, WithA(acc, 0.13 / k * a));
+                if(tex) this->g->ShapeTex(tex, xf, rad, false, a, true, 50, 50);
+                else { this->g->Shape(xf, rad, false, WithA(Col{ 127, 127, 127, 255 }, 0.3 * a)); this->g->Text("+", static_cast<int>(sz * 0.4), cx, cy - sz * 0.27, WithA(tc, a), 1); }
+                if(foc) this->g->ShapeRing(xf, rad, false, 4, WithA(acc, a));
+                if(nameH > 0) this->g->Text(u.name, 18, cx, cy + ih / 2 * sc + 10, WithA(tc, (foc ? 1.0 : 0.75) * a), 1, static_cast<int>(iw + gap - 6));
+            }
+            const double hw = iw * sc, hh = ih * sc + nameH;
+            this->rowHits.push_back(Hit{ cx - hw / 2, cy - ih * sc / 2, hw, hh, u.id, i });
+        }
     }
 
 }

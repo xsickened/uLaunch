@@ -20,6 +20,10 @@ namespace nexus::plat {
     };
 
     bool Init();
+    // In uMenu: Eingabe kommt von Plutonium, nur Schrift/Akku/WLAN-Dienste öffnen
+    bool InitEmbedded();
+    // Gemeinsame Eingabeaufbereitung (Tastenwiederholung, Tippen/Wischen); Rohwerte = HidNpadButton-Bits, Touch in 1280x720
+    void ProcessRaw(Input &in, uint64_t hidDown, uint64_t hidHeld, bool touching, float tx, float ty, uint64_t nowMs);
     void Exit();
     bool Loop();                          // appletMainLoop
     void PollInput(Input &in, uint64_t nowMs);

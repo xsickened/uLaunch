@@ -108,6 +108,7 @@ namespace ul::menu::ui {
         this->themes_menu_lyt = nullptr;
         this->settings_menu_lyt = nullptr;
         this->lockscreen_menu_lyt = nullptr;
+        this->nexus_menu_lyt = nullptr;
 
         // TODO: customize
         this->SetFadeAlphaIncrementStepCount(FastFadeAlphaIncrementSteps);
@@ -251,6 +252,21 @@ namespace ul::menu::ui {
             if(fade_cb) {
                 fade_cb();
             }
+        }
+
+        // NEXUS HOME übernimmt Profilauswahl, Hauptmenü, Sperrbildschirm und Themes. Die Konsolen-Einstellungen bleiben bei uLaunch.
+        if(IsNexusActive() && (type != MenuType::Settings)) {
+            if(this->nexus_menu_lyt == nullptr) {
+                this->nexus_menu_lyt = NexusMenuLayout::New();
+            }
+            this->nexus_menu_lyt->SetScreen((type == MenuType::Startup) ? NexusMenuLayout::Screen::Profile : ((type == MenuType::Lockscreen) ? NexusMenuLayout::Screen::Lock : NexusMenuLayout::Screen::Main));
+            this->LoadLayout(this->nexus_menu_lyt);
+            this->loaded_menu = type;
+            this->StartPlayBgm();
+            if(fade) {
+                this->FadeIn();
+            }
+            return;
         }
 
         this->EnsureLayoutCreated(type);

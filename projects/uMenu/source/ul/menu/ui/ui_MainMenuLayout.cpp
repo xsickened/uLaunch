@@ -846,6 +846,12 @@ namespace ul::menu::ui {
     }
 
     void MainMenuLayout::OnMenuInput(const u64 keys_down, const u64 keys_up, const u64 keys_held, const pu::ui::TouchPoint touch_pos) {
+        // NEXUS wieder einschalten: ZL gedrückt halten und ZR drücken
+        if((keys_held & HidNpadButton_ZL) && (keys_down & HidNpadButton_ZR)) {
+            SetNexusClassicMode(false);
+            g_MenuApplication->LoadMenu(MenuType::Main);
+            return;
+        }
         const auto quick_menu_on = this->quick_menu->IsOn();
         if(this->last_quick_menu_on != quick_menu_on) {
             this->last_quick_menu_on = quick_menu_on;

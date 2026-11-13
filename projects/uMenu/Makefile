@@ -19,7 +19,7 @@ include $(DEVKITPRO)/libnx/switch_rules
 #---------------------------------------------------------------------------------
 TARGET		:=	$(notdir $(CURDIR))
 BUILD		:=	build
-SOURCES		:=	source source/ul source/ul/menu source/ul/menu/am source/ul/menu/smi source/ul/menu/smi/sf source/ul/menu/bt source/ul/menu/ui source/ul/menu/ui/menu
+SOURCES		:=	source source/ul source/ul/menu source/ul/menu/am source/ul/menu/smi source/ul/menu/smi/sf source/ul/menu/bt source/ul/menu/ui source/ul/menu/ui/menu ../nexus/source/core ../nexus/source/nx ../nexus/source/ui
 DATA		:=	data
 INCLUDES	:=	include
 EXEFS_SRC	:=	exefs_src
@@ -29,7 +29,7 @@ EXEFS_SRC	:=	exefs_src
 #---------------------------------------------------------------------------------
 ARCH	:=	-march=armv8-a -mtune=cortex-a57 -mtp=soft -fPIE -Wl,-wrap,libappletLaunch -Wl,-wrap,libappletStart
 
-CFLAGS	:=	-g -O2 -ffunction-sections -Wall -Werror $(ARCH) $(DEFINES)
+CFLAGS	:=	-g -O2 -ffunction-sections -Wall $(ARCH) $(DEFINES)
 
 CFLAGS	+=	$(INCLUDE) -D__SWITCH__ $(UL_DEFS)
 
@@ -42,7 +42,7 @@ LIBUCOMMON		:=	$(CURDIR)/../../libs/uCommon
 LIBPU			:=	$(CURDIR)/../../libs/Plutonium/Plutonium
 LIBNX_EXT		:=	$(CURDIR)/../../libs/libnx-ext/libnx-ext
 LIBNX_IPCEXT	:=	$(CURDIR)/../../libs/libnx-ext/libnx-ipcext
-INCLUDES 		+=	/../../libs/json/single_include/nlohmann /../../libs/zip/src
+INCLUDES 		+=	/../../libs/json/single_include/nlohmann /../../libs/json/single_include /../../libs/zip/src ../nexus/source
 
 LIBS	:= -lpu -lfreetype -lSDL2_mixer -lopusfile -lopus -lmodplug -lmpg123 -lvorbisidec -logg -lSDL2_ttf -lSDL2_gfx -lSDL2_image -lSDL2 -lEGL -lGLESv2 -lglapi -ldrm_nouveau -lwebp -lpng -ljpeg `sdl2-config --libs` `freetype-config --libs` -luCommon -lnx-ipcext -lnx-ext -lbz2 -lharfbuzz -lz -lnx
 

@@ -42,6 +42,13 @@ namespace nexus::plat {
         return g_Pl;
     }
 
+    bool InitEmbedded() {
+        g_Pl = R_SUCCEEDED(plInitialize(PlServiceType_User));
+        g_Psm = R_SUCCEEDED(psmInitialize());
+        g_Nifm = R_SUCCEEDED(nifmInitialize(NifmServiceType_User));
+        return g_Pl;
+    }
+
     void Exit() {
         if(g_Nifm) nifmExit();
         if(g_Psm) psmExit();
@@ -59,8 +66,14 @@ namespace nexus::plat {
 
     void PollInput(Input &in, uint64_t nowMs) {
         padUpdate(&g_Pad);
-        const uint32_t down = Map(padGetButtonsDown(&g_Pad));
-        const uint32_t held = Map(padGetButtons(&g_Pad));
+        HidTouchScreenState st = {};
+        const bool touching = hidGetTouchScreenStates(&st, 1) > 0 && st.count > 0;
+        ProcessRaw(in, padGetButtonsDown(&g_Pad), padGetButtons(&g_Pad), touching, touching ? static_cast<float>(st.touches[0].x) : 0, touching ? static_cast<float>(st.touches[0].y) : 0, nowMs);
+    }
+
+    void ProcessRaw(Input &in, uint64_t hidDown, uint64_t hidHeld, bool touching, float tx, float ty, uint64_t nowMs) {
+        const uint32_t down = Map(hidDown);
+        const uint32_t held = Map(hidHeld);
         in.held = held;
         in.down = down;
         // Tastenwiederholung für Richtungen (380 ms Verzögerung, dann alle 110 ms)
@@ -78,10 +91,8 @@ namespace nexus::plat {
         }
         // Touch: Tippen = Loslassen ohne nennenswerte Bewegung
         in.tap = false;
-        HidTouchScreenState st = {};
-        const bool touching = hidGetTouchScreenStates(&st, 1) > 0 && st.count > 0;
         if(touching) {
-            const float x = static_cast<float>(st.touches[0].x), y = static_cast<float>(st.touches[0].y);
+            const float x = tx, y = ty;
             if(!g_Touching) { g_TouchStartX = x; g_TouchStartY = y; }
             g_TouchLastX = x; g_TouchLastY = y;
         }

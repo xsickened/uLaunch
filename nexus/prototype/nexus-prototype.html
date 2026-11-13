@@ -71,6 +71,8 @@ html,body{margin:0;height:100%;background:#05070b;color:#eef2f7;font-family:syst
 @keyframes isway{0%,100%{rotate:-1deg}50%{rotate:1deg}}
 .in.wobble{animation:wobble .5s ease}
 @keyframes wobble{0%,100%{rotate:0deg}25%{rotate:-3deg}75%{rotate:3deg}}
+.nxpop{animation:nxpop .45s cubic-bezier(.34,1.56,.64,1) both}.nxup{animation:nxup .45s ease both}.nxfade{animation:nxfade .45s ease both}
+@keyframes nxpop{from{opacity:0;scale:.6}to{opacity:1;scale:1}}@keyframes nxup{from{opacity:0;translate:0 60px}to{opacity:1;translate:0 0}}@keyframes nxfade{from{opacity:0}to{opacity:1}}
 .ra-bar{position:absolute;left:8px;right:8px;bottom:7px;height:5px;border-radius:3px;background:rgba(0,0,0,.55)}
 .ra-bar i{display:block;height:100%;border-radius:3px;background:#5fd3ff}
 .ra-bar.m i{background:#ffd447}
@@ -238,6 +240,7 @@ const SPEC = [
   {g:"top", p:"icons.color", l:"Symbolfarbe", t:"enum", o:["text","white","black","accent"], ol:["Wie Schrift","Weiß","Schwarz","Akzent"], d:"text"},
   {g:"top", p:"icons.style", l:"Symbolstil", t:"enum", o:["outline","filled"], ol:["Kontur","Gefüllt"], d:"outline"},
   {g:"top", p:"icons.size", l:"Symbolgröße", t:"num", min:.8, max:1.6, step:.1, f:pct, d:1},
+  {g:"top", p:"topbar.showUser", l:"Profil (Bild + Name) anzeigen", t:"bool", d:true},
   {g:"top", p:"topbar.showClock", l:"Uhrzeit", t:"bool", d:true},
   {g:"top", p:"topbar.clock24", l:"24-Stunden-Format", t:"bool", d:true},
   {g:"top", p:"topbar.showDate", l:"Datum", t:"bool", d:false},
@@ -324,6 +327,20 @@ const SPEC = [
   {g:"lock", p:"lock.showBattery", l:"Akku", t:"bool", d:true},
   {g:"lock", p:"lock.hint", l:"Hinweis „Zum Entsperren …“", t:"bool", d:true},
   {g:"lock", p:"lock.anim", l:"Entsperr-Animation", t:"enum", o:["slideUp","fade","zoom"], ol:["Nach oben schieben","Ausblenden","Zoom"], d:"slideUp"},
+  // Profilauswahl
+  {g:"profile", p:"profile.style", l:"Darstellung", t:"enum", o:["circles","cards","list"], ol:["Kreise","Karten","Liste"], d:"circles"},
+  {g:"profile", p:"profile.iconSize", l:"Bildgröße", t:"num", min:80, max:220, step:10, f:px, d:140},
+  {g:"profile", p:"profile.position", l:"Position", t:"enum", o:["center","bottom","top"], ol:["Mitte","Unten","Oben"], d:"center"},
+  {g:"profile", p:"profile.showNames", l:"Namen anzeigen", t:"bool", d:true},
+  {g:"profile", p:"profile.title", l:"Überschrift „Wer spielt?“", t:"bool", d:true},
+  {g:"profile", p:"profile.showClock", l:"Uhrzeit anzeigen", t:"bool", d:true},
+  {g:"profile", p:"profile.showAddUser", l:"„Benutzer hinzufügen“ anzeigen", t:"bool", d:true},
+  {g:"profile", p:"profile.autoSingle", l:"Bei nur einem Profil automatisch wählen", t:"bool", d:false},
+  {g:"profile", p:"profile.bgType", l:"Hintergrund", t:"enum", o:["home","hero","gradient","color"], ol:["Wie Home","Letzter Hero","Farbverlauf","Volltonfarbe"], d:"home"},
+  {g:"profile", p:"profile.preset", l:"Verlauf", t:"num", min:0, max:7, step:1, f:v=>"Vorlage "+(v+1), d:1, w:()=>S.data.settings.profile.bgType==="gradient"},
+  {g:"profile", p:"profile.color", l:"Farbe", t:"color", d:"#0b0f17", w:()=>S.data.settings.profile.bgType==="color"},
+  {g:"profile", p:"profile.dim", l:"Abdunkelung", t:"num", min:0, max:.9, step:.05, f:pct, d:.25},
+  {g:"profile", p:"profile.anim", l:"Einblendung", t:"enum", o:["pop","slideUp","fade","none"], ol:["Aufploppen","Von unten","Blenden","Keine"], d:"pop"},
   // Kachel-Standard
   {g:"tiles", p:"tileDefaults.size", l:"Größe", t:"enum", o:["S","M","L","XL"], ol:["Klein","Mittel","Groß","Extra groß"], d:"M"},
   {g:"tiles", p:"tileDefaults.ratio", l:"Seitenverhältnis", t:"enum", o:Object.keys(RATIOS), d:"2:3"},
@@ -356,7 +373,7 @@ const SPEC = [
   {g:"lib", p:"theme.name", l:"", t:"str", d:"Nexus Dunkel", hidden:true},
   {g:"lib", p:"sgdbKey", l:"", t:"str", d:"", hidden:true},
 ];
-const GROUPS = [["look","Darstellung & Schrift"],["top","Kopfzeile, Symbole & Hinweise"],["layout","Anordnung der Kacheln"],["anim","Animationen"],["tiles","Kacheln (Standard)"],["hero","Fokus: Hintergrund"],["logo","Fokus: Logo"],["home","Home-Hintergrund"],["lock","Sperrbildschirm"],["sections","Bereiche (Reihenfolge & Sichtbarkeit)"],["lib","Bibliothek & SteamGridDB"],["ra","RetroAchievements"],["sys","Themes, Backup & System"]];
+const GROUPS = [["look","Darstellung & Schrift"],["top","Kopfzeile, Symbole & Hinweise"],["layout","Anordnung der Kacheln"],["anim","Animationen"],["tiles","Kacheln (Standard)"],["hero","Fokus: Hintergrund"],["logo","Fokus: Logo"],["home","Home-Hintergrund"],["lock","Sperrbildschirm"],["profile","Profilauswahl"],["sections","Bereiche (Reihenfolge & Sichtbarkeit)"],["lib","Bibliothek & SteamGridDB"],["ra","RetroAchievements"],["sys","Themes, Backup & System"]];
 const TILE_SPEC = SPEC.filter(s=>s.g==="tiles").map(s=>({...s, p:s.p.replace("tileDefaults.","")}));
 const SECTION_IDS = Object.keys(SECTION_NAMES);
 function defaultSettings(){ const s = {}; SPEC.forEach(x=>setP(s, x.p, clone(x.d))); s.sections = SECTION_IDS.map(id=>({id, visible:true})); return s; }
@@ -730,8 +747,11 @@ function renderTopbar(){
   const s = ST(), tb = $("#topbar"); tb.style.display = s.topbar.visible ? "flex" : "none";
   tb.className = s.topbar.bg + " al-" + s.topbar.align; const ic = iconColor();
   const tabs = s.sections.filter(x=>x.visible);
-  $("#tabs").innerHTML = tabs.map(x=>`<div class="tab ${x.id===S.section&&!S.openFolder?"active":""}" data-sec="${x.id}" title="${SECTION_NAMES[x.id]}">${s.topbar.tabStyle!=="text"?icon(x.id, ic):""}${s.topbar.tabStyle!=="icons"?SECTION_NAMES[x.id]:""}</div>`).join("");
-  $("#tabs").querySelectorAll(".tab").forEach(el=>el.onclick=()=>{ if(S.dialogs.some(d=>d.kind==="lock")) return; closeAllDialogs(); switchSection(el.dataset.sec); });
+  const cu = S.user ? TEST_USERS.find(u=>u.id===S.user) : null;
+  const userHtml = (s.topbar.showUser && cu) ? `<div class="tab" style="cursor:pointer" title="Profil wechseln" id="tbUser"><img src="${avatar(cu)}" style="width:calc(26px * var(--iconScale));height:calc(26px * var(--iconScale));border-radius:50%">${esc(cu.name)}</div>` : "";
+  $("#tabs").innerHTML = userHtml + tabs.map(x=>`<div class="tab ${x.id===S.section&&!S.openFolder?"active":""}" data-sec="${x.id}" title="${SECTION_NAMES[x.id]}">${s.topbar.tabStyle!=="text"?icon(x.id, ic):""}${s.topbar.tabStyle!=="icons"?SECTION_NAMES[x.id]:""}</div>`).join("");
+  $("#tabs").querySelectorAll(".tab[data-sec]").forEach(el=>el.onclick=()=>{ if(S.dialogs.some(d=>d.kind==="lock")) return; closeAllDialogs(); switchSection(el.dataset.sec); });
+  const tu = $("#tbUser"); if(tu) tu.onclick = ()=>{ closeAllDialogs(); showProfile(true); };
   renderStatus();
 }
 function renderStatus(){
@@ -1130,7 +1150,7 @@ function openGroup(id){
   else if(id==="lib") rows = ()=>[...SPEC.filter(s=>s.g==="lib" && !s.hidden).map(specRow), {head:"SteamGridDB"},
     A_("API-Key: "+(ST().sgdbKey?"••••"+ST().sgdbKey.slice(-4):"nicht hinterlegt"), ()=>openOSK("SteamGridDB-API-Key", "", v=>{ ST().sgdbKey = v.trim().slice(0,120); DataStore.save(); redraw(); toast("Key nur lokal gespeichert. Hinweis: Auf einer modifizierten Konsole kann jede Homebrew die SD-Karte lesen."); })),
     A_("Bildcache leeren", ()=>{ artCache.clear(); toast("Texturcache geleert (Downloads auf SD bleiben)."); })];
-  else rows = ()=>{ const r = SPEC.filter(s=>s.g===id && !s.hidden).map(specRow); if(id==="lock") r.push(A_("Sperrbildschirm jetzt anzeigen", ()=>showLock())); return r; };
+  else rows = ()=>{ const r = SPEC.filter(s=>s.g===id && !s.hidden).map(specRow); if(id==="lock") r.push(A_("Sperrbildschirm jetzt anzeigen", ()=>showLock())); if(id==="profile") r.push(A_("Profilauswahl jetzt anzeigen", ()=>showProfile(true))); return r; };
   const previewHint = ["layout","anim","tiles","hero","logo"].includes(id);
   const dlg = rowsDialog({title:label, kind:"settings", sub: id==="sections" ? "A = ein/aus · ←→ = Reihenfolge ändern" : previewHint ? "Y = Vorschau-Fokus zur nächsten Kachel" : "", rows, box:settingsBox,
     hints:[["↑↓","Option"],["←→","Wert"],["A","Wählen"],...(previewHint?[["Y","Vorschau-Fokus"]]:[]),["B","Zurück"]],
@@ -1180,9 +1200,46 @@ function showLock(){
     input(k){ if(d.unlocking || !["A","B","X","Y"].includes(k)) return;
       d.unlocking = true; const el = d.el; const a = ST().lock.anim; if(!animOn()) { popDialog(); return; }
       el.style.transform = a==="slideUp" ? "translateY(-100%)" : a==="zoom" ? "scale(1.15)" : ""; el.style.opacity = a==="slideUp" ? "1" : "0";
-      setTimeout(()=>popDialog(), 520); }};
+      setTimeout(()=>{ popDialog(); if(!S.user) showProfile(false); }, 520); }};
   pushDialog(d);
 }
+/* ---------------- Profilauswahl (in uLaunch: ersetzt die Startup-/Benutzerauswahl) ---------------- */
+const TEST_USERS = [{id:"u1", name:"Kevin", hue:200}, {id:"u2", name:"Lena", hue:330}, {id:"u3", name:"Gast", hue:95}];
+function avatar(u){ return svgURI(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="a" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${hsl(u.hue,70,62)}"/><stop offset="1" stop-color="${hsl(u.hue+40,70,38)}"/></linearGradient></defs><rect width="100" height="100" fill="url(#a)"/><circle cx="50" cy="40" r="18" fill="#fff" opacity=".9"/><path d="M18 92c4-20 18-30 32-30s28 10 32 30z" fill="#fff" opacity=".9"/></svg>`); }
+function showProfile(manual){
+  if(S.dialogs.some(d=>d.kind==="profile")) return;
+  const p = ST().profile;
+  if(!manual && p.autoSingle && TEST_USERS.length===1){ S.user = TEST_USERS[0].id; renderTopbar(); return; }
+  let sel = Math.max(0, TEST_USERS.findIndex(u=>u.id===S.user)); const t0 = performance.now();
+  const items = ()=>[...TEST_USERS, ...(ST().profile.showAddUser ? [{id:"add", name:"Hinzufügen"}] : [])];
+  const d = {kind:"profile", hints:[["←→","Profil"],["A","Auswählen"]],
+    draw(){ const p = ST().profile; const el = document.createElement("div"); el.className = "lock"; el.style.cursor = "default";
+      const hero = S.lastHero || FocusPresentationManager.heroFor(S.list[0]);
+      el.style.background = p.bgType==="home" ? bgCSS(ST().home.bgType, ST().home.preset, ST().home.color, ST().home.image) : bgCSS(p.bgType, p.preset, p.color, null, hero);
+      const light = $("#stage").classList.contains("light"); const col = light ? "#12161d" : "#fff"; const sz = p.iconSize; const list = items();
+      const isList = p.style==="list";
+      const box = isList ? `display:flex;flex-direction:column;gap:12px;align-items:stretch;width:440px` : `display:flex;gap:${p.style==="cards"?24:40}px;align-items:flex-start;justify-content:center`;
+      const vpos = p.position==="top" ? "top:150px" : p.position==="bottom" ? "bottom:90px" : "top:50%;transform:translateY(-40%)";
+      const anim = !animOn() || p.anim==="none" ? "" : p.anim==="pop" ? "nxpop" : p.anim==="slideUp" ? "nxup" : "nxfade";
+      el.innerHTML = `<div class="ld" style="opacity:${p.dim}"></div>
+        ${p.title?`<div style="position:absolute;left:0;right:0;top:${p.position==="top"?70:p.position==="bottom"?120:110}px;text-align:center;font-size:34px;font-weight:600;color:${col}">Wer spielt?</div>`:""}
+        ${p.showClock?`<div style="position:absolute;right:40px;top:22px;font-size:18px;color:${col}">${fmtTime(new Date(), ST().topbar.clock24)}</div>`:""}
+        <div style="position:absolute;left:0;right:0;${vpos};display:flex;justify-content:center"><div style="${box}">${list.map((u,i)=>{
+          const cur = i===sel; const ring = cur ? `box-shadow:0 0 0 4px ${ST().theme.accent},0 0 26px ${ST().theme.accent};` : "";
+          const img = u.id==="add" ? `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:${sz*0.45}px;color:${col};background:rgba(127,127,127,.25)">+</div>` : `<img src="${avatar(u)}" style="width:100%;height:100%;object-fit:cover">`;
+          const delay = `animation-delay:${i*60}ms`;
+          if(isList) return `<div data-i="${i}" class="${anim}" style="${delay};display:flex;align-items:center;gap:16px;padding:10px 14px;border-radius:14px;background:rgba(127,127,127,${cur?.3:.15});${ring}color:${col};font-size:20px;cursor:pointer"><div style="width:56px;height:56px;border-radius:50%;overflow:hidden;flex:none">${img}</div>${esc(u.name)}</div>`;
+          const shape = p.style==="cards" ? `width:${sz}px;height:${sz*1.25}px;border-radius:16px` : `width:${sz}px;height:${sz}px;border-radius:50%`;
+          return `<div data-i="${i}" class="${anim}" style="${delay};display:flex;flex-direction:column;align-items:center;gap:12px;cursor:pointer;transform:scale(${cur?1.08:1});transition:transform .2s"><div style="${shape};overflow:hidden;${ring}">${img}</div>${p.showNames?`<div style="color:${col};font-size:18px;opacity:${cur?1:.75}">${esc(u.name)}</div>`:""}</div>`; }).join("")}</div></div>`;
+      el.querySelectorAll("[data-i]").forEach(n=>n.onclick=()=>{ const i=+n.dataset.i; if(i===sel) d.input("A"); else { sel=i; redraw(); } });
+      return el; },
+    input(k){ const n = items().length; const vert = ST().profile.style==="list";
+      if(k===(vert?"up":"left")) sel=(sel+n-1)%n; else if(k===(vert?"down":"right")) sel=(sel+1)%n;
+      else if(k==="A"){ const u = items()[sel]; if(u.id==="add"){ toast("Öffnet auf der Switch die Benutzerverwaltung des Systems (simuliert)."); return; } S.user = u.id; popDialog(); renderTopbar(); toast(`Angemeldet als ${u.name}`); return; }
+      else if(k==="B" && manual){ popDialog(); return; } else return; redraw(); }};
+  pushDialog(d);
+}
+
 setInterval(()=>{ renderStatus(); const lk = S.dialogs.find(d=>d.kind==="lock"); if(lk && !lk.unlocking && lk.el){ const c = lk.el.querySelector(".clk"); if(c && c.firstChild) c.firstChild.textContent = fmtTime(new Date(), ST().lock.clock24); } }, 1000);
 
 /* ---------------- Bereiche ---------------- */
@@ -1249,11 +1306,11 @@ document.querySelectorAll("#pad button").forEach(btn=>{ let rep; const k = btn.d
   S.data = DataStore.load();
   if(safe){ const keep = S.data.settings.sgdbKey; S.data.settings = defaultSettings(); S.data.settings.sgdbKey = keep; S.notice = "Abgesicherter Modus: Darstellung auf Standard gesetzt, Bibliothek und Bilder sind erhalten."; if(location.hash==="#safe") history.replaceState(null,"",location.pathname); }
   render();
-  if(ST().lock.enabled && !safe) showLock();
+  if(ST().lock.enabled && !safe) showLock(); else if(!S.user) showProfile(false);
   if(S.notice) setTimeout(()=>toast(S.notice), 300);
   setTimeout(()=>BootGuard.ok(), 2500); // erfolgreicher Start
 })();
-window.NEXUS = {S, press, SPEC, sanitizeData, sanitizeSettings, DataStore, LAYOUTS, defaultData};
+window.NEXUS = {S, press, showProfile, SPEC, sanitizeData, sanitizeSettings, DataStore, LAYOUTS, defaultData};
 </script>
 </body>
 </html>
