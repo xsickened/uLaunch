@@ -7,6 +7,32 @@
 
 namespace nexus {
 
+    std::string SanitizeUtf8(const std::string &in) {
+        std::string out;
+        out.reserve(in.size());
+        const auto *s = reinterpret_cast<const unsigned char *>(in.data());
+        const size_t n = in.size();
+        size_t i = 0;
+        while(i < n) {
+            const unsigned char c = s[i];
+            size_t len = c < 0x80 ? 1 : (c >> 5) == 0x6 ? 2 : (c >> 4) == 0xE ? 3 : (c >> 3) == 0x1E ? 4 : 0;
+            bool ok = len > 0 && i + len <= n;
+            for(size_t k = 1; ok && k < len; k++) ok = (s[i + k] & 0xC0) == 0x80;
+            if(ok && len == 2 && c < 0xC2) ok = false;                                  // überlange Kodierung
+            if(ok && len == 3 && c == 0xE0 && s[i + 1] < 0xA0) ok = false;
+            if(ok && len == 3 && c == 0xED && s[i + 1] >= 0xA0) ok = false;              // Surrogate
+            if(ok && len == 4 && (c > 0xF4 || (c == 0xF0 && s[i + 1] < 0x90) || (c == 0xF4 && s[i + 1] >= 0x90))) ok = false;
+            if(ok && len == 1 && c == 0) break;                                          // C-String-Ende
+            if(ok) { out.append(in, i, len); i += len; }
+            else { out += '?'; i++; }
+        }
+        return out;
+    }
+
+    std::string SafeDump(const json &j, int indent) {
+        return j.dump(indent, ' ', false, json::error_handler_t::replace);
+    }
+
     bool ReadFile(const std::string &path, std::string &out, size_t maxBytes) {
         FILE *f = std::fopen(path.c_str(), "rb");
         if(!f) return false;
@@ -96,7 +122,7 @@ namespace nexus {
         json j = d.library.ToJson();
         j["schema"] = 2;
         j["settings"] = d.settings.data;
-        return WriteFileAtomic(path, j.dump(1));
+        return WriteFileAtomic(path, SafeDump(j, 1));
     }
 
     bool BootGuardStart(const std::string &path) {

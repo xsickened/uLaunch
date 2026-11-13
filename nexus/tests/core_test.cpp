@@ -160,6 +160,23 @@ int main() {
         }
     }
 
+    // 6. Ungültiges UTF-8 darf Speichern nicht abbrechen (Absturzursache auf der Konsole)
+    {
+        const std::string bad = std::string("Spiel \xC3\x28 \xFF Ende \xE2\x82", 20);
+        const std::string clean = SanitizeUtf8(bad);
+        json j = json::object();
+        j["a"] = bad;
+        const std::string dumped = SafeDump(j);
+        CHECK(!dumped.empty());
+        json k = json::object();
+        k["a"] = clean;
+        CHECK(json::parse(k.dump(), nullptr, false).is_object());
+        CHECK(SanitizeUtf8("Pokémon ★ 日本") == "Pokémon ★ 日本");
+        NexusData d; d.settings.data = Settings::Defaults();
+        d.library.CreateFolder(bad, 0);
+        CHECK(SaveData("/tmp/nexus_test/utf8.json", d));
+    }
+
     std::printf(g_Fail ? "%d Fehler\n" : "Alle Kern-Tests bestanden.\n", g_Fail);
     return g_Fail ? 1 : 0;
 }

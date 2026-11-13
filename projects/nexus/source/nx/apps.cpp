@@ -47,7 +47,7 @@ namespace nexus {
                 AppInfo a;
                 a.tid = recs[i].application_id;
                 a.id = TidHex(a.tid);
-                a.name = JStr(names, a.id.c_str(), "");
+                a.name = SanitizeUtf8(JStr(names, a.id.c_str(), ""));
                 if(FileExists(IconPath(a.id))) a.iconKey = IconPath(a.id);
                 list.push_back(a);
             }
@@ -99,6 +99,7 @@ namespace nexus {
             for(int i = 0; i < 16 && name.empty(); i++) {
                 if(data->nacp.lang[i].name[0]) name = data->nacp.lang[i].name;
             }
+            name = SanitizeUtf8(name);
             if(name.empty()) name = a.id;
             names[a.id] = name;
             std::string iconKey = a.iconKey;
@@ -123,7 +124,7 @@ namespace nexus {
             }
             if(++changed % 8 == 0) this->version++;
         }
-        if(!names.empty()) WriteFileAtomic(NamesFile, names.dump());
+        if(!names.empty()) WriteFileAtomic(NamesFile, SafeDump(names));
         this->version++;
         this->busy = false;
     }

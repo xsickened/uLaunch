@@ -1,4 +1,5 @@
 #include "library.hpp"
+#include "store.hpp"
 #include <algorithm>
 #include <cctype>
 #include <random>
@@ -47,7 +48,7 @@ namespace nexus {
             for(const auto &f: *fs) {
                 Folder fo;
                 fo.id = JStr(f, "id", "");
-                fo.name = JStr(f, "name", "").substr(0, 60);
+                fo.name = SanitizeUtf8(JStr(f, "name", "").substr(0, 60));
                 if(!IsFolderId(fo.id) || fo.name.empty() || fids.count(fo.id)) {
                     if(report) report->push_back("folder:" + fo.id);
                     continue;
@@ -220,7 +221,7 @@ namespace nexus {
         Folder f;
         f.id = RandomId();
         while(this->FindFolder(f.id)) f.id = RandomId();
-        f.name = name.substr(0, 60);
+        f.name = SanitizeUtf8(name.substr(0, 60));
         f.accent = Palette[this->folders.size() % 11];
         this->folders.push_back(f);
         if(insertAt < 0 || insertAt > static_cast<int>(this->rootOrder.size())) insertAt = static_cast<int>(this->rootOrder.size());
