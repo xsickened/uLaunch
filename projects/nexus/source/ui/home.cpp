@@ -23,7 +23,7 @@ namespace nexus {
             return "?";
         }
         const std::vector<std::pair<std::string, std::string>> Groups = {
-            { "look", "Darstellung & Schrift" }, { "ui", "Textboxen & Schrift" }, { "top", "Kopfzeile, Symbole & Hinweise" }, { "layout", "Anordnung der Kacheln" },
+            { "look", "Darstellung & Schrift" }, { "ui", "Textboxen & Schrift" }, { "aura", "Kachel-Aura (Partikel)" }, { "bgfx", "Hintergrund-Effekte" }, { "idle", "Bildschirmschoner" }, { "top", "Kopfzeile, Symbole & Hinweise" }, { "layout", "Anordnung der Kacheln" },
             { "anim", "Animationen" }, { "tiles", "Kacheln (Standard)" }, { "hero", "Fokus: Hintergrund" }, { "logo", "Fokus: Logo" },
             { "home", "Home-Hintergrund" }, { "lock", "Sperrbildschirm" }, { "profile", "Profilauswahl" }, { "sections", "Bereiche (Reihenfolge & Sichtbarkeit)" },
             { "lib", "Bibliothek & SteamGridDB" }, { "ra", "RetroAchievements" }, { "sys", "Themes & System" }
@@ -309,6 +309,10 @@ namespace nexus {
         }
         this->CloseAll();
         this->section = s;
+        if(this->d->settings.S("library.startSection") == "last" && JStr(*JGet(this->d->settings.data, "library"), "lastSection", "") != s) {
+            JSet(this->d->settings.data, "library.lastSection", json(s));
+            this->MarkDirty();
+        }
         this->openFolder.clear();
         this->focus = 0;
         this->scroll = 0;
@@ -392,6 +396,13 @@ namespace nexus {
     }
 
     void Home::HandleInput(const plat::Input &in) {
+        const bool any = in.down != 0 || in.tap;
+        if(this->idleActive) {
+            // erste Eingabe beendet nur den Bildschirmschoner
+            if(any) this->UpdateIdle(0, true);
+            return;
+        }
+        if(any) this->idleT = 0;
         if(this->crop.active) { this->CropInput(in); return; }
         if(this->logoMove.active) { this->LogoMoveInput(in); return; }
         if(in.tap) this->Tap(in.tapX, in.tapY);
@@ -818,6 +829,19 @@ namespace nexus {
         if(p == "ui.panelColor") return s.S("theme.panelStyle") == "custom";
         if(p == "lock.textCustom") return s.S("lock.textColor") == "custom";
         if(p == "hero.maskSize") return s.S("hero.mask") != "none";
+        if(p.rfind("aura.", 0) == 0 && p != "aura.enabled") {
+            if(!s.B("aura.enabled")) return false;
+            if(p == "aura.image") return s.S("aura.shape") == "custom";
+            if(p == "aura.color") return s.S("aura.colorMode") == "fixed";
+        }
+        if(p.rfind("bgfx.", 0) == 0 && p != "bgfx.type") {
+            const auto bt = s.S("bgfx.type");
+            if(bt == "none") return false;
+            if(p == "bgfx.image") return bt == "custom";
+            if(p == "bgfx.color") return s.S("bgfx.colorMode") == "fixed";
+        }
+        if(p == "idle.minutes") return s.S("idle.mode") != "off";
+        if(p == "idle.slideSeconds") return s.S("idle.mode") == "slideshow";
         {
             const bool fr = s.S("logo.placement") == "free";
             if(p == "logo.posX" || p == "logo.posY") return fr;
@@ -983,6 +1007,13 @@ namespace nexus {
                 for(const auto &e: Schema()) {
                     if(e.group != gid || e.hidden || !this->SettingVisible(e.path)) continue;
                     const auto *ep = &e;
+                    if(e.type == SType::Str) {
+                        rows.push_back(Row{ e.label, [this, ep]() { const auto v = this->d->settings.S(ep->path); return v.empty() ? std::string("(leer, A = eingeben)") : v; }, nullptr, [this, ep, changed]() {
+                            const std::string path = ep->path, label = ep->label;
+                            this->AskText(label, this->d->settings.S(path), 120, [this, path, changed](std::string v) { this->d->settings.Set(path, json(v)); changed(); });
+                        } });
+                        continue;
+                    }
                     if(e.type == SType::Image) {
                         rows.push_back(Row{ e.label, [this, ep]() {
                                 const auto v = this->d->settings.S(ep->path);
@@ -995,10 +1026,10 @@ namespace nexus {
                                         if(pick.empty()) JSet(this->d->settings.data, path, json(nullptr));
                                         else this->d->settings.Set(path, json(pick));
                                         changed();
-                                        if(!pick.empty()) this->OpenCropEditor(pick, "Bildausschnitt", ScreenW / ScreenH);
+                                        if(!pick.empty() && path.rfind("aura.", 0) != 0 && path.rfind("bgfx.", 0) != 0) this->OpenCropEditor(pick, "Bildausschnitt", ScreenW / ScreenH);
                                     }, "Kein Bild");
                             } });
-                        if(!this->d->settings.S(e.path).empty()) {
+                        if(!this->d->settings.S(e.path).empty() && e.path.rfind("aura.", 0) != 0 && e.path.rfind("bgfx.", 0) != 0) {
                             rows.push_back(Row{ "   Bildausschnitt (Zoom, Schnitt)", [this, ep]() {
                                     const Crop c = this->d->library.CropOf(this->d->settings.S(ep->path));
                                     return c.set ? std::to_string(static_cast<int>(std::lround(c.zoom * 100))) + " %" : std::string("ganzes Bild");
@@ -1029,6 +1060,24 @@ namespace nexus {
         this->g->fontScale = this->d->settings.N("ui.fontScale");
         this->g->paint = this->AccentFn(0, 0, ScreenW, ScreenH);
         this->online.Tick();
+        {
+            const auto &st = this->d->settings;
+            this->auraC = AuraFrom(st);
+            this->bgC = BgFrom(st);
+            const bool fxOn = st.B("anim.enabled") && this->screen == Screen::Main && !this->locked && !this->idleActive;
+            const AccentParams ap = this->accentP;
+            const double tt = this->time;
+            auto acc = [ap, tt](double x, double y) { return AccentAt(ap, AccentU(ap, x, y, ScreenW, ScreenH), tt); };
+            if(fxOn) {
+                this->fx.SpawnAura(this->auraC, this->auraRects, dt, this->time, acc);
+                this->fx.SpawnBg(this->bgC, dt, this->time, ScreenW, ScreenH, acc);
+            }
+            this->fx.Update(dt, this->time);
+            if(!this->auraC.enabled) this->fx.parts.erase(std::remove_if(this->fx.parts.begin(), this->fx.parts.end(), [](const Particle &p) { return p.layer < 2; }), this->fx.parts.end());
+            if(this->bgC.type == "none") this->fx.parts.erase(std::remove_if(this->fx.parts.begin(), this->fx.parts.end(), [](const Particle &p) { return p.layer >= 2; }), this->fx.parts.end());
+            this->UpdateIdle(dt, false);
+            if(!this->startApplied && this->appsVersion > 0) this->ApplyStartSection();
+        }
         if(!this->autoArtQueued && this->appsVersion > 0 && !this->apps->Busy()) {
             this->autoArtQueued = true;
             if(this->d->settings.B("sgdb.autoMissing")) this->QueueMissingArt(false);
@@ -1096,10 +1145,13 @@ namespace nexus {
         const double dt = this->frameDt;
         this->DrawBackground();
         this->DrawHero(dt);
+        this->DrawParticles(2);
         this->DrawLogo(dt);
         this->DrawTiles();
         this->DrawTopbar();
         this->DrawHints();
+        this->DrawParticles(3);
+        if(this->idleActive) this->DrawIdle();
         this->DrawDialogs();
         if(this->crop.active) this->DrawCropEditor();
         if(this->logoMove.active) {
@@ -1305,6 +1357,10 @@ namespace nexus {
         Xf focusXf;
         double focusRad = 0;
         bool focusHex = false, haveFocus = false;
+        this->DrawParticles(0);
+        this->auraRects.clear();
+        const double dimOthers = s.N("anim.dimOthers");
+        const bool titleOnFocus = s.B("anim.titleOnFocus");
         for(const int i: order) {
             const auto &e = this->list[i];
             auto dit = this->disp.find(e.id);
@@ -1377,7 +1433,7 @@ namespace nexus {
                 }
                 const double bw = JNum(t, "borderWidth", 0);
                 if(bw > 0) this->g->ShapeRing(xf, rad, hex, bw * xf.sc, WithA(ParseCol(JStr(t, "borderColor", "#ffffff")), op));
-                if(JBool(t, "showTitle", false) && std::abs(xf.rot) < 0.5 && ds.w > 60) {
+                if((JBool(t, "showTitle", false) || (foc && titleOnFocus)) && std::abs(xf.rot) < 0.5 && ds.w > 60) {
                     const double bx = xf.cx - ds.w * xf.sc * xf.squash / 2, by = xf.cy + ds.h * xf.sc / 2;
                     this->g->GradV(bx, by - 34, ds.w * xf.sc * xf.squash, 34, Col{ 0, 0, 0, 0 }, Col{ 0, 0, 0, static_cast<uint8_t>(200 * op) });
                     this->g->Text(e.name, 13, bx + 8, by - 22, WithA(Col{ 255, 255, 255, 255 }, op), 0, static_cast<int>(ds.w * xf.sc * xf.squash - 16));
@@ -1403,6 +1459,12 @@ namespace nexus {
                     this->g->Text("Pausiert", 12, bx + 8, by + 3, Col{ 0, 0, 0, static_cast<uint8_t>(255 * op) }, 0, 0, true);
                 }
             }
+            if(!foc && dimOthers > 0) this->g->Shape(xf, rad, hex, Col{ 0, 0, 0, static_cast<uint8_t>(255 * dimOthers * op) });
+            if(this->auraC.enabled && op > 0.3) {
+                const auto &tg = this->auraC.target;
+                if((tg == "focus" && foc) || tg == "all" || (tg == "fav" && !e.folder && this->d->library.IsFav(e.id)))
+                    this->auraRects.push_back(EmitRect{ xf.cx, xf.cy, ds.w * xf.sc * xf.squash, ds.h * xf.sc });
+            }
             if(foc) { focusXf = xf; focusRad = rad; focusHex = hex; haveFocus = true; }
         }
         // Ebene 5: Fokusmarkierung (eigene Ebene, nicht Teil der Kachel)
@@ -1413,10 +1475,14 @@ namespace nexus {
             if(this->moving) fn = [](float, float) { return Col{ 255, 212, 71, 255 }; };
             double pulse = 1.0;
             if(fx == "pulse" && s.B("anim.enabled")) pulse = 0.55 + 0.45 * std::sin(this->time * 4.5);
-            const int layers = fx == "glow" ? 5 : 3;
-            for(int k = layers; k >= 1; k--) this->g->ShapeRingFn(focusXf, focusRad, focusHex, 3 + k * (fx == "glow" ? 5 : 3), fn, 0.12 * pulse / k * (fx == "glow" ? 1.6 : 1));
-            this->g->ShapeRingFn(focusXf, focusRad, focusHex, 3.5, fn, pulse);
+            const double rw = s.N("anim.ringWidth");
+            if(rw > 0 || this->moving) {
+                const int layers = fx == "glow" ? 5 : 3;
+                for(int k = layers; k >= 1; k--) this->g->ShapeRingFn(focusXf, focusRad, focusHex, rw + k * (fx == "glow" ? 5 : 3), fn, 0.12 * pulse / k * (fx == "glow" ? 1.6 : 1));
+                this->g->ShapeRingFn(focusXf, focusRad, focusHex, std::max(rw, 2.0), fn, pulse);
+            }
         }
+        this->DrawParticles(1);
         if(!this->openFolder.empty()) {
             auto *f = this->d->library.FindFolder(this->openFolder);
             this->g->Text(std::string(SectionName(this->section)) + "  ›  " + (f ? f->name : "") + "   ·   B = zurück", 14, 60, this->Env().topH, this->MutedCol());
@@ -1465,8 +1531,9 @@ namespace nexus {
         const std::tm *lt = std::localtime(&now);
         char buf[32];
         if(s.B("topbar.showClock")) {
-            if(s.B("topbar.clock24")) std::strftime(buf, sizeof(buf), "%H:%M", lt);
-            else std::strftime(buf, sizeof(buf), "%I:%M %p", lt);
+            const bool sec = s.B("topbar.seconds");
+            if(s.B("topbar.clock24")) std::strftime(buf, sizeof(buf), sec ? "%H:%M:%S" : "%H:%M", lt);
+            else std::strftime(buf, sizeof(buf), sec ? "%I:%M:%S %p" : "%I:%M %p", lt);
             rx -= this->g->TextW(buf, 16);
             this->g->Text(buf, 16, rx, 18, tc);
             rx -= 16;
@@ -1504,6 +1571,13 @@ namespace nexus {
             else this->g->Circle(ux.cx, ux.cy, us / 2, this->Accent());
             const int nw = this->g->Text(this->currentUser.name, 15, 40 + us + 8, 19, tc);
             userW = us + 8 + nw + 18;
+        }
+        if(s.B("topbar.greeting")) {
+            const int hr = lt->tm_hour;
+            std::string gr = hr < 5 ? "Gute Nacht" : hr < 11 ? "Guten Morgen" : hr < 17 ? "Guten Tag" : hr < 22 ? "Guten Abend" : "Gute Nacht";
+            if(!this->currentUser.name.empty()) gr += ", " + this->currentUser.name;
+            const int gw = this->g->Text(gr, 15, 40 + userW, 19, mc);
+            userW += gw + 18;
         }
         // Bereiche
         const auto vis = s.VisibleSections();
@@ -1694,7 +1768,7 @@ namespace nexus {
         const std::time_t now = std::time(nullptr);
         const std::tm *lt = std::localtime(&now);
         char clk[16], date[64];
-        std::strftime(clk, sizeof(clk), s.B("lock.clock24") ? "%H:%M" : "%I:%M", lt);
+        std::strftime(clk, sizeof(clk), s.B("lock.clock24") ? (s.B("lock.seconds") ? "%H:%M:%S" : "%H:%M") : (s.B("lock.seconds") ? "%I:%M:%S" : "%I:%M"), lt);
         static const char *const days[] = { "Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag" };
         static const char *const months[] = { "Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember" };
         std::snprintf(date, sizeof(date), "%s, %d. %s", days[lt->tm_wday % 7], lt->tm_mday, months[lt->tm_mon % 12]);
@@ -1714,6 +1788,8 @@ namespace nexus {
         }
         else this->g->Text(clk, size, x, y + oy, col, align);
         if(s.B("lock.showDate")) this->g->Text(date, 24, x, y + oy + size * 1.15, col, align);
+        const auto msg = s.S("lock.message");
+        if(!msg.empty()) this->g->Text(msg, 20, x, y + oy + size * 1.15 + (s.B("lock.showDate") ? 40 : 0), WithA(col, 0.9), align, 1000);
         if(s.B("lock.showBattery")) {
             const int pct = plat::BatteryPercent();
             if(pct >= 0) {

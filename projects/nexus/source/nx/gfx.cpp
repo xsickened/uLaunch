@@ -333,6 +333,93 @@ namespace nexus {
         SDL_RenderGeometry(this->r, tex, this->vbuf.data(), static_cast<int>(this->vbuf.size()), this->ibuf.data(), static_cast<int>(this->ibuf.size()));
     }
 
+    SDL_Texture *Gfx::ParticleSprite(const std::string &shape) {
+        auto it = this->sprites.find(shape);
+        if(it != this->sprites.end()) return it->second;
+        constexpr int N = 64;
+        std::vector<uint8_t> px(N * N * 4, 255);
+        auto smooth = [](double e0, double e1, double x) { const double t = std::clamp((x - e0) / (e1 - e0), 0.0, 1.0); return t * t * (3 - 2 * t); };
+        for(int j = 0; j < N; j++) {
+            for(int i = 0; i < N; i++) {
+                const double x = (i + 0.5) / N * 2 - 1, y = (j + 0.5) / N * 2 - 1;
+                const double r = std::sqrt(x * x + y * y), th = std::atan2(y, x);
+                double a = 0;
+                if(shape == "spark") {
+                    const double arms = std::max(std::exp(-std::fabs(x) * 14) , std::exp(-std::fabs(y) * 14)) * (1 - smooth(0.2, 1.0, r));
+                    a = std::max(arms, std::pow(std::max(0.0, 1 - r * 2.2), 2));
+                }
+                else if(shape == "star") {
+                    const double seg = 2 * kPi / 5;
+                    const double k = std::fmod(th + kPi / 2 + 4 * kPi, seg) / seg;
+                    const double R = 0.42 + 0.53 * std::pow(std::fabs(k * 2 - 1), 1.6);
+                    a = 1 - smooth(R - 0.06, R, r);
+                }
+                else if(shape == "ring") a = 1 - smooth(0.05, 0.14, std::fabs(r - 0.72));
+                else if(shape == "heart") {
+                    const double hx = x * 1.25, hy = -y * 1.25 + 0.25;
+                    const double v = std::pow(hx * hx + hy * hy - 1, 3) - hx * hx * hy * hy * hy;
+                    a = 1 - smooth(-0.04, 0.02, v);
+                }
+                else if(shape == "square") {
+                    const double qx = std::max(std::fabs(x) - 0.55, 0.0), qy = std::max(std::fabs(y) - 0.55, 0.0);
+                    a = 1 - smooth(0.16, 0.24, std::sqrt(qx * qx + qy * qy));
+                }
+                else if(shape == "snow") {
+                    const double seg = kPi / 3;
+                    const double m = std::fmod(th + 4 * kPi, seg);
+                    const double d = r * std::fabs(std::sin(std::min(m, seg - m)));
+                    a = (1 - smooth(0.04, 0.09, d)) * (1 - smooth(0.85, 0.97, r));
+                    a = std::max(a, 1 - smooth(0.12, 0.2, r));
+                }
+                else if(shape == "bubble") {
+                    a = (1 - smooth(0.04, 0.1, std::fabs(r - 0.8))) * 0.9;
+                    const double hx = x + 0.35, hy = y + 0.35;
+                    a = std::max(a, (1 - smooth(0.08, 0.2, std::sqrt(hx * hx + hy * hy))) * 0.9);
+                    a = std::max(a, (1 - r) * 0.12);
+                }
+                else if(shape == "line") a = std::exp(-std::fabs(x) * 18) * (1 - smooth(0.6, 1.0, std::fabs(y)));
+                else { // glow
+                    const double g = std::max(0.0, 1 - r);
+                    a = g * g;
+                }
+                px[(j * N + i) * 4 + 3] = static_cast<uint8_t>(std::clamp(a, 0.0, 1.0) * 255);
+            }
+        }
+        SDL_Texture *t = SDL_CreateTexture(this->r, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STATIC, N, N);
+        if(t) {
+            SDL_UpdateTexture(t, nullptr, px.data(), N * 4);
+            SDL_SetTextureBlendMode(t, SDL_BLENDMODE_BLEND);
+        }
+        this->sprites[shape] = t;
+        return t;
+    }
+
+    void Gfx::Sprites(SDL_Texture *tex, const std::vector<Sprite> &list, bool additive) {
+        if(!tex || list.empty()) return;
+        int tw = 1, th = 1;
+        SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+        const double ar = th > 0 ? static_cast<double>(tw) / th : 1.0;
+        this->vbuf.clear();
+        this->ibuf.clear();
+        for(const auto &s: list) {
+            const double hw = s.size / 2 * (ar >= 1 ? 1 : ar), hh = s.size / 2 * (ar >= 1 ? 1 / ar : 1);
+            const double cs = std::cos(s.rot), sn = std::sin(s.rot);
+            const SDL_Color col = SC(s.c);
+            const int base = static_cast<int>(this->vbuf.size());
+            const double cx[4] = { -hw, hw, hw, -hw }, cy[4] = { -hh, -hh, hh, hh };
+            const float u[4] = { 0, 1, 1, 0 }, v[4] = { 0, 0, 1, 1 };
+            for(int k = 0; k < 4; k++) {
+                this->vbuf.push_back(SDL_Vertex{ { static_cast<float>(s.x + cx[k] * cs - cy[k] * sn), static_cast<float>(s.y + cx[k] * sn + cy[k] * cs) }, col, { u[k], v[k] } });
+            }
+            this->ibuf.insert(this->ibuf.end(), { base, base + 1, base + 2, base, base + 2, base + 3 });
+        }
+        SDL_BlendMode old = SDL_BLENDMODE_BLEND;
+        SDL_GetTextureBlendMode(tex, &old);
+        SDL_SetTextureBlendMode(tex, additive ? SDL_BLENDMODE_ADD : SDL_BLENDMODE_BLEND);
+        SDL_RenderGeometry(this->r, tex, this->vbuf.data(), static_cast<int>(this->vbuf.size()), this->ibuf.data(), static_cast<int>(this->ibuf.size()));
+        SDL_SetTextureBlendMode(tex, old);
+    }
+
     void Gfx::RoundRect(double x, double y, double w, double h, double rad, Col c) {
         Xf xf;
         xf.cx = x + w / 2; xf.cy = y + h / 2; xf.w = w; xf.h = h;

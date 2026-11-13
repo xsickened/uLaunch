@@ -247,8 +247,18 @@ namespace ul::menu::ui {
         }
     }
 
-    void MenuApplication::LoadMenu(const MenuType type, const bool fade, MenuFadeCallback fade_cb) {
+    void MenuApplication::LoadMenu(const MenuType type, const bool fade_in, MenuFadeCallback fade_cb) {
         this->StopPlayBgm();
+
+        // NEXUS -> NEXUS (Profilauswahl, Sperrbildschirm, Hauptmenü): keine Überblendung über eine Farbe,
+        // das Menü bleibt sichtbar und NEXUS animiert den Wechsel selbst.
+        bool fade = fade_in;
+        if(fade && IsNexusActive() && (this->nexus_menu_lyt != nullptr) && (type != MenuType::Settings) && (this->loaded_menu != MenuType::Settings)) {
+            fade = false;
+            if(fade_cb) {
+                fade_cb();
+            }
+        }
 
         if(fade) {
             this->SetBackgroundFade();

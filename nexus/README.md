@@ -28,3 +28,11 @@ Der Originalcode von uLaunch ist in diesem Branch unverändert. NEXUS-Code kommt
 - **Netz:** ein Hintergrund-Thread (`nx/net.cpp`, curl), Zeitlimits, Größenlimits, ein Wiederholversuch bei HTTP 429. Ohne Netz oder Schlüssel passiert nichts.
 - **Akzent:** einfarbig, Verlauf (2/3 Farben) oder RGB-Regenbogen, mit Richtung und Bewegung (fließend, Farbwechsel, Pulsieren). Gemeinsame Rechnung in `core/accent.cpp` und im Prototyp.
 - **Bildauswahl:** Home-, Sperr- und Profilhintergrund sowie Cover/Hintergrund/Logo pro Titel aus `sdmc:/nexus/art/…` oder dem Album.
+
+## v0.4
+
+- **Kachel-Aura:** Partikel (Leuchtpunkt, Funke, Stern, Ring, Herz, Quadrat, Schneeflocke, Blase oder eigenes Bild) mit Farbe, Richtung, Austritt, Streuung, Dichte, Geschwindigkeit, Größe, Lebensdauer, Schwerkraft, Drehung und Ebene. „Leuchtend“ macht Schwarz durchsichtig (eigene JPGs), „Normal“ nutzt PNG-Transparenz. Simulation in `core/particles.cpp` (getestet), Zeichnen gebündelt über `Gfx::Sprites`.
+- **Hintergrund-Effekte:** Schnee, funkelnde Sterne, Blasen, Glut, Regen, Glühwürmchen, eigenes Bild.
+- **Bildschirmschoner:** Abdunkeln, Diashow der Spielbilder, große Uhr oder Sperrbildschirm nach X Minuten.
+- **Weitere Optionen:** Fokusrahmen-Breite, andere Kacheln abdunkeln, Titel bei Fokus, Sekunden, Begrüßung, eigener Text auf dem Sperrbildschirm, Startbereich beim Öffnen.
+- **Übergänge:** Zwischen Profilauswahl, Sperrbildschirm und Hauptmenü blendet uLaunch nicht mehr über; NEXUS bleibt sichtbar und animiert selbst.

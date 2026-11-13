@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstdio>
+#include <ctime>
 #include <dirent.h>
 #include <sys/stat.h>
 
@@ -65,6 +66,7 @@ namespace nexus {
         }
 
         constexpr char KeysFile[] = "sdmc:/nexus/keys.txt";
+        constexpr double kHalfPi = 1.57079632679489661923;
 
     }
 
@@ -298,6 +300,121 @@ namespace nexus {
             this->logoMove.active = false;
             this->Toast("Verschieben abgebrochen.");
         }
+    }
+
+    // ------------------------------------------------------------------ Partikel
+
+    void Home::DrawParticles(int layer) {
+        if(this->fx.parts.empty()) return;
+        const bool aura = layer < 2;
+        const std::string shape = aura ? this->auraC.shape : BgShape(this->bgC);
+        SDL_Texture *tex = nullptr;
+        bool tint = true;
+        if(shape == "custom") {
+            const auto path = this->d->settings.S(aura ? "aura.image" : "bgfx.image");
+            if(!path.empty() && !this->img->Failed(path)) tex = this->img->Get(path, 1);
+            if(!tex) tex = this->g->ParticleSprite("glow");
+        }
+        else tex = this->g->ParticleSprite(shape);
+        if(!tex) return;
+        std::vector<Gfx::Sprite> list;
+        list.reserve(this->fx.parts.size());
+        for(const auto &p: this->fx.parts) {
+            if(p.layer != layer) continue;
+            float a, sz;
+            ParticleSystem::Look(p, this->time, a, sz);
+            if(a < 0.01f) continue;
+            const float rot = p.stretch ? static_cast<float>(std::atan2(p.vy, p.vx) - kHalfPi) : p.rot;
+            list.push_back(Gfx::Sprite{ p.x, p.y, sz, rot, Col{ tint ? p.r : uint8_t(255), tint ? p.g : uint8_t(255), tint ? p.b : uint8_t(255), static_cast<uint8_t>(a * 255) } });
+        }
+        this->g->Sprites(tex, list, aura ? this->auraC.additive : this->bgC.additive);
+    }
+
+    // ------------------------------------------------------------------ Bildschirmschoner & Startbereich
+
+    void Home::UpdateIdle(double dt, bool input) {
+        const auto &s = this->d->settings;
+        const auto mode = s.S("idle.mode");
+        if(input) {
+            this->idleActive = false;
+            this->idleT = 0;
+            return;
+        }
+        if(mode == "off" || this->screen != Screen::Main || this->locked || !this->dialogs.empty() || this->crop.active || this->logoMove.active) {
+            this->idleT = 0;
+            this->idleActive = false;
+            return;
+        }
+        this->idleT += dt;
+        if(!this->idleActive && this->idleT >= s.N("idle.minutes") * 60.0) {
+            if(mode == "lock") { this->locked = true; this->unlocking = false; this->idleT = 0; return; }
+            this->idleActive = true;
+            this->slideT = 1e9;   // sofort erstes Bild
+        }
+        if(this->idleActive && mode == "slideshow") {
+            this->slideT += dt;
+            if(this->slideT >= s.N("idle.slideSeconds") && !this->installed.empty()) {
+                this->slideT = 0;
+                // nächster Titel mit eigenem Hintergrundbild
+                for(size_t k = 0; k < this->installed.size(); k++) {
+                    this->slideIdx = (this->slideIdx + 1) % static_cast<int>(this->installed.size());
+                    const auto &id = this->installed[this->slideIdx];
+                    const auto &a = this->Art(id);
+                    if(!a.hero.empty()) { this->slidePrev = this->slideKey; this->slideKey = a.hero; this->slideId = id; break; }
+                }
+            }
+        }
+    }
+
+    void Home::DrawIdle() {
+        const auto &s = this->d->settings;
+        const auto mode = s.S("idle.mode");
+        const std::time_t now = std::time(nullptr);
+        const std::tm *lt = std::localtime(&now);
+        char clk[16];
+        std::strftime(clk, sizeof(clk), s.B("topbar.clock24") ? "%H:%M" : "%I:%M", lt);
+        if(mode == "dim") {
+            this->g->Rect(0, 0, ScreenW, ScreenH, Col{ 0, 0, 0, 170 });
+            return;
+        }
+        this->g->Rect(0, 0, ScreenW, ScreenH, Col{ 0, 0, 0, 255 });
+        if(mode == "slideshow" && !this->slideKey.empty()) {
+            const double fadeT = std::min(1.0, this->slideT / 1.2);
+            if(!this->slidePrev.empty() && fadeT < 1) {
+                if(SDL_Texture *t = this->img->Get(this->slidePrev, 0)) this->g->ImageEx(t, 0, 0, ScreenW, ScreenH, 1 - fadeT, 1.05, 50, 50);
+            }
+            if(SDL_Texture *t = this->img->Get(this->slideKey, 0)) {
+                const double z = 1.0 + 0.06 * std::min(1.0, this->slideT / std::max(1.0, s.N("idle.slideSeconds")));   // langsamer Zoom
+                const Crop c = this->d->library.CropOf(this->slideKey);
+                this->g->ImageEx(t, 0, 0, ScreenW, ScreenH, fadeT, (c.set ? c.zoom : 1.0) * z, c.set ? c.x : 50, c.set ? c.y : 50);
+            }
+            this->g->GradV(0, ScreenH * 0.6, ScreenW, ScreenH * 0.4, Col{ 0, 0, 0, 0 }, Col{ 0, 0, 0, 200 });
+            const auto &a = this->Art(this->slideId);
+            SDL_Texture *lg = a.logo.empty() ? nullptr : this->img->Get(a.logo, 1);
+            if(lg) {
+                int tw = 0, th = 0;
+                SDL_QueryTexture(lg, nullptr, nullptr, &tw, &th);
+                if(tw > 0 && th > 0) { const double w = 380, h = w * th / tw; this->g->Image(lg, 60, ScreenH - 60 - h, w, h, fadeT, true); }
+            }
+            this->g->Text(clk, 44, ScreenW - 60, ScreenH - 100, Col{ 255, 255, 255, 230 }, 2);
+            return;
+        }
+        // große Uhr, langsam wandernd (schont den Bildschirm)
+        const double px = ScreenW / 2 + std::sin(this->time * 0.05) * 260, py = ScreenH / 2 - 70 + std::cos(this->time * 0.037) * 150;
+        this->g->TextFn(clk, 120, px, py, this->AccentFn(px - 220, py, 440, 140), 1.0, 1);
+    }
+
+    void Home::ApplyStartSection() {
+        this->startApplied = true;
+        const auto mode = this->d->settings.S("library.startSection");
+        std::string target = mode;
+        if(mode == "last") {
+            const json *l = JGet(this->d->settings.data, "library.lastSection");
+            target = (l && l->is_string()) ? l->get<std::string>() : std::string("start");
+        }
+        if(target == "start" || target == this->section) return;
+        const auto vis = this->d->settings.VisibleSections();
+        if(std::find(vis.begin(), vis.end(), target) != vis.end() && target != "settings") this->SwitchSection(target);
     }
 
     // ------------------------------------------------------------------ Eigene Themes

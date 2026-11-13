@@ -1,6 +1,7 @@
 #pragma once
 #include "../core/accent.hpp"
 #include "../core/layout.hpp"
+#include "../core/particles.hpp"
 #include "../core/store.hpp"
 #include "../nx/apps.hpp"
 #include "../nx/gfx.hpp"
@@ -97,6 +98,17 @@ namespace nexus {
             bool autoArtQueued = false;
             AccentParams accentP;
             // Bildausschnitt-Editor (Zoom, Schnitt)
+            // Partikel (Kachel-Aura, Hintergrund-Effekte)
+            ParticleSystem fx;
+            std::vector<EmitRect> auraRects;
+            AuraCfg auraC;
+            BgCfg bgC;
+            // Bildschirmschoner
+            double idleT = 0, slideT = 0;
+            bool idleActive = false, idleLocked = false;
+            int slideIdx = -1;
+            std::string slideKey, slidePrev, slideId;
+            bool startApplied = false;
             struct LogoMove { bool active = false; json backup; } logoMove;
             struct CropEdit { bool active = false; std::string path, title; double aspect = 16.0 / 9.0; Crop c, backup; std::function<void()> done; } crop;
 
@@ -206,6 +218,10 @@ namespace nexus {
             double TileAspect() const;
             void OpenThemes();
             void StartLogoMove();
+            void DrawParticles(int layer);
+            void DrawIdle();
+            void UpdateIdle(double dt, bool input);
+            void ApplyStartSection();
             void LogoMoveInput(const plat::Input &in);
             void QueueMissingArt(bool force);
             void ArtChanged(const std::string &id);

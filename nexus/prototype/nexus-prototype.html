@@ -90,7 +90,14 @@ html,body{margin:0;height:100%;background:#05070b;color:#eef2f7;font-family:syst
 #ring{position:absolute;left:0;top:0;transition:transform var(--tileMs) var(--ease), width var(--tileMs) var(--ease), height var(--tileMs) var(--ease), opacity .2s;transform-origin:center;display:none}
 #ring.box{box-shadow:0 0 0 6px rgba(0,0,0,.45),0 0 24px var(--accent)}
 #ring.glow.box{box-shadow:0 0 46px 8px var(--accent)}
-#ring.box::before{content:"";position:absolute;inset:-3px;border-radius:inherit;padding:3px;background:var(--accentGrad);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+.fxc{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+#idleScr{position:absolute;inset:0;z-index:30;display:none;background:#000;color:#fff;overflow:hidden}
+#idleScr.dim{background:rgba(0,0,0,.66)}
+#idleScr .ib{position:absolute;inset:0;background-size:cover;background-position:center;transition:opacity 1.2s;animation:kb 20s linear infinite alternate}
+#idleScr .ic{position:absolute;font-size:120px;font-weight:300;background:var(--accentGrad);-webkit-background-clip:text;background-clip:text;color:transparent;transition:left 4s linear, top 4s linear}
+#ring.ttl::after{content:attr(data-title);position:absolute;left:-40px;right:-40px;top:calc(100% + 10px);text-align:center;color:var(--text);font-size:14px;font-weight:600;text-shadow:0 2px 8px rgba(0,0,0,.8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#ring.noring::before{display:none}#ring.noring{box-shadow:none!important}
+#ring.box::before{content:"";position:absolute;inset:calc(-1*var(--ringW,3px));border-radius:inherit;padding:var(--ringW,3px);background:var(--accentGrad);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
 #ring.pulse{animation:pulse 1.4s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
 #ring svg{position:absolute;inset:-3px;width:calc(100% + 6px);height:calc(100% + 6px);overflow:visible}
@@ -166,16 +173,17 @@ body.touch:not(.land) #rot{display:block}
 <body>
 <div id="wrap"><div id="stage">
   <div class="layer" id="L1"><div id="homeBg"></div><div class="hero" id="heroA"></div><div class="hero" id="heroB"></div></div>
-  <div class="layer" id="L2"><div id="dim"></div><div id="grad"></div></div>
+  <div class="layer" id="L2"><div id="dim"></div><div id="grad"></div><canvas id="fxBack" class="fxc" width="1280" height="720"></canvas></div>
   <div class="layer" id="L3"><div id="safeArea"></div><div id="logo"><img alt=""></div><div id="raInfo"></div></div>
   <div class="layer" id="L4">
     <div id="tiles"></div>
     <div id="topbar"><div id="tabs"></div><div id="status"></div></div>
     <div id="crumb"></div>
   </div>
-  <div class="layer" id="L5"><div id="ringWrap"><div id="ring"></div></div><div id="moveBanner"></div>
+  <div class="layer" id="L5"><canvas id="fxFront" class="fxc" width="1280" height="720"></canvas><div id="ringWrap"><div id="ring"></div></div><div id="moveBanner"></div>
     <div id="hints"></div><div id="layerLbl">Ebenen: 1 Hintergrund · 2 Effekte · 3 Logo · 4 Kacheln · 5 Fokus · 6 Dialoge</div></div>
   <div class="layer" id="L6"></div>
+  <div id="idleScr"></div>
   <div id="toast"></div>
 </div></div>
 <details id="help"><summary>Steuerung (Tastatur / Controller / Maus)</summary>
@@ -272,6 +280,8 @@ const SPEC = [
   {g:"top", p:"topbar.showUser", l:"Profil (Bild + Name) anzeigen", t:"bool", d:true},
   {g:"top", p:"topbar.showClock", l:"Uhrzeit", t:"bool", d:true},
   {g:"top", p:"topbar.clock24", l:"24-Stunden-Format", t:"bool", d:true},
+  {g:"top", p:"topbar.seconds", l:"Sekunden anzeigen", t:"bool", d:false},
+  {g:"top", p:"topbar.greeting", l:"Begrüßung (z. B. „Guten Abend, Kevin“)", t:"bool", d:false},
   {g:"top", p:"topbar.showDate", l:"Datum", t:"bool", d:false},
   {g:"top", p:"topbar.showWifi", l:"WLAN-Symbol", t:"bool", d:true},
   {g:"top", p:"topbar.showBattery", l:"Akku-Symbol", t:"bool", d:true},
@@ -312,6 +322,9 @@ const SPEC = [
   {g:"anim", p:"anim.stagger", l:"Versatz zwischen Kacheln", t:"num", min:0, max:120, step:10, f:ms, d:30},
   {g:"anim", p:"anim.idle", l:"Leerlauf-Animation", t:"enum", o:["none","float","breathe","sway"], ol:["Keine","Schweben","Atmen","Wiegen"], d:"none"},
   {g:"anim", p:"anim.idleFocusOnly", l:"Leerlauf nur für Fokus-Kachel", t:"bool", d:true},
+  {g:"anim", p:"anim.ringWidth", l:"Breite des Fokusrahmens (0 = aus)", t:"num", min:0, max:10, step:.5, f:px, d:3.5},
+  {g:"anim", p:"anim.dimOthers", l:"Andere Kacheln abdunkeln", t:"num", min:0, max:.8, step:.05, f:pct, d:0},
+  {g:"anim", p:"anim.titleOnFocus", l:"Titel der fokussierten Kachel einblenden", t:"bool", d:false},
   // Fokus-Hintergrund
   {g:"hero", p:"hero.enabled", l:"Hero beim Fokussieren", t:"bool", d:true},
   {g:"hero", p:"hero.transition", l:"Übergang", t:"enum", o:["crossfade","viaHome","slide","zoom","cut"], ol:["Überblenden","Über den Home-Hintergrund","Schieben","Zoom","Hart"], d:"crossfade"},
@@ -343,6 +356,42 @@ const SPEC = [
   {g:"logo", p:"logo.float", l:"Schwebebewegung", t:"bool", d:true},
   {g:"logo", p:"logo.shadow", l:"Schatten", t:"bool", d:true},
   {g:"logo", p:"logo.safeArea", l:"Sicherheitsbereich (verdeckt keine Kacheln)", t:"bool", d:true, w:()=>ST().logo.placement!=="free"},
+  // Kachel-Aura (Partikel)
+  {g:"aura", p:"aura.enabled", l:"Aura anzeigen", t:"bool", d:false},
+  {g:"aura", p:"aura.target", l:"Bei welchen Kacheln", t:"enum", o:["focus","all","fav"], ol:["Nur fokussierte Kachel","Alle Kacheln","Nur Favoriten"], d:"focus"},
+  {g:"aura", p:"aura.shape", l:"Partikelart", t:"enum", o:["glow","spark","star","ring","heart","square","snow","bubble","custom"], ol:["Leuchtpunkt","Funke","Stern","Ring","Herz","Quadrat","Schneeflocke","Blase","Eigenes Bild"], d:"glow"},
+  {g:"aura", p:"aura.image", l:"Eigenes Partikelbild", t:"image", d:null, w:()=>ST().aura.shape==="custom"},
+  {g:"aura", p:"aura.blend", l:"Darstellung", t:"enum", o:["add","normal"], ol:["Leuchtend (Schwarz wird durchsichtig, gut für JPG)","Normal (PNG-Transparenz)"], d:"add"},
+  {g:"aura", p:"aura.colorMode", l:"Farbe", t:"enum", o:["accent","fixed","rainbow","random","image"], ol:["Akzent (Verlauf/RGB)","Feste Farbe","Regenbogen","Zufällig","Originalfarben (eigenes Bild)"], d:"accent"},
+  {g:"aura", p:"aura.color", l:"Feste Farbe", t:"color", d:"#ffffff", w:()=>ST().aura.colorMode==="fixed"},
+  {g:"aura", p:"aura.direction", l:"Richtung", t:"enum", o:["outward","up","down","left","right","orbit","inward","random"], ol:["Nach außen","Nach oben","Nach unten","Nach links","Nach rechts","Umkreisen","Nach innen","Zufällig"], d:"outward"},
+  {g:"aura", p:"aura.emit", l:"Austritt", t:"enum", o:["edge","corners","inside","around"], ol:["Am Rand","An den Ecken","Aus der Fläche","Ring um die Kachel"], d:"edge"},
+  {g:"aura", p:"aura.dirSpread", l:"Streuung der Richtung", t:"num", min:0, max:180, step:5, f:deg, d:25},
+  {g:"aura", p:"aura.density", l:"Dichte (Partikel pro Sekunde)", t:"num", min:2, max:150, step:2, f:v=>v+"/s", d:30},
+  {g:"aura", p:"aura.velocity", l:"Geschwindigkeit", t:"num", min:0, max:300, step:10, f:v=>v+" px/s", d:60},
+  {g:"aura", p:"aura.particleSize", l:"Größe", t:"num", min:2, max:48, step:1, f:px, d:10},
+  {g:"aura", p:"aura.sizeVar", l:"Größen-Zufall", t:"num", min:0, max:1, step:.05, f:pct, d:.4},
+  {g:"aura", p:"aura.lifetime", l:"Lebensdauer", t:"num", min:.3, max:5, step:.1, f:v=>v.toFixed(1).replace(".",",")+" s", d:1.4},
+  {g:"aura", p:"aura.opacity", l:"Deckkraft", t:"num", min:.1, max:1, step:.05, f:pct, d:.9},
+  {g:"aura", p:"aura.gravity", l:"Schwerkraft", t:"num", min:-200, max:200, step:10, f:v=>v+" px/s²", d:0},
+  {g:"aura", p:"aura.spin", l:"Drehen", t:"bool", d:true},
+  {g:"aura", p:"aura.fadeMode", l:"Vergehen", t:"enum", o:["both","fade","shrink","none"], ol:["Ausblenden + Schrumpfen","Ausblenden","Schrumpfen","Keins"], d:"both"},
+  {g:"aura", p:"aura.layer", l:"Ebene", t:"enum", o:["behind","front"], ol:["Hinter der Kachel","Vor der Kachel"], d:"behind"},
+  // Hintergrund-Effekte
+  {g:"bgfx", p:"bgfx.type", l:"Effekt", t:"enum", o:["none","snow","stars","bubbles","embers","rain","fireflies","custom"], ol:["Aus","Schnee","Funkelnde Sterne","Blasen","Glut","Regen","Glühwürmchen","Eigenes Bild"], d:"none"},
+  {g:"bgfx", p:"bgfx.image", l:"Eigenes Partikelbild", t:"image", d:null, w:()=>ST().bgfx.type==="custom"},
+  {g:"bgfx", p:"bgfx.blend", l:"Darstellung", t:"enum", o:["add","normal"], ol:["Leuchtend (Schwarz wird durchsichtig)","Normal (PNG-Transparenz)"], d:"add", w:()=>ST().bgfx.type!=="none"},
+  {g:"bgfx", p:"bgfx.colorMode", l:"Farbe", t:"enum", o:["auto","fixed","accent","rainbow","image"], ol:["Passend zum Effekt","Feste Farbe","Akzent (Verlauf/RGB)","Regenbogen","Originalfarben (eigenes Bild)"], d:"auto", w:()=>ST().bgfx.type!=="none"},
+  {g:"bgfx", p:"bgfx.color", l:"Feste Farbe", t:"color", d:"#ffffff", w:()=>ST().bgfx.type!=="none" && ST().bgfx.colorMode==="fixed"},
+  {g:"bgfx", p:"bgfx.density", l:"Dichte", t:"num", min:2, max:150, step:2, f:v=>v+"/s", d:24, w:()=>ST().bgfx.type!=="none"},
+  {g:"bgfx", p:"bgfx.speedScale", l:"Geschwindigkeit", t:"num", min:.2, max:3, step:.1, f:pct, d:1, w:()=>ST().bgfx.type!=="none"},
+  {g:"bgfx", p:"bgfx.sizeScale", l:"Größe", t:"num", min:.3, max:3, step:.1, f:pct, d:1, w:()=>ST().bgfx.type!=="none"},
+  {g:"bgfx", p:"bgfx.opacity", l:"Deckkraft", t:"num", min:.1, max:1, step:.05, f:pct, d:.7, w:()=>ST().bgfx.type!=="none"},
+  {g:"bgfx", p:"bgfx.layer", l:"Ebene", t:"enum", o:["back","front"], ol:["Hinter den Kacheln","Vor allem (außer Menüs)"], d:"back", w:()=>ST().bgfx.type!=="none"},
+  // Bildschirmschoner
+  {g:"idle", p:"idle.mode", l:"Bei Inaktivität", t:"enum", o:["off","dim","slideshow","clock","lock"], ol:["Nichts","Abdunkeln","Diashow der Spielbilder","Große Uhr","Sperrbildschirm"], d:"off"},
+  {g:"idle", p:"idle.minutes", l:"Nach", t:"num", min:1, max:30, step:1, f:v=>v+" min", d:5, w:()=>ST().idle.mode!=="off"},
+  {g:"idle", p:"idle.slideSeconds", l:"Bildwechsel alle", t:"num", min:3, max:30, step:1, f:v=>v+" s", d:8, w:()=>ST().idle.mode==="slideshow"},
   // Home-Hintergrund
   {g:"home", p:"home.bgType", l:"Art", t:"enum", o:["gradient","animated","color","image"], ol:["Farbverlauf","Animierter Verlauf","Volltonfarbe","Eigenes Bild"], d:"gradient"},
   {g:"home", p:"home.preset", l:"Verlauf", t:"num", min:0, max:7, step:1, f:v=>"Vorlage "+(v+1), d:0, w:()=>["gradient","animated"].includes(S.data.settings.home.bgType)},
@@ -363,6 +412,8 @@ const SPEC = [
   {g:"lock", p:"lock.clockAccent", l:"Uhr im Akzent (Verlauf/RGB)", t:"bool", d:false},
   {g:"lock", p:"lock.textColor", l:"Schriftfarbe", t:"enum", o:["white","black","custom"], ol:["Weiß","Schwarz","Eigene Farbe"], d:"white"},
   {g:"lock", p:"lock.textCustom", l:"Eigene Schriftfarbe", t:"color", d:"#ffffff", w:()=>ST().lock.textColor==="custom"},
+  {g:"lock", p:"lock.seconds", l:"Sekunden anzeigen", t:"bool", d:false},
+  {g:"lock", p:"lock.message", l:"Eigener Text unter der Uhr", t:"str", d:""},
   {g:"lock", p:"lock.clock24", l:"24-Stunden-Format", t:"bool", d:true},
   {g:"lock", p:"lock.showDate", l:"Datum", t:"bool", d:true},
   {g:"lock", p:"lock.showBattery", l:"Akku", t:"bool", d:true},
@@ -412,12 +463,13 @@ const SPEC = [
   {g:"ra", p:"ra.user", l:"", t:"str", d:"", hidden:true},
   {g:"ra", p:"ra.key", l:"", t:"str", d:"", hidden:true},
   {g:"lib", p:"library.sort", l:"„Alle Spiele“ sortieren", t:"enum", o:["name","recent"], ol:["Nach Name","Zuletzt gespielt"], d:"name"},
+  {g:"lib", p:"library.startSection", l:"Beim Öffnen zeigen", t:"enum", o:["start","last","all","fav","recent","folders"], ol:["Startseite","Zuletzt geöffneten Bereich","Alle Spiele","Favoriten","Zuletzt gespielt","Ordner"], d:"start"},
   {g:"lib", p:"theme.name", l:"", t:"str", d:"Nexus Dunkel", hidden:true},
   {g:"lib", p:"sgdb.gridDims", l:"SteamGridDB: Cover-Format", t:"enum", o:["600x900","920x430","460x215","512x512","any"], ol:["Hochformat 600×900","Querformat 920×430","Quer klein 460×215","Quadrat 512×512","Alle Formate"], d:"600x900"},
   {g:"lib", p:"sgdb.autoMissing", l:"Fehlende Bilder automatisch laden", t:"bool", d:false},
   {g:"lib", p:"sgdbKey", l:"", t:"str", d:"", hidden:true},
 ];
-const GROUPS = [["look","Darstellung & Schrift"],["ui","Textboxen & Schrift"],["top","Kopfzeile, Symbole & Hinweise"],["layout","Anordnung der Kacheln"],["anim","Animationen"],["tiles","Kacheln (Standard)"],["hero","Fokus: Hintergrund"],["logo","Fokus: Logo"],["home","Home-Hintergrund"],["lock","Sperrbildschirm"],["profile","Profilauswahl"],["sections","Bereiche (Reihenfolge & Sichtbarkeit)"],["lib","Bibliothek & SteamGridDB"],["ra","RetroAchievements"],["sys","Themes, Backup & System"]];
+const GROUPS = [["look","Darstellung & Schrift"],["ui","Textboxen & Schrift"],["aura","Kachel-Aura (Partikel)"],["bgfx","Hintergrund-Effekte"],["idle","Bildschirmschoner"],["top","Kopfzeile, Symbole & Hinweise"],["layout","Anordnung der Kacheln"],["anim","Animationen"],["tiles","Kacheln (Standard)"],["hero","Fokus: Hintergrund"],["logo","Fokus: Logo"],["home","Home-Hintergrund"],["lock","Sperrbildschirm"],["profile","Profilauswahl"],["sections","Bereiche (Reihenfolge & Sichtbarkeit)"],["lib","Bibliothek & SteamGridDB"],["ra","RetroAchievements"],["sys","Themes, Backup & System"]];
 const TILE_SPEC = SPEC.filter(s=>s.g==="tiles").map(s=>({...s, p:s.p.replace("tileDefaults.","")}));
 const SECTION_IDS = Object.keys(SECTION_NAMES);
 function defaultSettings(){ const s = {}; SPEC.forEach(x=>setP(s, x.p, clone(x.d))); s.sections = SECTION_IDS.map(id=>({id, visible:true})); return s; }
@@ -604,6 +656,83 @@ function updateAccent(){
   st.style.setProperty("--accent", rgbStr(accentAt(.5,t)));
 }
 setInterval(()=>{ try{ if((ST().theme.accentAnim||"none")!=="none") updateAccent(); }catch(e){} }, 50);
+
+/* ---------------- Partikel: Kachel-Aura & Hintergrund (gleiche Logik wie core/particles.cpp) ---------------- */
+const FX = { parts:[], aAcc:0, bAcc:0, last:performance.now(), sprites:{}, tinted:new Map(), imgs:{},
+  sprite(shape){ if(this.sprites[shape]) return this.sprites[shape]; const N=64, c=document.createElement("canvas"); c.width=c.height=N; const x2=c.getContext("2d"), id=x2.createImageData(N,N);
+    const sm=(e0,e1,x)=>{ const t=clamp((x-e0)/(e1-e0),0,1); return t*t*(3-2*t); };
+    for(let j=0;j<N;j++) for(let i=0;i<N;i++){ const x=(i+.5)/N*2-1, y=(j+.5)/N*2-1, r=Math.hypot(x,y), th=Math.atan2(y,x); let a=0;
+      if(shape==="spark") a=Math.max(Math.max(Math.exp(-Math.abs(x)*14),Math.exp(-Math.abs(y)*14))*(1-sm(.2,1,r)), Math.max(0,1-r*2.2)**2);
+      else if(shape==="star"){ const seg=2*Math.PI/5, k=((th+Math.PI/2+4*Math.PI)%seg)/seg, R=.42+.53*Math.abs(k*2-1)**1.6; a=1-sm(R-.06,R,r); }
+      else if(shape==="ring") a=1-sm(.05,.14,Math.abs(r-.72));
+      else if(shape==="heart"){ const hx=x*1.25, hy=-y*1.25+.25, v=(hx*hx+hy*hy-1)**3-hx*hx*hy**3; a=1-sm(-.04,.02,v); }
+      else if(shape==="square"){ const qx=Math.max(Math.abs(x)-.55,0), qy=Math.max(Math.abs(y)-.55,0); a=1-sm(.16,.24,Math.hypot(qx,qy)); }
+      else if(shape==="snow"){ const seg=Math.PI/3, m=(th+4*Math.PI)%seg, d=r*Math.abs(Math.sin(Math.min(m,seg-m))); a=Math.max((1-sm(.04,.09,d))*(1-sm(.85,.97,r)), 1-sm(.12,.2,r)); }
+      else if(shape==="bubble"){ a=Math.max((1-sm(.04,.1,Math.abs(r-.8)))*.9, (1-sm(.08,.2,Math.hypot(x+.35,y+.35)))*.9, (1-r)*.12); }
+      else if(shape==="line") a=Math.exp(-Math.abs(x)*18)*(1-sm(.6,1,Math.abs(y)));
+      else { const g=Math.max(0,1-r); a=g*g; }
+      const o=(j*N+i)*4; id.data[o]=id.data[o+1]=id.data[o+2]=255; id.data[o+3]=clamp(a,0,1)*255; }
+    x2.putImageData(id,0,0); return this.sprites[shape]=c; },
+  tint(shape, r,g,b){ r=r&~15; g=g&~15; b=b&~15; const k=shape+r+","+g+","+b; let c=this.tinted.get(k); if(c) return c;
+    const s=this.sprite(shape); c=document.createElement("canvas"); c.width=c.height=64; const x=c.getContext("2d"); x.drawImage(s,0,0); x.globalCompositeOperation="source-in"; x.fillStyle=`rgb(${r},${g},${b})`; x.fillRect(0,0,64,64);
+    if(this.tinted.size>400) this.tinted.clear(); this.tinted.set(k,c); return c; },
+  img(url){ if(!url) return null; let im=this.imgs[url]; if(!im){ im=new Image(); im.src=url; this.imgs[url]=im; } return im.complete && im.naturalWidth ? im : null; },
+  hsv(h,s,v){ h=((h%360)+360)%360/60; const i=Math.floor(h)%6, f=h-Math.floor(h), p=v*(1-s), q=v*(1-s*f), t=v*(1-s*(1-f)); return [[v,t,p],[q,v,p],[p,v,t],[p,q,v],[t,p,v],[v,p,q]][i].map(x=>x*255); },
+  rnd:(a,b)=>a+Math.random()*(b-a),
+  push(p){ if(this.parts.length<700) this.parts.push(p); },
+  spawnAura(dt, t){ const c=ST().aura; if(!c.enabled || !animOn()){ this.aAcc=0; return; }
+    const rects=[]; S.items.forEach((it,i)=>{ const e=S.list[i]; if(!it||!e) return; if((c.target==="focus"&&i===S.focus)||c.target==="all"||(c.target==="fav"&&e.favorite)) rects.push(it); });
+    if(!rects.length) return; this.aAcc += c.density*(rects.length>1?.4:1)*rects.length*Math.min(dt,.1); let n=Math.min(Math.floor(this.aAcc),60); this.aAcc-=Math.floor(this.aAcc);
+    for(let k=0;k<n;k++){ const R=rects[Math.floor(Math.random()*rects.length)], hw=Math.max(1,R.w/2), hh=Math.max(1,R.h/2), cx=R.x+hw, cy=R.y+hh; let px=cx, py=cy, nx=0, ny=-1;
+      if(c.emit==="corners"){ const q=Math.floor(Math.random()*4), sx=(q===0||q===3)?-1:1, sy=q<2?-1:1; px=cx+sx*hw; py=cy+sy*hh; nx=sx*.7071; ny=sy*.7071; }
+      else if(c.emit==="inside"){ px=cx+this.rnd(-hw,hw); py=cy+this.rnd(-hh,hh); const l=Math.hypot(px-cx,py-cy); if(l>1e-3){ nx=(px-cx)/l; ny=(py-cy)/l; } }
+      else if(c.emit==="around"){ const a=this.rnd(0,2*Math.PI); nx=Math.cos(a); ny=Math.sin(a); px=cx+(hw+10)*nx; py=cy+(hh+10)*ny; }
+      else { let u=this.rnd(0,4*(hw+hh)); if(u<2*hw){ px=cx-hw+u; py=cy-hh; nx=0; ny=-1; } else if((u-=2*hw)<2*hh){ px=cx+hw; py=cy-hh+u; nx=1; ny=0; } else if((u-=2*hh)<2*hw){ px=cx+hw-u; py=cy+hh; nx=0; ny=1; } else { u-=2*hw; px=cx-hw; py=cy+hh-u; nx=-1; ny=0; } }
+      let dx=nx, dy=ny; const d=c.direction;
+      if(d==="up"){dx=0;dy=-1;} else if(d==="down"){dx=0;dy=1;} else if(d==="left"){dx=-1;dy=0;} else if(d==="right"){dx=1;dy=0;} else if(d==="orbit"){dx=-ny;dy=nx;} else if(d==="inward"){dx=-nx;dy=-ny;} else if(d==="random"){ const a=this.rnd(0,2*Math.PI); dx=Math.cos(a); dy=Math.sin(a); }
+      const sp=this.rnd(-.5,.5)*c.dirSpread*Math.PI/180, rx=dx*Math.cos(sp)-dy*Math.sin(sp), ry=dx*Math.sin(sp)+dy*Math.cos(sp);
+      const max=c.lifetime*this.rnd(.75,1.25), v=c.velocity*this.rnd(.7,1.3); if(d==="inward"){ px+=nx*v*max*.6; py+=ny*v*max*.6; }
+      let col=[255,255,255]; if(c.colorMode==="fixed") col=hexRgb(c.color); else if(c.colorMode==="rainbow") col=this.hsv(t*90+this.rnd(0,60),.85,1); else if(c.colorMode==="random") col=this.hsv(this.rnd(0,360),.8,1); else if(c.colorMode==="accent") col=accentAt(clamp(px/1280,0,1),t);
+      this.push({x:px,y:py,vx:rx*v,vy:ry*v,ay:c.gravity,life:max,max,size:Math.max(1,c.particleSize*(1-c.sizeVar*Math.random())),rot:this.rnd(0,6.28),vr:c.spin?this.rnd(-3,3):0,op:c.opacity,fade:{fade:1,shrink:2,none:3}[c.fadeMode]||0,layer:c.layer==="front"?1:0,col,motion:0,phase:0}); } },
+  spawnBg(dt, t){ const c=ST().bgfx; if(c.type==="none" || !animOn()){ this.bAcc=0; return; } this.bAcc+=c.density*Math.min(dt,.1); let n=Math.min(Math.floor(this.bAcc),40); this.bAcc-=Math.floor(this.bAcc);
+    for(let k=0;k<n;k++){ const sp=c.speedScale, sz=c.sizeScale, W=1280, H=720; let p={layer:c.layer==="front"?3:2, op:c.opacity, fade:1, phase:this.rnd(0,6.28), vx:0, vy:0, ay:0, rot:0, vr:0, motion:0}; let col=[255,255,255];
+      if(c.type==="snow"||c.type==="custom"){ Object.assign(p,{x:this.rnd(-20,W+20),y:-20,vy:this.rnd(35,80)*sp,vx:this.rnd(-10,10)*sp,size:this.rnd(5,14)*sz*(c.type==="custom"?2.2:1),motion:3,vr:this.rnd(-1,1),fade:3}); p.max=(H+40)/Math.max(1,p.vy); }
+      else if(c.type==="stars"){ Object.assign(p,{x:this.rnd(0,W),y:this.rnd(0,H),size:this.rnd(6,16)*sz,motion:1,max:this.rnd(2,4.5)/Math.max(.2,sp)}); col=[255,244,214]; }
+      else if(c.type==="bubbles"){ Object.assign(p,{x:this.rnd(0,W),y:H+20,vy:-this.rnd(30,70)*sp,size:this.rnd(10,28)*sz,motion:3,fade:3}); p.max=(H+60)/Math.max(1,-p.vy); col=[170,220,255]; }
+      else if(c.type==="embers"){ Object.assign(p,{x:this.rnd(0,W),y:H+10,vy:-this.rnd(40,110)*sp,vx:this.rnd(-20,20)*sp,size:this.rnd(4,12)*sz,max:this.rnd(3,6)}); col=this.hsv(this.rnd(8,40),.9,1); }
+      else if(c.type==="rain"){ Object.assign(p,{x:this.rnd(-50,W+50),y:-30,vy:this.rnd(550,750)*sp,vx:-60*sp,size:this.rnd(16,28)*sz,stretch:1,fade:3}); p.max=(H+60)/Math.max(1,p.vy); col=[190,210,235]; }
+      else { Object.assign(p,{x:this.rnd(0,W),y:this.rnd(H*.2,H),size:this.rnd(8,16)*sz,motion:2,max:this.rnd(4,8)}); col=[214,255,120]; }
+      if(c.colorMode==="fixed") col=hexRgb(c.color); else if(c.colorMode==="rainbow") col=this.hsv(t*40+p.x*.2,.8,1); else if(c.colorMode==="accent") col=accentAt(clamp(p.x/1280,0,1),t); else if(c.colorMode==="image") col=[255,255,255];
+      p.life=p.max; p.col=col; this.push(p); } },
+  look(p, t){ const age=clamp(1-p.life/Math.max(.001,p.max),0,1); let a=p.op*Math.min(1,age/.1+.05), s=p.size;
+    if(p.fade===0||p.fade===1) a*=(1-age); if(p.fade===0||p.fade===2) s*=(1-.7*age);
+    if(p.motion===1) a=p.op*Math.sin(age*Math.PI)*(.6+.4*Math.sin(t*6+p.phase)); if(p.motion===2) a*=.5+.5*Math.sin(t*3+p.phase);
+    if(p.fade===3&&p.motion!==1) a=p.op*Math.min(1,age/.05+.05)*Math.min(1,(1-age)/.1); return [clamp(a,0,1), Math.max(.5,s)]; },
+  frame(now){ const dt=Math.min(.1,(now-this.last)/1000); this.last=now; const t=(now-T0)/1000;
+    try{ const blocked = S.dialogs.some(d=>d.kind==="lock"||d.kind==="profile");
+      if(!blocked && !IdleSaver.on){ this.spawnAura(dt,t); this.spawnBg(dt,t); }
+      for(const p of this.parts){ p.life-=dt; if(p.motion===2){ p.vx+=Math.sin(t*1.3+p.phase*3)*40*dt; p.vy+=Math.cos(t*1.1+p.phase*5)*40*dt; p.vx*=.98; p.vy*=.98; } p.vy+=p.ay*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; if(p.motion===3) p.x+=Math.sin(t*1.5+p.phase)*18*dt; p.rot+=p.vr*dt; }
+      this.parts=this.parts.filter(p=>p.life>0);
+      if(!ST().aura.enabled) this.parts=this.parts.filter(p=>p.layer>=2); if(ST().bgfx.type==="none") this.parts=this.parts.filter(p=>p.layer<2);
+      for(const [cv, layers] of [[$("#fxBack"),[2,0]],[$("#fxFront"),[1,3]]]){ const x=cv.getContext("2d"); x.clearRect(0,0,1280,720);
+        for(const L of layers){ const aura=L<2, c=aura?ST().aura:ST().bgfx; const shape=aura?c.shape:({snow:"snow",stars:"spark",bubbles:"bubble",rain:"line",custom:"custom"})[c.type]||"glow";
+          x.globalCompositeOperation = c.blend==="add" ? "lighter" : "source-over"; const im = shape==="custom" ? this.img(c.image) : null;
+          for(const p of this.parts){ if(p.layer!==L) continue; const [a,s]=this.look(p,t); if(a<.01) continue; const spr = im || this.tint(shape==="custom"?"glow":shape, p.col[0]|0, p.col[1]|0, p.col[2]|0);
+            x.globalAlpha=a; x.save(); x.translate(p.x,p.y); x.rotate(p.stretch?Math.atan2(p.vy,p.vx)-Math.PI/2:p.rot); x.drawImage(spr,-s/2,-s/2,s,s); x.restore(); } }
+        x.globalAlpha=1; x.globalCompositeOperation="source-over"; }
+    }catch(e){} requestAnimationFrame(n=>this.frame(n)); } };
+requestAnimationFrame(n=>FX.frame(n));
+
+/* ---------------- Bildschirmschoner ---------------- */
+const IdleSaver = { on:false, idx:-1, lastSlide:0,
+  tick(){ const c=ST().idle, el=$("#idleScr"); if(c.mode==="off"||S.dialogs.length){ if(this.on) this.stop(); return; }
+    const idle=(performance.now()-lastInput)/1000; if(!this.on && idle>=c.minutes*60){ if(c.mode==="lock"){ lastInput=performance.now(); showLock(); return; } this.start(); }
+    if(this.on && c.mode==="slideshow" && performance.now()-this.lastSlide>=c.slideSeconds*1000) this.slide();
+    if(this.on && c.mode==="clock"){ const k=el.querySelector(".ic"); if(k){ k.textContent=fmtTime(new Date(), ST().topbar.clock24); k.style.left=(200+Math.random()*700)+"px"; k.style.top=(120+Math.random()*380)+"px"; } } },
+  start(){ const c=ST().idle, el=$("#idleScr"); this.on=true; el.className=c.mode==="dim"?"dim":""; el.style.display="block"; el.innerHTML = c.mode==="clock" ? `<div class="ic" style="left:420px;top:260px"></div>` : ""; this.lastSlide=0; if(c.mode==="slideshow") this.slide(); },
+  slide(){ const el=$("#idleScr"); const list=S.list.filter(e=>e.kind!=="folder"); if(!list.length) return; this.idx=(this.idx+1)%list.length; const url=FocusPresentationManager.heroFor(list[this.idx]); if(!url) return;
+    const d=document.createElement("div"); d.className="ib"; d.style.opacity=0; d.style.backgroundImage=`url("${url}")`; el.appendChild(d); requestAnimationFrame(()=>d.style.opacity=1); while(el.children.length>2) el.removeChild(el.firstChild); this.lastSlide=performance.now(); },
+  stop(){ this.on=false; const el=$("#idleScr"); el.style.display="none"; el.innerHTML=""; } };
 
 /* ---------------- RetroAchievements (Prototyp: Offline-Testdaten) ----------------
    Switch-App: GET https://retroachievements.org/API/API_GetGameInfoAndUserProgress.php?g=<Spiel-ID>&u=<Benutzer>&y=<Web-API-Key>
@@ -823,7 +952,7 @@ function applyTheme(){
   $("#layerLbl").style.display = s.hints.visible && s.hints.layerLabel ? "block" : "none";
 }
 function iconColor(){ const c = ST().icons.color; return c==="text" ? null : c==="accent" ? ST().theme.accent : c==="white" ? "#ffffff" : "#000000"; }
-function fmtTime(d, h24){ return d.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit",hour12:!h24}); }
+function fmtTime(d, h24, sec){ return d.toLocaleTimeString("de-DE",sec?{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:!h24}:{hour:"2-digit",minute:"2-digit",hour12:!h24}); }
 function renderTopbar(){
   const s = ST(), tb = $("#topbar"); tb.style.display = s.topbar.visible ? "flex" : "none";
   tb.className = s.topbar.bg + " al-" + s.topbar.align; const ic = iconColor();
@@ -837,6 +966,7 @@ function renderTopbar(){
 }
 function renderStatus(){
   const s = ST().topbar, now = new Date(), ic = iconColor(); let h = "";
+  if(s.greeting){ const hr = now.getHours(); const u = TEST_USERS.find(x=>x.id===S.user); h += `<span style="margin-right:auto;opacity:.75">${hr<5?"Gute Nacht":hr<11?"Guten Morgen":hr<17?"Guten Tag":hr<22?"Guten Abend":"Gute Nacht"}${u?", "+esc(u.name):""}</span>`; }
   const ra = ST().ra;
   if(ra.enabled && ra.topbar!=="none"){ const p = RetroAchievements.profile(); const parts = [];
     if(ra.topbarName && p.user) parts.push(esc(p.user));
@@ -844,7 +974,7 @@ function renderStatus(){
     if(ra.topbar==="count"||ra.topbar==="both") parts.push(p.trophies.toLocaleString("de-DE")+" Pokale");
     h += `<span title="RetroAchievements" style="display:flex;align-items:center;gap:6px">${ra.topbarIcon?'<span style="font-size:calc(17px * var(--iconScale))">🏆</span>':""}${parts.join(" · ")}</span>`; }
   if(s.showDate) h += `<span>${now.toLocaleDateString("de-DE",{weekday:"short",day:"2-digit",month:"2-digit"})}</span>`;
-  if(s.showClock) h += `<span>${fmtTime(now, s.clock24)}</span>`;
+  if(s.showClock) h += `<span>${fmtTime(now, s.clock24, s.seconds)}</span>`;
   if(s.showWifi) h += icon("wifi", ic);
   if(s.showBattery) h += `<span style="display:flex;align-items:center;gap:4px">${batteryIcon(ic)}${s.batteryPct?"87 %":""}</span>`;
   $("#status").innerHTML = h;
@@ -908,6 +1038,9 @@ function placeRing(){
   ring.style.borderRadius = (ST().layout.mode==="list" ? t.radius : t.radius)+"px";
   ring.innerHTML = it.hex ? `<svg viewBox="0 0 100 100" preserveAspectRatio="none"><polygon points="50,0 100,25 100,75 50,100 0,75 0,25" fill="none" stroke-width="3" vector-effect="non-scaling-stroke" style="stroke:var(--accent);filter:drop-shadow(0 0 8px var(--accent))"/></svg>` : "";
   ring.style.zIndex = 1;
+  const an = ST().anim; ring.style.setProperty("--ringW", (an.ringWidth??3.5)+"px"); ring.classList.toggle("noring", (an.ringWidth??3.5)<=0);
+  ring.classList.toggle("ttl", !!an.titleOnFocus); ring.dataset.title = (S.list[S.focus]||{}).name||"";
+  $("#tiles").querySelectorAll(".tile").forEach(el=>{ el.style.filter = (+el.dataset.i!==S.focus && an.dimOthers>0) ? `brightness(${1-an.dimOthers})` : ""; });
 }
 function bindTiles(){
   $("#tiles").querySelectorAll(".tile").forEach(el=>{
@@ -1220,7 +1353,7 @@ function startMove(){ const arr = manualOrderArray(); if(!arr){ toast("Position 
 function moveStep(d){ const m = S.move; const i = m.arr.indexOf(m.id); const j = clamp(i+d,0,m.arr.length-1); if(i===j) return; m.arr.splice(i,1); m.arr.splice(j,0,m.id); S.list = currentList(); S.focus = S.list.findIndex(x=>x.id===m.id); render(); }
 
 /* ---------------- Einstellungen (aus SPEC erzeugt) ---------------- */
-function specRow(spec){ return {l:spec.l, get:()=>getP(ST(), spec.p), set:v=>setP(ST(), spec.p, v), t:spec.t, o:spec.o, ol:spec.ol, min:spec.min, max:spec.max, step:spec.step, f:spec.f, w:spec.w}; }
+function specRow(spec){ if(spec.t==="str") return {l:spec.l, get:()=>getP(ST(), spec.p)||"(leer)", t:"text", act:()=>openOSK(spec.l, getP(ST(), spec.p)||"", v=>{ setP(ST(), spec.p, v.slice(0,120)); liveApply(); redraw(); }), w:spec.w}; return {l:spec.l, get:()=>getP(ST(), spec.p), set:v=>setP(ST(), spec.p, v), t:spec.t, o:spec.o, ol:spec.ol, min:spec.min, max:spec.max, step:spec.step, f:spec.f, w:spec.w}; }
 function settingsBox(){ const w = 470; const A = area(); const left = vertical() && A.side==="right"; return {l:left?20:SW-w-20, t:topH()+4, w, h:SH-topH()-botH()-10}; }
 function liveApply(){ DataStore.save(); applyTheme(); renderTopbar(); computeLayout(); place(); FocusPresentationManager.applyEffects(); FocusPresentationManager.curKey=null; FocusPresentationManager.apply(S.list[S.focus]); }
 function openSettings(group){
@@ -1285,7 +1418,7 @@ function showLock(){
       const col = l.textColor==="black" ? "#111" : l.textColor==="custom" ? l.textCustom : "#fff"; const now = new Date();
       const pos = {center:"left:0;right:0;top:34%;text-align:center", topLeft:"left:70px;top:80px", bottomLeft:"left:70px;bottom:110px", bottomRight:"right:70px;bottom:110px;text-align:right"}[l.clockPos];
       el.innerHTML = `<div class="ld" style="opacity:${l.dim};backdrop-filter:blur(${l.blur}px);-webkit-backdrop-filter:blur(${l.blur}px)"></div>
-        <div class="clk${l.clockAccent?" acc":""}" style="${pos};font-size:${l.clockSize}px;font-family:'${l.clockFont}',system-ui;color:${col}">${fmtTime(now, l.clock24)}${l.showDate?`<div class="dt">${now.toLocaleDateString("de-DE",{weekday:"long",day:"numeric",month:"long"})}</div>`:""}</div>
+        <div class="clk${l.clockAccent?" acc":""}" style="${pos};font-size:${l.clockSize}px;font-family:'${l.clockFont}',system-ui;color:${col}">${fmtTime(now, l.clock24, l.seconds)}${l.showDate?`<div class="dt">${now.toLocaleDateString("de-DE",{weekday:"long",day:"numeric",month:"long"})}</div>`:""}${l.message?`<div class="dt">${esc(l.message)}</div>`:""}</div>
         ${l.showBattery?`<div class="lb" style="color:${col}">${batteryIcon(col)} 87 %</div>`:""}${l.hint?`<div class="lh" style="color:${col}">Zum Entsperren A drücken oder tippen</div>`:""}${(ST().ra.enabled && ST().ra.lockRecent && RetroAchievements.recent()) ? `<div class="lh" style="color:${col};bottom:80px;animation:none;opacity:.9">🏆 Zuletzt freigeschaltet: „${esc(RetroAchievements.recent().title)}“ in ${esc(RetroAchievements.recent().game)}</div>` : ""}`;
       el.onclick = ()=>d.input("A"); return el; },
     input(k){ if(d.unlocking || !["A","B","X","Y"].includes(k)) return;
@@ -1331,10 +1464,10 @@ function showProfile(manual){
   pushDialog(d);
 }
 
-setInterval(()=>{ renderStatus(); const lk = S.dialogs.find(d=>d.kind==="lock"); if(lk && !lk.unlocking && lk.el){ const c = lk.el.querySelector(".clk"); if(c && c.firstChild) c.firstChild.textContent = fmtTime(new Date(), ST().lock.clock24); } }, 1000);
+setInterval(()=>{ renderStatus(); const lk = S.dialogs.find(d=>d.kind==="lock"); if(lk && !lk.unlocking && lk.el){ const c = lk.el.querySelector(".clk"); if(c && c.firstChild) c.firstChild.textContent = fmtTime(new Date(), ST().lock.clock24, ST().lock.seconds); } IdleSaver.tick(); }, 1000);
 
 /* ---------------- Bereiche ---------------- */
-function switchSection(id){ if(id==="settings"){ closeAllDialogs(); openSettings(); return; } S.section = id; S.openFolder = null; S.focus = 0; S.scroll = 0; S.move=null; S.multi=null; S.entry=true; closeAllDialogs(); render(); }
+function switchSection(id){ if(id==="settings"){ closeAllDialogs(); openSettings(); return; } try{ localStorage.setItem("nexusLastSection", id); }catch(e){} S.section = id; S.openFolder = null; S.focus = 0; S.scroll = 0; S.move=null; S.multi=null; S.entry=true; closeAllDialogs(); render(); }
 function cycleSection(d){ const vis = ST().sections.filter(s=>s.visible).map(s=>s.id); const i = vis.indexOf(S.section); closeAllDialogs(); switchSection(vis[(i+d+vis.length)%vis.length]); }
 
 /* ---------------- Eingabe ---------------- */
@@ -1342,6 +1475,7 @@ let lastInput = 0;
 function press(k, raw){
   try{
     lastInput = performance.now();
+    if(IdleSaver.on){ IdleSaver.stop(); return; }
     const top = S.dialogs[S.dialogs.length-1];
     if(k==="LOCK"){ showLock(); return; }
     if(top){ if((k==="L"||k==="R") && top.kind==="settings" && top.onLR){ top.onLR(k); return; } if((k==="L"||k==="R") && top.kind==="settings"){ cycleSection(k==="L"?-1:1); return; } top.input(k, raw); return; }
@@ -1396,6 +1530,8 @@ document.querySelectorAll("#pad button").forEach(btn=>{ let rep; const k = btn.d
   const safe = BootGuard.start();
   S.data = DataStore.load();
   if(safe){ const keep = S.data.settings.sgdbKey; S.data.settings = defaultSettings(); S.data.settings.sgdbKey = keep; S.notice = "Abgesicherter Modus: Darstellung auf Standard gesetzt, Bibliothek und Bilder sind erhalten."; if(location.hash==="#safe") history.replaceState(null,"",location.pathname); }
+  { const ss = ST().library.startSection; let t = ss; if(ss==="last"){ try{ t = localStorage.getItem("nexusLastSection")||"start"; }catch(e){ t = "start"; } }
+    if(t && t!=="start" && t!=="settings" && ST().sections.some(x=>x.id===t && x.visible)) S.section = t; }
   render();
   if(ST().lock.enabled && !safe) showLock(); else if(!S.user) showProfile(false);
   if(S.notice) setTimeout(()=>toast(S.notice), 300);

@@ -3,6 +3,7 @@
 #include "settings.hpp"
 #include "accent.hpp"
 #include "online_parse.hpp"
+#include "particles.hpp"
 #include "library.hpp"
 #include "store.hpp"
 #include "layout.hpp"
@@ -345,6 +346,40 @@ int main() {
         CHECK(!g.library.CropOf("/etc/x.jpg").set);
         Crop reset; reset.set = true; g.library.SetCrop("sdmc:/nexus/art/b.jpg", reset);
         CHECK(!g.library.CropOf("sdmc:/nexus/art/b.jpg").set);
+    }
+
+    // 11. Partikel: alle Varianten bleiben endlich, begrenzt und sterben wieder
+    {
+        Settings st; st.data = Settings::Defaults();
+        CHECK(!AuraFrom(st).enabled && BgFrom(st).type == "none");
+        ParticleSystem ps;
+        auto acc = [](double, double) { return Rgb{ 10, 200, 30 }; };
+        std::vector<EmitRect> rects = { { 640, 360, 200, 300 }, { 100, 100, 0, 0 } };
+        for(const char *dir: { "outward", "up", "down", "left", "right", "orbit", "inward", "random" })
+            for(const char *em: { "edge", "corners", "inside", "around" })
+                for(const char *cm: { "accent", "fixed", "rainbow", "random", "image" }) {
+                    AuraCfg c; c.enabled = true; c.direction = dir; c.emit = em; c.colorMode = cm; c.density = 150; c.gravity = -200; c.spread = 180;
+                    ps.SpawnAura(c, rects, 0.05, 1.0, acc);
+                    ps.Update(0.05, 1.0);
+                }
+        CHECK(!ps.parts.empty() && ps.parts.size() <= ParticleSystem::MaxParticles);
+        for(const auto &p: ps.parts) { float a, sz; ParticleSystem::Look(p, 2.0, a, sz); CHECK(std::isfinite(p.x) && a >= 0 && a <= 1 && sz > 0); }
+        for(const char *t: { "snow", "stars", "bubbles", "embers", "rain", "fireflies", "custom" }) {
+            BgCfg b; b.type = t; b.density = 150; b.colorMode = "rainbow";
+            for(int i = 0; i < 40; i++) { ps.SpawnBg(b, 0.05, i * 0.05, 1280, 720, acc); ps.Update(0.05, i * 0.05); }
+            CHECK(!BgShape(b).empty());
+        }
+        CHECK(ps.parts.size() <= ParticleSystem::MaxParticles);
+        // ohne Nachschub ist nach einiger Zeit alles verschwunden
+        for(int i = 0; i < 400; i++) ps.Update(0.1, 10 + i * 0.1);
+        CHECK(ps.parts.empty());
+        // Akzent-Farbe wird übernommen
+        AuraCfg c; c.enabled = true; c.density = 100;
+        ps.SpawnAura(c, { { 0, 0, 10, 10 } }, 0.1, 0, acc);
+        CHECK(!ps.parts.empty() && ps.parts[0].g == 200);
+        // dt = 0 / leere Liste: nichts passiert
+        ps.Clear(); ps.SpawnAura(c, {}, 0.1, 0, acc); ps.SpawnAura(c, rects, 0, 0, acc);
+        CHECK(ps.parts.empty());
     }
 
     std::printf(g_Fail ? "%d Fehler\n" : "Alle Kern-Tests bestanden.\n", g_Fail);

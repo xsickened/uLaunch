@@ -61,6 +61,11 @@ namespace nexus {
             // Bild mit Zuschnitt (Zoom/Position) und Deckkraft pro Punkt (weiche Ränder): fade(u, v) mit u, v in 0..1
             void ImageEx(SDL_Texture *tex, double x, double y, double w, double h, double alpha, double zoom, double posX, double posY, const std::function<double(double, double)> &fade = nullptr, Col tint = Col{});
 
+            // Partikel: eingebaute Formen als weiße Sprites (Farbe über die Eckpunkte), gebündelt gezeichnet
+            struct Sprite { float x, y, size, rot; Col c; };
+            SDL_Texture *ParticleSprite(const std::string &shape);
+            void Sprites(SDL_Texture *tex, const std::vector<Sprite> &list, bool additive);
+
             double fontScale = 1.0;   // globale Schriftgröße
             ColFn paint;              // Färbung für Schrift mit Col::paint
 
@@ -86,6 +91,7 @@ namespace nexus {
             uint64_t frame = 0;
             std::vector<SDL_Vertex> vbuf;
             double curZoom = 1.0;
+            std::unordered_map<std::string, SDL_Texture *> sprites;
             std::vector<int> ibuf;
 
             TTF_Font *Font(int size, bool bold);
