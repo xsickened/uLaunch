@@ -2,6 +2,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
+#include <atomic>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -31,6 +32,7 @@ namespace nexus {
 
     class Net {
         public:
+            ~Net() { this->Stop(); }   // Thread immer erst anhalten, dann abbauen
             bool Start();
             void Stop();
             int Get(const std::string &url, const std::vector<std::string> &headers, const std::string &logName, const std::string &toFile = "", size_t maxBytes = 4 * 1024 * 1024);
@@ -45,7 +47,8 @@ namespace nexus {
             std::deque<NetRequest> queue;
             std::vector<NetResult> done;
             pthread_t thread{};
-            bool running = false, started = false, socketsUp = false;
+            std::atomic<bool> running{ false };
+            bool started = false, socketsUp = false;
             int nextId = 1, busy = 0;
 
             static void *Entry(void *self);

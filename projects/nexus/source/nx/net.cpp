@@ -16,6 +16,11 @@ namespace nexus {
             bool overflow = false;
         };
 
+        // Beim Beenden laufende Übertragungen sofort abbrechen statt bis zu 25 s zu warten
+        int ProgressCb(void *ud, curl_off_t, curl_off_t, curl_off_t, curl_off_t) {
+            return static_cast<std::atomic<bool> *>(ud)->load() ? 0 : 1;
+        }
+
         size_t WriteCb(char *ptr, size_t size, size_t n, void *ud) {
             auto *s = static_cast<Sink *>(ud);
             const size_t len = size * n;
@@ -140,7 +145,7 @@ namespace nexus {
             else if(!Online()) { res.id = rq.id; res.error = "Keine Internetverbindung"; }
             else {
                 res = this->Perform(rq);
-                if(res.status == 429) {
+                if(res.status == 429 && this->running) {
                     Log("Netz: HTTP 429 bei %s, warte 5 s", rq.logName.c_str());
                     svcSleepThread(5'000'000'000ull);
                     res = this->Perform(rq);
@@ -185,6 +190,9 @@ namespace nexus {
         curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, 8L);
         curl_easy_setopt(c, CURLOPT_TIMEOUT, 25L);
         curl_easy_setopt(c, CURLOPT_NOSIGNAL, 1L);
+        curl_easy_setopt(c, CURLOPT_NOPROGRESS, 0L);
+        curl_easy_setopt(c, CURLOPT_XFERINFOFUNCTION, ProgressCb);
+        curl_easy_setopt(c, CURLOPT_XFERINFODATA, &this->running);
         curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, WriteCb);
         curl_easy_setopt(c, CURLOPT_WRITEDATA, &sink);
         const CURLcode cc = curl_easy_perform(c);

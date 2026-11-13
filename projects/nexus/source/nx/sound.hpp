@@ -22,7 +22,7 @@ namespace nexus {
         private:
             bool ready = false, ownAudio = false, enabled = true, bgm = true;
             std::string style = "soft", wantMusic, playingMusic;
-            double volume = 0.5, bgmVolume = 0.4, musicCheck = 0;
+            double volume = 0.5, bgmVolume = 0.4, musicCheck = 0, musicRetry = 0;
             int freq = 48000, channels = 2;
             uint16_t format = 0;
             struct Synth { std::vector<int16_t> pcm; Mix_Chunk *chunk = nullptr; };

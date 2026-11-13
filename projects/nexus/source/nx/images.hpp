@@ -16,6 +16,7 @@ namespace nexus {
     // Schlüssel: Dateipfad ("sdmc:/...") oder "mem:<id>" für Bilddaten im Speicher (z. B. Spiel-Icons).
     class ImageCache {
         public:
+            ~ImageCache() { this->Stop(); }   // Thread immer erst anhalten, dann abbauen
             void Start(size_t budgetBytes, int maxEdge);
             void Stop();
             // Liefert die Textur oder nullptr (dann wird das Laden angestoßen). prio: 0 = sofort, höher = später
@@ -64,6 +65,9 @@ namespace nexus {
             std::string DiskDir() const { std::lock_guard<std::mutex> lk(this->dirMtx); return this->diskDir; }
             std::unordered_map<std::string, uint32_t> colors;   // 0xRRGGBB, 0xFFFFFFFF = grau
             uint64_t tick = 0;
+            std::unordered_map<std::string, uint64_t> wanted;   // letzter Bild-Tick, in dem ein Bild angefordert wurde
+            uint64_t sharedTick = 0;                            // tick, für den Lade-Thread (unter mtx)
+            size_t decodedBytes = 0;                            // fertig dekodiert, noch nicht hochgeladen
             std::vector<std::string> gcInUse;   // Aufräumauftrag für den Lade-Thread
             bool gcWanted = false;
 

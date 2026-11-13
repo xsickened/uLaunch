@@ -29,11 +29,12 @@ namespace nexus {
                 for(auto &c: y) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
                 return x < y;
             });
+            const int count = static_cast<int>(out.size());
             {
                 std::lock_guard<std::mutex> lk(this->mtx);
                 this->list = std::move(out);
             }
-            Log("Homebrew: %d Einträge", static_cast<int>(this->list.size()));
+            Log("Homebrew: %d Einträge", count);
             this->version++;
             this->busy = false;
         }, 512 * 1024);

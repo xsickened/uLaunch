@@ -1,5 +1,6 @@
 #include "images.hpp"
 #include "../core/store.hpp"
+#include "platform.hpp"
 #include <SDL2/SDL_image.h>
 #include <algorithm>
 #include <cmath>
@@ -8,6 +9,13 @@
 #include <dirent.h>
 #include <set>
 #include <sys/stat.h>
+#define STB_IMAGE_STATIC
+#define STB_IMAGE_IMPLEMENTATION
+#define STBI_ONLY_PNG
+#define STBI_ONLY_JPEG
+#define STBI_ONLY_BMP
+#define STBI_ONLY_GIF
+#include "stb_image.h"
 #define STB_IMAGE_WRITE_STATIC
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
@@ -33,6 +41,8 @@ namespace nexus {
         this->worker.Join();
         for(auto &[k, s]: this->decoded) SDL_FreeSurface(s);
         this->decoded.clear();
+        this->decodedBytes = 0;
+        this->wanted.clear();
         this->Clear();
     }
 
@@ -80,6 +90,7 @@ namespace nexus {
         }
         std::lock_guard<std::mutex> lk(this->mtx);
         if(std::find(this->failed.begin(), this->failed.end(), key) != this->failed.end()) return nullptr;
+        this->wanted[key] = this->tick;
         auto p = this->pending.find(key);
         if(p == this->pending.end()) {
             this->pending[key] = prio;
@@ -101,7 +112,8 @@ namespace nexus {
             bool isMem = false;
             {
                 std::unique_lock<std::mutex> lk(this->mtx);
-                this->cv.wait(lk, [this]() { return !this->running || !this->queue.empty() || this->gcWanted; });
+                // Rückstau begrenzen: höchstens ~32 MB fertig dekodierter Bilder, die noch hochgeladen werden müssen
+                this->cv.wait(lk, [this]() { return !this->running || this->gcWanted || (!this->queue.empty() && this->decodedBytes < 32u * 1024 * 1024); });
                 if(!this->running) return;
                 if(this->gcWanted) {
                     // Cache aufräumen im selben Thread, der die Cache-Dateien schreibt: nie gleichzeitig
@@ -119,6 +131,15 @@ namespace nexus {
                 key = best->second;
                 this->queue.erase(std::remove_if(this->queue.begin(), this->queue.end(), [&](const std::pair<int, std::string> &q) { return q.second == key; }), this->queue.end());
                 if(!this->pending.count(key)) continue;
+                // seit über 2 s nicht mehr angefordert (weggeblättert): nicht mehr laden, beim nächsten Zeigen neu anfordern
+                {
+                    auto w = this->wanted.find(key);
+                    if(w != this->wanted.end() && this->sharedTick > w->second + 120) {
+                        this->pending.erase(key);
+                        this->wanted.erase(w);
+                        continue;
+                    }
+                }
                 if(key.rfind("mem:", 0) == 0) {
                     auto m = this->memory.find(key);
                     if(m != this->memory.end()) { mem = m->second; isMem = true; }
@@ -139,7 +160,21 @@ namespace nexus {
                         if(stat((base + ext).c_str(), &st) == 0 && st.st_size > 0) { s = IMG_Load((base + ext).c_str()); break; }
                     }
                 }
+                // Abmessungen vor dem Dekodieren prüfen: ein riesiges Bild darf den Speicher nicht sprengen
+                bool tooBig = false;
                 if(!s) {
+                    int iw = 0, ih = 0, ic = 0;
+                    if(stbi_info(key.c_str(), &iw, &ih, &ic) && iw > 0 && ih > 0) {
+                        const uint64_t px = static_cast<uint64_t>(iw) * ih;
+                        const uint64_t need = px * 8 + 16ull * 1024 * 1024;   // Dekodieren + RGBA-Umwandlung + Reserve
+                        const uint64_t freeMem = plat::FreeMemory();
+                        if(px > 40ull * 1000 * 1000 || (freeMem > 0 && need + 48ull * 1024 * 1024 > freeMem)) {
+                            tooBig = true;
+                            Log("Bild zu groß für den freien Speicher (%dx%d, frei %lu MB): %s", iw, ih, static_cast<unsigned long>(freeMem >> 20), key.c_str());
+                        }
+                    }
+                }
+                if(!s && !tooBig) {
                     s = IMG_Load(key.c_str());
                     if(s && static_cast<long long>(s->w) * s->h > 2500000) Log("Großes Bild %dx%d: %s", s->w, s->h, key.c_str());
                     if(!s) Log("Bild nicht ladbar: %s (%s)", key.c_str(), IMG_GetError());
@@ -247,7 +282,10 @@ namespace nexus {
             }
             std::lock_guard<std::mutex> lk(this->mtx);
             if(s) this->colors[key] = dom;
-            if(s) this->decoded.push_back({ key, s });
+            if(s) {
+                this->decoded.push_back({ key, s });
+                this->decodedBytes += static_cast<size_t>(s->h) * s->pitch;
+            }
             else {
                 this->failed.push_back(key);
                 this->pending.erase(key);
@@ -263,8 +301,16 @@ namespace nexus {
             const int n = std::min(maxUploads, static_cast<int>(this->decoded.size()));
             ready.assign(this->decoded.begin(), this->decoded.begin() + n);
             this->decoded.erase(this->decoded.begin(), this->decoded.begin() + n);
-            for(const auto &[k, s]: ready) this->pending.erase(k);
+            for(const auto &[k, s]: ready) {
+                this->pending.erase(k);
+                this->wanted.erase(k);
+                this->decodedBytes -= std::min(this->decodedBytes, static_cast<size_t>(s->h) * s->pitch);
+            }
+            this->sharedTick = this->tick;
+            // Anforderungen, die nie geladen wurden, nicht ewig merken
+            if(this->wanted.size() > 4000) this->wanted.clear();
         }
+        if(!ready.empty()) this->cv.notify_one();
         for(auto &[k, s]: ready) {
             SDL_Texture *t = SDL_CreateTextureFromSurface(r, s);
             const size_t bytes = static_cast<size_t>(s->w) * s->h * 4;

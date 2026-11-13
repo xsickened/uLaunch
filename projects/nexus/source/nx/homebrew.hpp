@@ -16,6 +16,7 @@ namespace nexus {
     // Durchsucht sdmc:/switch nach .nro-Dateien (im Hintergrund) und stellt die Icons bereit.
     class Homebrew {
         public:
+            ~Homebrew() { this->Stop(); }   // Thread immer erst anhalten, dann abbauen
             void Start(ImageCache *images);
             void Stop();
             std::vector<HbInfo> Snapshot(int &version);

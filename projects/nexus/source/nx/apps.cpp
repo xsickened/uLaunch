@@ -66,7 +66,7 @@ namespace nexus {
     void Apps::Stop() {
         this->stop = true;
         this->worker.Join();
-        if(this->nsOk) nsExit();
+        if(this->nsOk) { nsExit(); this->nsOk = false; }
     }
 
     std::vector<AppInfo> Apps::Snapshot(int &v) {

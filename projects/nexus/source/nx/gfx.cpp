@@ -52,21 +52,26 @@ namespace nexus {
     void Gfx::Exit() {
         for(auto &[k, e]: this->textCache) SDL_DestroyTexture(e.tex);
         this->textCache.clear();
+        this->textBytes = 0;
         for(auto &[k, f]: this->fonts) TTF_CloseFont(f);
         this->fonts.clear();
     }
 
     void Gfx::BeginFrame() {
         this->frame++;
-        if(this->textCache.size() > 500) {
+        // Schrift-Texturen begrenzen: nach Anzahl und nach Speicher (große Titel brauchen über 1 MB)
+        auto trim = [this](uint64_t age) {
             for(auto it = this->textCache.begin(); it != this->textCache.end();) {
-                if(this->frame - it->second.used > 120) {
+                if(this->frame - it->second.used > age) {
+                    this->textBytes -= std::min(this->textBytes, static_cast<size_t>(it->second.w) * it->second.h * 4);
                     SDL_DestroyTexture(it->second.tex);
                     it = this->textCache.erase(it);
                 }
                 else ++it;
             }
-        }
+        };
+        if(this->textCache.size() > 400 || this->textBytes > 24u * 1024 * 1024) trim(90);
+        if(this->textCache.size() > 900 || this->textBytes > 40u * 1024 * 1024) trim(1);
     }
 
     void CoverSrc(double texW, double texH, double at, double posX, double posY, double zoom, double &sx, double &sy, double &sw, double &sh) {
@@ -476,15 +481,23 @@ namespace nexus {
     SDL_Texture *Gfx::TextTex(const std::string &s, int size, Col c, int outline, Col oc, int &w, int &h, bool bold) {
         w = h = 0;
         if(s.empty()) return nullptr;
+        // Ohne Kontur wird weiß gerendert und beim Zeichnen eingefärbt: animierte Farben (Verlauf, Puls)
+        // erzeugen so keine neue Textur pro Bild. Mit Kontur gehören beide Farben zum Schlüssel.
+        const bool tint = outline <= 0;
+        const Col want = c;
+        if(tint) c = Col{ 255, 255, 255, 255 };
         char key[96];
-        std::snprintf(key, sizeof(key), "%d@%d|%d|%d|%02x%02x%02x%02x|%02x%02x%02x|", size, static_cast<int>(this->fontScale * 100), bold ? 1 : 0, outline, c.r, c.g, c.b, c.a, oc.r, oc.g, oc.b);
+        std::snprintf(key, sizeof(key), "%d@%d|%d|%d|%02x%02x%02x|%02x%02x%02x|", size, static_cast<int>(this->fontScale * 100), bold ? 1 : 0, outline, c.r, c.g, c.b, oc.r, oc.g, oc.b);
         const std::string k = std::string(key) + s;
         auto it = this->textCache.find(k);
         if(it != this->textCache.end()) {
             it->second.used = this->frame;
             w = it->second.w; h = it->second.h;
+            if(tint) SDL_SetTextureColorMod(it->second.tex, want.r, want.g, want.b);
+            SDL_SetTextureAlphaMod(it->second.tex, want.a);
             return it->second.tex;
         }
+        if(s.size() > 1024) return nullptr;
         TTF_Font *f = this->Font(size, bold);
         if(!f) return nullptr;
         SDL_Surface *surf = nullptr;
@@ -513,8 +526,10 @@ namespace nexus {
         SDL_FreeSurface(surf);
         if(!tex) return nullptr;
         SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
-        SDL_SetTextureAlphaMod(tex, c.a);
+        if(tint) SDL_SetTextureColorMod(tex, want.r, want.g, want.b);
+        SDL_SetTextureAlphaMod(tex, want.a);
         this->textCache[k] = TextEntry{ tex, w, h, this->frame };
+        this->textBytes += static_cast<size_t>(w) * h * 4;
         return tex;
     }
 

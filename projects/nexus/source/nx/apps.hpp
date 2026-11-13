@@ -22,6 +22,7 @@ namespace nexus {
     // und lädt Namen/Icons im Hintergrund. Schreibt nur in sdmc:/nexus/cache.
     class Apps {
         public:
+            ~Apps() { this->Stop(); }   // Thread immer erst anhalten, dann abbauen
             bool Start(ImageCache *images);
             void Stop();
             std::vector<AppInfo> Snapshot(int &version);

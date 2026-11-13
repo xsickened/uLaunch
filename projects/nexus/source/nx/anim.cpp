@@ -13,6 +13,7 @@ namespace nexus {
         this->surfaces.clear();
         this->textures.clear();
         this->delays.clear();
+        this->shown.clear();
         this->path.clear();
         this->done = false;
         this->failed = false;
@@ -26,6 +27,27 @@ namespace nexus {
 #if defined(SDL_IMAGE_VERSION_ATLEAST)
 #if SDL_IMAGE_VERSION_ATLEAST(2, 6, 0)
         this->worker.Start([this, p, budget]() {
+            // IMG_LoadAnimation dekodiert alle Bilder in voller Größe auf einmal: vorher abschätzen,
+            // sonst reicht ein langes GIF, um den Speicher von uMenu zu sprengen
+            {
+                std::string raw;
+                if(!ReadFile(p, raw, 24u * 1024 * 1024) || raw.size() < 13 || raw.compare(0, 3, "GIF") != 0) {
+                    this->failed = true;
+                    Log("GIF nicht lesbar oder größer als 24 MB: %s", p.c_str());
+                    return;
+                }
+                const size_t gw = static_cast<uint8_t>(raw[6]) | (static_cast<uint8_t>(raw[7]) << 8);
+                const size_t gh = static_cast<uint8_t>(raw[8]) | (static_cast<uint8_t>(raw[9]) << 8);
+                size_t frames = 0;
+                for(size_t i = 0; i + 2 < raw.size(); i++) if(raw[i] == '\x21' && static_cast<uint8_t>(raw[i + 1]) == 0xF9 && raw[i + 2] == '\x04') frames++;
+                frames = std::max<size_t>(frames, 1);
+                const size_t need = gw * gh * 4 * frames;
+                if(need > 80u * 1024 * 1024) {
+                    this->failed = true;
+                    Log("GIF zu groß zum Abspielen (%zux%zu, %zu Bilder, ~%zu MB): %s", gw, gh, frames, need >> 20, p.c_str());
+                    return;
+                }
+            }
             IMG_Animation *a = IMG_LoadAnimation(p.c_str());
             if(!a || a->count <= 0) { if(a) IMG_FreeAnimation(a); this->failed = true; Log("GIF nicht lesbar: %s", p.c_str()); return; }
             const double k = std::min(1.0, 640.0 / std::max(1, a->w));
@@ -66,6 +88,7 @@ namespace nexus {
                 SDL_Texture *t = SDL_CreateTextureFromSurface(r, s);
                 if(t) SDL_SetTextureBlendMode(t, SDL_BLENDMODE_BLEND);
                 this->textures.push_back(t);
+                this->shown.push_back(this->textures.size() - 1 < this->delays.size() ? this->delays[this->textures.size() - 1] : 100);
                 SDL_FreeSurface(s);
                 this->surfaces[this->textures.size() - 1] = nullptr;
                 up++;
@@ -75,10 +98,10 @@ namespace nexus {
         // Bildwechsel nach den GIF-Verzögerungen (nur über die bereits hochgeladenen Bilder)
         const size_t n = this->textures.size();
         long long sum = 0;
-        for(size_t i = 0; i < n; i++) sum += std::max(20, this->delays[i]);
+        for(size_t i = 0; i < n; i++) sum += std::max(20, this->shown[i]);
         long long tms = static_cast<long long>(time * 1000) % std::max(1LL, sum);
         for(size_t i = 0; i < n; i++) {
-            tms -= std::max(20, this->delays[i]);
+            tms -= std::max(20, this->shown[i]);
             if(tms < 0) return this->textures[i];
         }
         return this->textures.back();

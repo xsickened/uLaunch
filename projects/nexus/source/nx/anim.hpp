@@ -27,7 +27,8 @@ namespace nexus {
             std::mutex mtx;
             std::vector<SDL_Surface *> surfaces;
             std::vector<SDL_Texture *> textures;
-            std::vector<int> delays;
+            std::vector<int> delays;        // vom Lade-Thread befüllt (nur unter mtx)
+            std::vector<int> shown;         // Verzögerungen der hochgeladenen Bilder (nur Hauptthread)
             std::atomic<bool> done{ false }, failed{ false }, cancel{ false };
             int total = 0;
     };

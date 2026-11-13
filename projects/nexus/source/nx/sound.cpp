@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <sys/stat.h>
 
 namespace nexus {
 
@@ -99,7 +100,13 @@ namespace nexus {
         auto f = this->files.find(ev);
         if(f == this->files.end()) {
             const auto path = FindFile(ev);
-            Mix_Chunk *c = path.empty() ? nullptr : Mix_LoadWAV(path.c_str());
+            // Klänge liegen komplett im Speicher: zu große Dateien (z. B. ganze Lieder) nicht laden
+            Mix_Chunk *c = nullptr;
+            if(!path.empty()) {
+                struct stat st;
+                if(stat(path.c_str(), &st) == 0 && st.st_size > 0 && st.st_size <= 4 * 1024 * 1024) c = Mix_LoadWAV(path.c_str());
+                else Log("Sound %s übersprungen (größer als 4 MB): %s", ev.c_str(), path.c_str());
+            }
             f = this->files.emplace(ev, c).first;
         }
         if(f->second) return f->second;
@@ -118,6 +125,7 @@ namespace nexus {
     }
 
     void Sound::SetMusic(const std::string &which) {
+        if(which != this->wantMusic) this->musicRetry = 0;
         this->wantMusic = which;
         this->musicCheck = 0;
     }
@@ -128,9 +136,11 @@ namespace nexus {
         const auto path = FindFile(this->wantMusic == "lock" ? "lock" : "bgm");
         if(path.empty()) return;
         this->music = Mix_LoadMUS(path.c_str());
-        if(!this->music) return;
+        // defekte oder nicht unterstützte Datei: nicht jede Sekunde neu versuchen
+        if(!this->music) { this->musicRetry = 30; Log("Musik nicht abspielbar: %s", path.c_str()); return; }
         Mix_VolumeMusic(static_cast<int>(this->bgmVolume * 128));
         if(Mix_FadeInMusic(this->music, -1, 600) == 0) this->playingMusic = this->wantMusic;
+        else { this->musicRetry = 30; Mix_FreeMusic(this->music); this->music = nullptr; }
     }
 
     void Sound::Tick(double dt) {
@@ -138,6 +148,7 @@ namespace nexus {
         this->musicCheck -= dt;
         if(this->musicCheck > 0) return;
         this->musicCheck = 1.0;
+        if(this->musicRetry > 0) { this->musicRetry -= 1.0; return; }
         if(!this->bgm || this->wantMusic.empty()) return;
         // Sperrbildschirm ohne eigene lock-Datei spielt die Menü-Musik weiter
         const bool lockFile = !FindFile("lock").empty();

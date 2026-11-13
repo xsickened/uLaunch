@@ -91,6 +91,7 @@ namespace nexus {
             struct TextEntry { SDL_Texture *tex; int w, h; uint64_t used; };
             std::unordered_map<std::string, TextEntry> textCache;
             uint64_t frame = 0;
+            size_t textBytes = 0;   // Speicher aller Schrift-Texturen
             std::vector<SDL_Vertex> vbuf;
             double curZoom = 1.0;
             std::unordered_map<std::string, SDL_Texture *> sprites;

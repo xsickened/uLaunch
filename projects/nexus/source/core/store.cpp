@@ -293,11 +293,24 @@ namespace nexus {
     void Log(const char *fmt, ...) {
         if(g_LogPath.empty()) return;
         std::lock_guard<std::mutex> lk(g_LogMtx);   // mehrere Threads schreiben ins Protokoll
+        // auch während langer Sitzungen begrenzen (alle 200 Einträge prüfen)
+        static int writes = 0;
+        if(++writes >= 200) {
+            writes = 0;
+            struct stat st;
+            if(stat(g_LogPath.c_str(), &st) == 0 && st.st_size > 512 * 1024) {
+                const auto old = g_LogPath + ".1";
+                std::remove(old.c_str());
+                std::rename(g_LogPath.c_str(), old.c_str());
+            }
+        }
         FILE *f = std::fopen(g_LogPath.c_str(), "ab");
         if(!f) return;
         const std::time_t t = std::time(nullptr);
         char ts[32];
-        std::strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", std::localtime(&t));
+        std::tm tmv {};
+        localtime_r(&t, &tmv);   // threadsicher (std::localtime teilt einen Puffer)
+        std::strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", &tmv);
         std::fprintf(f, "[%s] ", ts);
         va_list args;
         va_start(args, fmt);

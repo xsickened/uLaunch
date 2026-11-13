@@ -173,6 +173,12 @@ namespace nexus::plat {
         return true;
     }
 
+    uint64_t FreeMemory() {
+        u64 total = 0, used = 0;
+        if(R_FAILED(svcGetInfo(&total, InfoType_TotalMemorySize, CUR_PROCESS_HANDLE, 0)) || R_FAILED(svcGetInfo(&used, InfoType_UsedMemorySize, CUR_PROCESS_HANDLE, 0)) || total <= used) return 0;
+        return total - used;
+    }
+
     bool PlayStats(uint64_t tid, const std::string &userHex, PlayInfo &out) {
         static int pdmState = 0;   // 0 = unversucht, 1 = bereit, -1 = nicht verfügbar
         if(pdmState == 0) pdmState = R_SUCCEEDED(pdmqryInitialize()) ? 1 : -1;

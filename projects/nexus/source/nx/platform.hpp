@@ -41,5 +41,7 @@ namespace nexus::plat {
     // Spielzeit aus der Systemstatistik (pdm). userHex = 32-stellige Benutzer-ID oder leer (alle Benutzer)
     struct PlayInfo { uint64_t minutes = 0; uint32_t launches = 0; uint64_t lastPlayed = 0; };
     bool PlayStats(uint64_t tid, const std::string &userHex, PlayInfo &out);
+    // Freier Speicher des eigenen Prozesses in Bytes (0 = unbekannt)
+    uint64_t FreeMemory();
 
 }
