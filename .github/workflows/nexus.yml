@@ -2,11 +2,11 @@ name: Build NEXUS HOME
 
 on:
   push:
-    branches: [ nexus-home ]
+    branches: [ symbolize ]
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   nexus:
@@ -57,76 +57,7 @@ jobs:
           make -j$(nproc) LIBNX=/tmp/libnx/nx/ umenu
         fi
 
-    - name: SD-Paket zusammenstellen
+    - name: Absturzadressen aufloesen
       run: |
-        mkdir -p out/switch/nexus out/nexus/art/backgrounds out/nexus/sounds out/nexus/themes out/ulaunch/bin/uMenu
-        cat > out/nexus/sounds/LIESMICH.txt << 'EOF'
-        Eigene Sounds (ersetzen die eingebauten Klänge), Formate: .wav, .ogg oder .mp3
-          move, select, back, open, launch, lock, unlock, error, toggle   (z. B. select.wav)
-        Musik (Schleife):
-          bgm.mp3   im Menü
-          lock.mp3  auf dem Sperrbildschirm (ohne diese Datei läuft bgm weiter)
-        Ein- und Ausschalten: Einstellungen > Sounds & Musik
-        EOF
-        cat > out/nexus/themes/LIESMICH.txt << 'EOF'
-        Eigene Themes (.json) und Theme-Pakete (.nxtheme, mit Bildern) liegen hier.
-        Ein Paket von jemand anderem einfach in diesen Ordner kopieren, dann in NEXUS:
-        Einstellungen > Themes & System > Eigene Themes > Paket auswählen.
-        EOF
-        cp projects/nexus/nexus.nro out/switch/nexus/nexus.nro
-        cp SdOut/ulaunch/bin/uMenu/main SdOut/ulaunch/bin/uMenu/main.npdm SdOut/ulaunch/bin/uMenu/romfs.bin out/ulaunch/bin/uMenu/
-        cat > out/nexus/art/LIESMICH.txt << 'EOF'
-        Eigene Bilder pro Titel (Titel-ID siehe Kontextmenü X in NEXUS):
-          sdmc:/nexus/art/<TITEL-ID>/grid.jpg   Cover (nur Kachel)
-          sdmc:/nexus/art/<TITEL-ID>/hero.jpg   Hintergrund (Ebene 1)
-          sdmc:/nexus/art/<TITEL-ID>/logo.png   schwebendes Logo (Ebene 3, transparent)
-        Weitere Bilder (beliebige Namen) im selben Ordner lassen sich in NEXUS auswählen:
-          X > Bilder wählen > Cover / Hintergrund / Logo
-        Eigene Hintergründe für Home, Sperrbildschirm und Profilauswahl:
-          sdmc:/nexus/art/backgrounds/  (JPG oder PNG, ideal 1280x720 oder 1920x1080)
-          Auswahl: Einstellungen > Home-Hintergrund / Sperrbildschirm / Profilauswahl > Art "Eigenes Bild" > Bild
-          Screenshots aus dem Album stehen dort ebenfalls zur Auswahl.
-        EOF
-        cat > out/nexus/keys-BEISPIEL.txt << 'EOF'
-        # Schlüssel bequem am PC eintragen: Datei in "keys.txt" umbenennen und Werte einsetzen.
-        # NEXUS übernimmt sie beim nächsten Öffnen und löscht keys.txt danach.
-        # SteamGridDB: steamgriddb.com > Einstellungen > API
-        sgdb=
-        # RetroAchievements: retroachievements.org > Einstellungen > Keys (Web-API-Key)
-        ra_user=
-        ra_key=
-        EOF
-        cat > out/NEXUS-LIESMICH.txt << 'EOF'
-        NEXUS HOME - Installation (setzt installiertes uLaunch 1.2.3 voraus)
-        1. Sicherung: Ordner sdmc:/ulaunch/bin/uMenu am PC kopieren (z. B. nach uMenu-original).
-        2. Ordner "ulaunch", "nexus" und "switch" aus diesem Paket in die oberste Ebene der SD-Karte kopieren.
-        3. Switch neu starten.
-        Notausgang:
-          - L gedrückt halten, während das Menü erscheint -> klassisches uLaunch (nur diese Sitzung)
-          - Im NEXUS-Menü (+) -> "Klassisches uLaunch-Menü"; zurück mit ZL halten + ZR
-          - Nach zwei Fehlstarts schaltet NEXUS automatisch auf klassisch um
-          - Komplett zurück: gesicherten uMenu-Ordner zurückkopieren oder uLaunch-v1.2.3.zip erneut aufspielen
-        Online (optional): SteamGridDB-Bilder und RetroAchievements brauchen einen Schlüssel,
-          siehe nexus/keys-BEISPIEL.txt oder Einstellungen > Bibliothek & SteamGridDB / RetroAchievements.
-        EOF
-
-    - name: ZIP für die SD-Karte
-      run: cd out && zip -r ../NEXUS-HOME-SD.zip .
-
-    - name: Release „nexus-latest“ aktualisieren
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: nexus-latest
-        name: NEXUS HOME – aktueller Build
-        prerelease: true
-        files: NEXUS-HOME-SD.zip
-        body: |
-          NEXUS HOME (Commit ${{ github.sha }}) – ersetzt die Oberfläche von uLaunch 1.2.3 (Atmosphère 1.10.2 / FW 21.2.0).
-          Installation und Notausgang: siehe NEXUS-LIESMICH.txt im ZIP.
-          Enthält zusätzlich die Test-App switch/nexus/nexus.nro.
-
-    - uses: actions/upload-artifact@v4
-      with:
-        name: NEXUS-HOME-SD
-        path: out/
-        if-no-files-found: error
+        E=$(find projects/uMenu -name '*.elf' | head -1); echo "ELF: $E"
+        for a in 0x8FEA14 0x8FEA08 0x8CE7B4 0x7A525C 0x7F31F4 0x7DA2A8; do echo "== $a"; $DEVKITPRO/devkitA64/bin/aarch64-none-elf-addr2line -f -C -i -e "$E" $a; done
