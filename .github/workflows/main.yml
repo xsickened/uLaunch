@@ -1,7 +1,10 @@
 
 name: Build uLaunch
 
-on: [push, pull_request]
+on:
+  push:
+    branches-ignore: [ nexus-home ]
+  pull_request:
 
 jobs:
   uLaunch:

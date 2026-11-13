@@ -1,0 +1,54 @@
+name: Build NEXUS HOME
+
+on:
+  push:
+    branches: [ nexus-home ]
+  workflow_dispatch:
+
+jobs:
+  nexus:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkita64:latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Abhängigkeiten
+      run: |
+        git config --global --add safe.directory "$GITHUB_WORKSPACE"
+        git submodule update --init --depth 1 libs/json
+
+    - name: Kern-Tests (Schema, Bibliothek, Speichern, Anordnungen)
+      run: |
+        command -v g++ || (sudo -n apt-get update && sudo -n apt-get install -y g++) || (apt-get update && apt-get install -y g++)
+        g++ -std=gnu++20 -O1 -Ilibs/json/single_include -Iprojects/nexus/source/core nexus/tests/core_test.cpp projects/nexus/source/core/*.cpp -o /tmp/core_test
+        /tmp/core_test
+
+    - name: NRO bauen
+      run: |
+        if ! make -C projects/nexus -j$(nproc); then
+          echo "::warning::Build mit stabiler libnx fehlgeschlagen – versuche libnx master (wie uLaunch)"
+          git clone --depth 1 https://github.com/switchbrew/libnx /tmp/libnx
+          make -C /tmp/libnx -j$(nproc)
+          cp -r /tmp/libnx/nx/external/bsd/include /tmp/libnx/nx
+          make -C projects/nexus clean
+          make -C projects/nexus -j$(nproc) LIBNX=/tmp/libnx/nx
+        fi
+
+    - name: SD-Paket zusammenstellen
+      run: |
+        mkdir -p out/switch/nexus out/nexus/art
+        cp projects/nexus/nexus.nro out/switch/nexus/nexus.nro
+        cat > out/nexus/art/LIESMICH.txt << 'EOF'
+        Eigene Bilder pro Titel (Titel-ID siehe Kontextmenü X in NEXUS):
+          sdmc:/nexus/art/<TITEL-ID>/grid.jpg   Cover (nur Kachel)
+          sdmc:/nexus/art/<TITEL-ID>/hero.jpg   Hintergrund (Ebene 1)
+          sdmc:/nexus/art/<TITEL-ID>/logo.png   schwebendes Logo (Ebene 3, transparent)
+        Danach in NEXUS: X > Eigene Bilder > Bilder neu einlesen.
+        EOF
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: NEXUS-HOME-SD
+        path: out/
+        if-no-files-found: error

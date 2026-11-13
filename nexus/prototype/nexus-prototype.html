@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>NEXUS HOME – PC-Prototyp</title>
+<style>
+:root{--accent:#3ee0c8;--ui:#0b0f17;--panel:rgba(14,18,28,.93);--text:#eef2f7;--muted:#93a0b4;--rowcur:rgba(255,255,255,.1);--font:"Segoe UI",system-ui,sans-serif;--tileMs:260ms;--ease:cubic-bezier(.2,.8,.2,1);--iconScale:1}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#05070b;color:#eef2f7;font-family:system-ui,sans-serif;overflow:hidden}
+#wrap{position:fixed;inset:0;overflow:hidden}
+#stage{position:absolute;left:50%;top:0;width:1280px;height:720px;overflow:hidden;background:var(--ui);transform-origin:top center;border-radius:6px;color:var(--text);font-family:var(--font)}
+#stage.light{--panel:rgba(246,248,251,.94);--text:#12161d;--muted:#5b6575;--rowcur:rgba(0,0,0,.08)}
+.layer{position:absolute;inset:0}
+#L1{z-index:1}#L2{z-index:2}#L3{z-index:3}#L4{z-index:4}#L5{z-index:5}#L6{z-index:6}
+/* Ebene 1: Home-Hintergrund + Hero */
+#L1{overflow:hidden}
+#homeBg{position:absolute;inset:0;background-size:cover;background-position:center}
+#homeBg.anim{background-size:400% 400%;animation:bgshift 24s ease infinite}
+@keyframes bgshift{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+.hero{position:absolute;inset:-30px;background-size:cover;background-position:center;opacity:0;transition:opacity var(--heroMs,450ms) ease, transform 600ms ease}
+.hero.on{opacity:1}
+.hero.kb.on{animation:kb 18s ease-in-out infinite alternate}
+@keyframes kb{from{scale:1}to{scale:1.12}}
+/* Ebene 2 */
+#L2{pointer-events:none}
+#dim{position:absolute;inset:0;background:#000}
+#grad{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 35%,var(--ui) 100%),linear-gradient(90deg,rgba(0,0,0,.5) 0%,rgba(0,0,0,0) 55%)}
+/* Ebene 3: Logo */
+#L3{pointer-events:none}
+#logo{position:absolute;opacity:0;transition:opacity 380ms ease, transform 420ms cubic-bezier(.2,.8,.2,1)}
+#logo.on{opacity:var(--logoOpacity,1)}
+#logo img{display:block;width:100%;height:auto}
+#logo.shadow img{filter:drop-shadow(0 6px 18px rgba(0,0,0,.6))}
+#logo.float img{animation:float 5s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+#safeArea{position:absolute;border:1px dashed rgba(255,80,80,.7);background:rgba(255,80,80,.06);display:none}
+/* Ebene 4 */
+#topbar{position:absolute;left:0;right:0;top:0;height:56px;display:flex;align-items:center;padding:0 40px;gap:10px;z-index:2}
+#topbar.fade{background:linear-gradient(180deg,rgba(0,0,0,.55),rgba(0,0,0,0))}
+#stage.light #topbar.fade{background:linear-gradient(180deg,rgba(255,255,255,.6),rgba(255,255,255,0))}
+#topbar.solid{background:var(--ui)}
+#topbar.glass{background:rgba(127,127,127,.18);backdrop-filter:blur(10px)}
+#tabs{display:flex;gap:4px;flex:1}
+#topbar.al-center #tabs{justify-content:center}
+#topbar.al-right #tabs{justify-content:flex-end}
+.tab{display:flex;align-items:center;gap:7px;padding:7px 14px;border-radius:20px;font-size:14px;color:var(--muted);cursor:pointer;white-space:nowrap}
+.tab.active{background:rgba(127,127,127,.22);color:var(--text);box-shadow:inset 0 -2px 0 var(--accent)}
+.ico{width:calc(20px * var(--iconScale));height:calc(20px * var(--iconScale));flex:none}
+#status{display:flex;gap:14px;align-items:center;font-size:14px;color:var(--text)}
+#crumb{position:absolute;left:60px;top:62px;font-size:13px;color:var(--muted)}
+#tiles,#ringWrap{position:absolute;inset:0;perspective:1400px;perspective-origin:50% 60%}
+.tile{position:absolute;left:0;top:0;cursor:pointer;transition:transform var(--tileMs) var(--ease), opacity var(--tileMs) var(--ease), width var(--tileMs) var(--ease), height var(--tileMs) var(--ease);transform-origin:center;will-change:transform}
+#tiles.noanim .tile,#ringWrap.noanim #ring{transition:none!important}
+.tile .in{position:absolute;inset:0;overflow:hidden;background:#1a2130}
+.tile img.cover{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none}
+.tile .ttl{position:absolute;left:0;right:0;bottom:0;padding:16px 8px 6px;font-size:12px;color:#fff;background:linear-gradient(0deg,rgba(0,0,0,.8),rgba(0,0,0,0));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile .badge{position:absolute;right:6px;top:6px;font-size:10px;padding:2px 6px;border-radius:8px;background:rgba(0,0,0,.65);color:#fff}
+.tile .fav{position:absolute;left:6px;top:4px;font-size:14px;color:#ffd447;text-shadow:0 1px 3px #000}
+.tile .sel{position:absolute;inset:0;border:3px solid #ffd447;background:rgba(255,212,71,.15)}
+.tile.li .in{display:flex;align-items:center;gap:14px;background:rgba(127,127,127,.16);backdrop-filter:blur(6px)}
+.tile.li img.cover{position:static;width:auto;height:100%;aspect-ratio:1;flex:none}
+.tile.li .nm{font-size:16px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile.li .kd{font-size:12px;color:var(--muted)}
+.tile.li .badge{top:50%;transform:translateY(-50%)}
+.in.idle-float{animation:ifloat 4s ease-in-out infinite}
+.in.idle-breathe{animation:ibreathe 4s ease-in-out infinite}
+.in.idle-sway{animation:isway 5s ease-in-out infinite}
+@keyframes ifloat{0%,100%{translate:0 0}50%{translate:0 -6px}}
+@keyframes ibreathe{0%,100%{scale:1}50%{scale:1.025}}
+@keyframes isway{0%,100%{rotate:-1deg}50%{rotate:1deg}}
+.in.wobble{animation:wobble .5s ease}
+@keyframes wobble{0%,100%{rotate:0deg}25%{rotate:-3deg}75%{rotate:3deg}}
+.ra-bar{position:absolute;left:8px;right:8px;bottom:7px;height:5px;border-radius:3px;background:rgba(0,0,0,.55)}
+.ra-bar i{display:block;height:100%;border-radius:3px;background:#5fd3ff}
+.ra-bar.m i{background:#ffd447}
+.ra-pct{position:absolute;left:6px;bottom:6px;font-size:10px;padding:2px 6px;border-radius:8px;background:rgba(0,0,0,.72);color:#fff}
+.ra-pct.m{background:#ffd447;color:#000}
+#raInfo{position:absolute;font-size:15px;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.8);opacity:0;transition:opacity .35s;pointer-events:none}
+#raInfo.on{opacity:1}
+#raInfo .rb{height:5px;border-radius:3px;background:rgba(255,255,255,.25);margin-top:6px;width:240px;display:inline-block}
+#raInfo .rb i{display:block;height:100%;border-radius:3px;background:#5fd3ff}
+#raInfo.m .rb i{background:#ffd447}
+.empty{position:absolute;left:60px;top:300px;font-size:15px;color:var(--muted)}
+/* Ebene 5: Fokus */
+#L5{pointer-events:none}
+#ring{position:absolute;left:0;top:0;transition:transform var(--tileMs) var(--ease), width var(--tileMs) var(--ease), height var(--tileMs) var(--ease), opacity .2s;transform-origin:center;display:none}
+#ring.box{box-shadow:0 0 0 3px var(--accent),0 0 0 6px rgba(0,0,0,.45),0 0 24px var(--accent)}
+#ring.glow.box{box-shadow:0 0 0 3px var(--accent),0 0 46px 8px var(--accent)}
+#ring.pulse{animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+#ring svg{position:absolute;inset:-3px;width:calc(100% + 6px);height:calc(100% + 6px);overflow:visible}
+#moveBanner{position:absolute;left:50%;top:70px;transform:translateX(-50%);background:var(--accent);color:#000;font-weight:600;padding:6px 16px;border-radius:16px;font-size:13px;display:none}
+#hints{position:absolute;left:0;right:0;bottom:0;height:36px;display:flex;align-items:center;justify-content:flex-end;gap:18px;padding:0 40px;font-size:13px;color:var(--muted);background:rgba(0,0,0,.45)}
+#stage.light #hints{background:rgba(255,255,255,.6)}
+#hints.plain{background:none}
+.k{display:inline-block;min-width:20px;height:20px;line-height:20px;text-align:center;border-radius:10px;background:var(--text);color:var(--ui);font-size:11px;margin-right:5px;padding:0 4px;font-weight:700}
+#layerLbl{position:absolute;left:290px;bottom:8px;font-size:11px;color:var(--muted);opacity:.7}
+/* Ebene 6 */
+#L6{pointer-events:none}
+#L6>*{pointer-events:auto}
+.shade{position:absolute;inset:0;background:rgba(0,0,0,.45)}
+.panel{position:absolute;background:var(--panel);color:var(--text);border:1px solid rgba(127,127,127,.25);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.5);backdrop-filter:blur(8px);display:flex;flex-direction:column}
+#stage.ps-solid .panel{backdrop-filter:none;background:var(--ui)}
+#stage.ps-outline .panel{background:rgba(0,0,0,.25);border:2px solid var(--accent)}
+.panel h2{margin:0;padding:16px 20px 6px;font-size:18px;font-weight:600}
+.panel .sub{padding:0 20px 8px;font-size:12px;color:var(--muted)}
+.rows{overflow:auto;padding:4px 10px 10px;flex:1}
+.row{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-radius:8px;font-size:14px;cursor:pointer;gap:10px;min-height:38px}
+.row.head{color:var(--accent);font-size:12px;text-transform:uppercase;letter-spacing:.08em;cursor:default;padding-top:14px;min-height:0}
+.row.cur{background:var(--rowcur);box-shadow:inset 3px 0 0 var(--accent)}
+.row .val{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;text-align:right}
+.row .arr{opacity:0;cursor:pointer;padding:0 4px;user-select:none}
+.row.cur .arr{opacity:.9}
+.row .sw{width:18px;height:18px;border-radius:4px;border:1px solid rgba(127,127,127,.6)}
+.btnbar{display:flex;gap:12px;flex-wrap:wrap;padding:10px 16px 14px;border-top:1px solid rgba(127,127,127,.15);font-size:12px;color:var(--muted)}
+.grid6{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:10px 16px;overflow:auto}
+.grid6 .opt{border-radius:8px;overflow:hidden;border:2px solid transparent;cursor:pointer;background:#111;aspect-ratio:var(--ar,16/9)}
+.grid6 .opt img{width:100%;height:100%;object-fit:contain}
+.grid6 .opt.cover img{object-fit:cover}
+.grid6 .opt.cur{border-color:var(--accent);box-shadow:0 0 14px var(--accent)}
+.osk{display:grid;grid-template-columns:repeat(10,1fr);gap:5px;padding:8px 16px}
+.osk div{background:rgba(127,127,127,.18);border-radius:6px;text-align:center;padding:8px 0;font-size:14px;cursor:pointer}
+.osk div.cur{background:var(--accent);color:#000}
+.oskIn{margin:6px 16px;padding:10px 12px;border-radius:8px;background:rgba(0,0,0,.35);border:1px solid rgba(127,127,127,.3);font-size:16px;min-height:42px;word-break:break-all}
+/* Sperrbildschirm */
+.lock{position:absolute;inset:0;background-size:cover;background-position:center;transition:transform .55s cubic-bezier(.6,0,.3,1),opacity .45s ease;overflow:hidden;cursor:pointer}
+.lock .ld{position:absolute;inset:0;background:#000}
+.lock .clk{position:absolute;font-weight:300;line-height:1;text-shadow:0 4px 24px rgba(0,0,0,.4)}
+.lock .dt{font-size:22px;margin-top:10px;font-weight:400;letter-spacing:.02em}
+.lock .lh{position:absolute;left:0;right:0;bottom:46px;text-align:center;font-size:15px;opacity:.85;animation:pulse 2.2s ease-in-out infinite}
+.lock .lb{position:absolute;right:40px;top:28px;font-size:15px;display:flex;gap:10px;align-items:center}
+#toast{position:absolute;left:50%;bottom:52px;transform:translateX(-50%) translateY(20px);background:var(--panel);color:var(--text);border:1px solid rgba(127,127,127,.25);padding:9px 16px;border-radius:10px;font-size:13px;opacity:0;transition:all .25s;pointer-events:none;max-width:900px;text-align:center;z-index:20}
+#toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+#help{position:fixed;left:10px;bottom:10px;z-index:9;font-size:12px;color:#7d8aa0;background:rgba(0,0,0,.6);padding:8px 10px;border-radius:8px;line-height:1.5;max-width:330px}
+#help summary{cursor:pointer;color:#cfd6e2}
+/* Touch-Gamepad */
+#pad{position:fixed;left:0;right:0;bottom:0;display:none;justify-content:space-between;align-items:center;padding:10px 16px calc(12px + env(safe-area-inset-bottom));gap:10px;user-select:none;-webkit-user-select:none;touch-action:none;z-index:10}
+body.touch #pad{display:flex}
+body.touch #help{display:none}
+#pad .dp,#pad .fb{display:grid;grid-template-columns:repeat(3,52px);grid-template-rows:repeat(3,52px);gap:4px}
+#pad .mid{display:flex;flex-direction:column;gap:10px;align-items:center}
+#pad button{all:unset;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);color:#fff;font:600 16px system-ui;border-radius:12px;-webkit-tap-highlight-color:transparent}
+#pad button.r{border-radius:50%}
+#pad button.sh{padding:8px 14px;border-radius:16px;font-size:14px}
+#pad button.dn{background:#3ee0c8;color:#000}
+body.touch.land #pad{padding:6px 10px;pointer-events:none}
+body.touch.land #pad>*{pointer-events:auto;opacity:.75}
+body.touch.land #pad .dp,body.touch.land #pad .fb{grid-template-columns:repeat(3,40px);grid-template-rows:repeat(3,40px)}
+#rot{display:none;text-align:center;color:#93a0b4;font:13px system-ui;padding:6px}
+body.touch:not(.land) #rot{display:block}
+#fatal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:#05070b;color:#eef2f7;font:15px system-ui;z-index:99;flex-direction:column;gap:14px;text-align:center;padding:20px}
+#fatal button{font:inherit;padding:10px 18px;border-radius:10px;border:0;background:#3ee0c8;color:#000;cursor:pointer}
+</style>
+</head>
+<body>
+<div id="wrap"><div id="stage">
+  <div class="layer" id="L1"><div id="homeBg"></div><div class="hero" id="heroA"></div><div class="hero" id="heroB"></div></div>
+  <div class="layer" id="L2"><div id="dim"></div><div id="grad"></div></div>
+  <div class="layer" id="L3"><div id="safeArea"></div><div id="logo"><img alt=""></div><div id="raInfo"></div></div>
+  <div class="layer" id="L4">
+    <div id="tiles"></div>
+    <div id="topbar"><div id="tabs"></div><div id="status"></div></div>
+    <div id="crumb"></div>
+  </div>
+  <div class="layer" id="L5"><div id="ringWrap"><div id="ring"></div></div><div id="moveBanner"></div>
+    <div id="hints"></div><div id="layerLbl">Ebenen: 1 Hintergrund · 2 Effekte · 3 Logo · 4 Kacheln · 5 Fokus · 6 Dialoge</div></div>
+  <div class="layer" id="L6"></div>
+  <div id="toast"></div>
+</div></div>
+<details id="help"><summary>Steuerung (Tastatur / Controller / Maus)</summary>
+Pfeile/WASD: Navigation · <b>Enter</b>=A · <b>Esc/Backspace</b>=B · <b>X</b>=Optionen · <b>Y</b>=Favorit · <b>Q/E</b>=L/R · <b>P</b>=Sperren<br>
+Gamepad mit Nintendo-Belegung (− = Sperren). Maus: Klick = Fokus, zweiter Klick = A, Rechtsklick = X, Drag-and-drop zum Sortieren/in Ordner.<br>
+Alle Bilder sind generierte Testgrafiken; SteamGridDB ist mit Offline-Testdaten simuliert. #safe in der Adresse startet im abgesicherten Modus.</details>
+<div id="pad">
+  <div class="dp"><span></span><button data-k="up">▲</button><span></span><button data-k="left">◀</button><span></span><button data-k="right">▶</button><span></span><button data-k="down">▼</button><span></span></div>
+  <div class="mid"><div style="display:flex;gap:8px"><button class="sh" data-k="L">L</button><button class="sh" data-k="LOCK">⏻</button><button class="sh" data-k="R">R</button></div><div id="rot">Tipp: Handy quer halten</div></div>
+  <div class="fb"><span></span><button class="r" data-k="X">X</button><span></span><button class="r" data-k="Y">Y</button><span></span><button class="r" data-k="A">A</button><span></span><button class="r" data-k="B">B</button><span></span></div>
+</div>
+<div id="fatal"><div>NEXUS konnte die Oberfläche nicht darstellen.</div><div id="fatalMsg" style="color:#93a0b4;font-size:12px"></div><button id="fatalBtn">Darstellung zurücksetzen (Bibliothek bleibt erhalten)</button></div>
+<input type="file" id="fileIn" accept="image/png,image/jpeg" style="display:none">
+<input type="file" id="jsonIn" accept="application/json" style="display:none">
+<script>
+"use strict";
+/* =====================================================================
+   NEXUS HOME PC-Prototyp v0.2  ·  Datenformat NexusData schema 2
+   SPEC = einzige Quelle für Einstellungen: erzeugt Menü UND validiert
+   jede geladene Konfiguration (wird 1:1 nach C++ übernommen).
+   ===================================================================== */
+const U = 24, SW = 1280, SH = 720, HINT_H = 36;
+const SIZES = {S:5, M:7, L:9, XL:11};
+const RATIOS = {"1:1":1, "2:3":2/3, "3:2":1.5, "4:3":4/3, "16:9":16/9};
+const SECTION_NAMES = {start:"Startseite", all:"Alle Spiele", fav:"Favoriten", folders:"Ordner", recent:"Zuletzt gespielt", homebrew:"Homebrew", settings:"Einstellungen"};
+const PALETTE = ["#3ee0c8","#ff5d73","#ffb347","#7c8cff","#5fd35f","#e86cff","#ffffff","#000000","#222831","#00a2ff","#ffd447"];
+const FONTS = ["Segoe UI","Georgia","Verdana","Trebuchet MS","Courier New","Impact"];
+const $ = s => document.querySelector(s);
+const clone = o => JSON.parse(JSON.stringify(o));
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const getP = (o,p) => p.split(".").reduce((a,k)=>a==null?a:a[k], o);
+const setP = (o,p,v) => { const ks=p.split("."); let a=o; for(let i=0;i<ks.length-1;i++){ if(typeof a[ks[i]]!=="object"||a[ks[i]]===null) a[ks[i]]={}; a=a[ks[i]]; } a[ks[ks.length-1]]=v; };
+function uuid(){ return (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(16).slice(2)+Date.now().toString(16)).replace(/-/g,"").slice(0,8); }
+function hash(s){ let h=2166136261; for(const c of String(s)){ h^=c.charCodeAt(0); h=Math.imul(h,16777619);} return h>>>0; }
+function rng(seed){ return ()=>{ seed|=0; seed=seed+0x6D2B79F5|0; let t=Math.imul(seed^seed>>>15,1|seed); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function hsl(h,s,l){ return `hsl(${(h%360+360)%360} ${s}% ${l}%)`; }
+function svgURI(svg){ return "data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svg); }
+function lum(hex){ const n=parseInt(hex.slice(1),16); return (0.299*(n>>16&255)+0.587*(n>>8&255)+0.114*(n&255))/255; }
+
+/* ---------------- Symbole (eigene, generische Formen) ---------------- */
+const ICONS = {
+  start:"M3 11 12 3l9 8v10h-6v-6H9v6H3z", all:"M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
+  fav:"M12 3l2.8 5.9 6.2.8-4.6 4.3 1.2 6.2L12 17.3 6.4 20.2l1.2-6.2L3 9.7l6.2-.8z", folders:"M3 6h6l2 2h10v11H3z",
+  recent:"M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l4 2", homebrew:"M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3",
+  settings:"M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1",
+  wifi:"M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01", lock:"M6 11h12v10H6zM8 11V8a4 4 0 0 1 8 0v3"
+};
+function icon(name, color){ const st = S.data.settings.icons.style; const c = color||"currentColor";
+  return `<svg class="ico" viewBox="0 0 24 24" fill="${st==="filled"?c:"none"}" fill-opacity="${st==="filled"?.35:0}" stroke="${c}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${ICONS[name]}"/></svg>`; }
+function batteryIcon(color){ return `<svg class="ico" viewBox="0 0 28 24" style="width:calc(26px * var(--iconScale))"><rect x="2" y="6" width="21" height="12" rx="3" fill="none" stroke="${color||"currentColor"}" stroke-width="2"/><rect x="5" y="9" width="13" height="6" rx="1" fill="${color||"currentColor"}"/><rect x="24" y="10" width="2.5" height="4" rx="1" fill="${color||"currentColor"}"/></svg>`; }
+
+/* ---------------- SPEC: alle Einstellungen ---------------- */
+const MODES = ["grid","rows","carousel","vgrid","arc","ring","coverflow","list","stack","honeycomb","wave"];
+const MODE_LABELS = ["Raster","Reihen","Karussell","Vertikal (Mauerwerk)","Halbkreis rotierend","Ring 3D","Cover Flow","Liste","Stapel","Wabe","Welle"];
+const isMode = (...m) => () => m.includes(S.data.settings.layout.mode);
+const pct = v=>Math.round(v*100)+" %", px = v=>v+" px", ms = v=>v+" ms", deg = v=>v+"°";
+const SPEC = [
+  // Darstellung
+  {g:"look", p:"theme.textColor", l:"Schriftfarbe", t:"enum", o:["white","black","auto"], ol:["Weiß","Schwarz","Automatisch"], d:"white"},
+  {g:"look", p:"theme.accent", l:"Akzentfarbe", t:"color", d:"#3ee0c8"},
+  {g:"look", p:"theme.ui", l:"UI-Grundfarbe", t:"enum", o:["#0b0f17","#000000","#120a1f","#0f1a14","#1a1a1a","#e9edf2"], ol:["Nachtblau","Schwarz","Violett","Waldgrün","Anthrazit","Hell"], d:"#0b0f17"},
+  {g:"look", p:"theme.font", l:"Schriftart", t:"enum", o:FONTS, d:"Segoe UI"},
+  {g:"look", p:"theme.panelStyle", l:"Menü-Stil", t:"enum", o:["glass","solid","outline"], ol:["Glas","Deckend","Umrandet"], d:"glass"},
+  // Kopfzeile & Symbole
+  {g:"top", p:"topbar.visible", l:"Kopfzeile anzeigen", t:"bool", d:true},
+  {g:"top", p:"topbar.tabStyle", l:"Bereiche als", t:"enum", o:["text","icons","both"], ol:["Nur Text","Nur Symbole","Symbol + Text"], d:"text"},
+  {g:"top", p:"topbar.align", l:"Ausrichtung", t:"enum", o:["left","center","right"], ol:["Links","Mitte","Rechts"], d:"left"},
+  {g:"top", p:"topbar.bg", l:"Hintergrund", t:"enum", o:["fade","solid","glass","none"], ol:["Verlauf","Deckend","Glas","Keiner"], d:"fade"},
+  {g:"top", p:"icons.color", l:"Symbolfarbe", t:"enum", o:["text","white","black","accent"], ol:["Wie Schrift","Weiß","Schwarz","Akzent"], d:"text"},
+  {g:"top", p:"icons.style", l:"Symbolstil", t:"enum", o:["outline","filled"], ol:["Kontur","Gefüllt"], d:"outline"},
+  {g:"top", p:"icons.size", l:"Symbolgröße", t:"num", min:.8, max:1.6, step:.1, f:pct, d:1},
+  {g:"top", p:"topbar.showClock", l:"Uhrzeit", t:"bool", d:true},
+  {g:"top", p:"topbar.clock24", l:"24-Stunden-Format", t:"bool", d:true},
+  {g:"top", p:"topbar.showDate", l:"Datum", t:"bool", d:false},
+  {g:"top", p:"topbar.showWifi", l:"WLAN-Symbol", t:"bool", d:true},
+  {g:"top", p:"topbar.showBattery", l:"Akku-Symbol", t:"bool", d:true},
+  {g:"top", p:"topbar.batteryPct", l:"Akku in Prozent", t:"bool", d:true},
+  {g:"top", p:"hints.visible", l:"Tastenhinweise unten", t:"bool", d:true},
+  {g:"top", p:"hints.style", l:"Hinweis-Stil", t:"enum", o:["bar","plain"], ol:["Leiste","Schwebend"], d:"bar"},
+  {g:"top", p:"hints.layerLabel", l:"Ebenen-Beschriftung (Entwickler)", t:"bool", d:true},
+  // Anordnung
+  {g:"layout", p:"layout.mode", l:"Anordnung", t:"enum", o:MODES, ol:MODE_LABELS, d:"grid"},
+  {g:"layout", p:"layout.position", l:"Position (vertikal)", t:"enum", o:["bottom","center","top"], ol:["Unten","Mitte","Oben"], d:"bottom", w:()=>!vertical()},
+  {g:"layout", p:"layout.side", l:"Seite", t:"enum", o:["right","left","full"], ol:["Rechts","Links","Volle Breite"], d:"right", w:isMode("vgrid","list")},
+  {g:"layout", p:"layout.height", l:"Bereichshöhe", t:"num", min:5, max:16, step:1, f:v=>v*U+" px", d:11, w:()=>!vertical()},
+  {g:"layout", p:"layout.rowCount", l:"Anzahl Reihen", t:"num", min:1, max:4, step:1, d:2, w:isMode("rows")},
+  {g:"layout", p:"layout.columns", l:"Spalten", t:"num", min:2, max:8, step:1, d:4, w:isMode("vgrid")},
+  {g:"layout", p:"layout.gap", l:"Kachelabstand", t:"num", min:0, max:3, step:.5, f:v=>v*U+" px", d:1},
+  {g:"layout", p:"layout.uniform", l:"Einheitliche Kachelgröße", t:"bool", d:false},
+  {g:"layout", p:"layout.align", l:"Ausrichtung im Bereich", t:"enum", o:["start","center"], ol:["Links beginnend","Zentriert"], d:"start", w:isMode("grid","rows","honeycomb")},
+  {g:"layout", p:"layout.focusMode", l:"Scrollverhalten", t:"enum", o:["edge","center"], ol:["Am Rand scrollen","Fokus bleibt mittig"], d:"edge", w:isMode("grid","rows","honeycomb","vgrid","list")},
+  {g:"layout", p:"layout.wrap", l:"Endlos (am Ende umbrechen)", t:"bool", d:false, w:isMode("carousel","arc","coverflow","list","stack","wave")},
+  {g:"layout", p:"layout.arcDir", l:"Bogenrichtung", t:"enum", o:["up","down","left","right"], ol:["Rad unten (Bogen nach oben)","Rad oben (hängend)","Rad links","Rad rechts"], d:"up", w:isMode("arc")},
+  {g:"layout", p:"layout.arcRadius", l:"Radius", t:"num", min:300, max:1600, step:50, f:px, d:900, w:isMode("arc")},
+  {g:"layout", p:"layout.arcSpread", l:"Winkelabstand", t:"num", min:6, max:45, step:1, f:deg, d:16, w:isMode("arc")},
+  {g:"layout", p:"layout.rotateTiles", l:"Kacheln mitdrehen", t:"bool", d:true, w:isMode("arc")},
+  {g:"layout", p:"layout.ringRadius", l:"Ring-Radius", t:"num", min:250, max:800, step:25, f:px, d:480, w:isMode("ring")},
+  {g:"layout", p:"layout.tilt", l:"Neigung", t:"num", min:0, max:75, step:5, f:deg, d:45, w:isMode("coverflow","ring")},
+  {g:"layout", p:"layout.waveAmp", l:"Wellenhöhe", t:"num", min:0, max:140, step:10, f:px, d:50, w:isMode("wave")},
+  {g:"layout", p:"layout.waveFreq", l:"Wellenlänge", t:"num", min:.2, max:1.6, step:.1, f:v=>(+v).toFixed(1), d:.7, w:isMode("wave")},
+  {g:"layout", p:"layout.stackOffset", l:"Stapelversatz", t:"num", min:10, max:80, step:5, f:px, d:34, w:isMode("stack")},
+  {g:"layout", p:"layout.sideScale", l:"Größe der Nachbarn", t:"num", min:.4, max:1, step:.05, f:pct, d:.82, w:isMode("carousel","arc","coverflow","wave","ring")},
+  {g:"layout", p:"layout.sideOpacity", l:"Deckkraft der Nachbarn", t:"num", min:.1, max:1, step:.05, f:pct, d:.85, w:isMode("carousel","arc","coverflow","wave","ring","stack")},
+  // Animation
+  {g:"anim", p:"anim.enabled", l:"Animationen", t:"bool", d:true},
+  {g:"anim", p:"anim.reduce", l:"Reduzierte Bewegung (spart Akku)", t:"bool", d:false},
+  {g:"anim", p:"anim.speed", l:"Bewegungsdauer", t:"num", min:60, max:1000, step:20, f:ms, d:260},
+  {g:"anim", p:"anim.easing", l:"Bewegungskurve", t:"enum", o:["smooth","spring","snappy","linear","bounce"], ol:["Weich","Federnd","Knackig","Linear","Hüpfend"], d:"smooth"},
+  {g:"anim", p:"anim.focus", l:"Fokus-Effekt", t:"enum", o:["zoom","lift","glow","pulse","tilt","wobble","none"], ol:["Zoom","Anheben","Leuchten","Pulsieren","Schräg","Wackeln","Keiner"], d:"zoom"},
+  {g:"anim", p:"anim.entry", l:"Einblendung beim Bereichswechsel", t:"enum", o:["fade","slideUp","slideSide","pop","flip","none"], ol:["Blenden","Von unten","Seitlich","Aufploppen","Drehen","Keine"], d:"slideUp"},
+  {g:"anim", p:"anim.stagger", l:"Versatz zwischen Kacheln", t:"num", min:0, max:120, step:10, f:ms, d:30},
+  {g:"anim", p:"anim.idle", l:"Leerlauf-Animation", t:"enum", o:["none","float","breathe","sway"], ol:["Keine","Schweben","Atmen","Wiegen"], d:"none"},
+  {g:"anim", p:"anim.idleFocusOnly", l:"Leerlauf nur für Fokus-Kachel", t:"bool", d:true},
+  // Fokus-Hintergrund
+  {g:"hero", p:"hero.enabled", l:"Hero beim Fokussieren", t:"bool", d:true},
+  {g:"hero", p:"hero.transitionMs", l:"Überblenddauer", t:"num", min:0, max:1500, step:50, f:ms, d:450},
+  {g:"hero", p:"hero.debounce", l:"Verzögerung bei schnellem Scrollen", t:"num", min:0, max:400, step:10, f:ms, d:110},
+  {g:"hero", p:"hero.dim", l:"Abdunkelung", t:"num", min:0, max:.9, step:.05, f:pct, d:.35},
+  {g:"hero", p:"hero.blur", l:"Unschärfe", t:"num", min:0, max:16, step:1, f:px, d:0},
+  {g:"hero", p:"hero.gradient", l:"Farbverlauf", t:"bool", d:true},
+  {g:"hero", p:"hero.parallax", l:"Parallax", t:"bool", d:true},
+  {g:"hero", p:"hero.kenBurns", l:"Langsamer Zoom (Ken Burns)", t:"bool", d:false},
+  // Logo
+  {g:"logo", p:"logo.visible", l:"Logo anzeigen", t:"bool", d:true},
+  {g:"logo", p:"logo.anchorX", l:"Horizontal", t:"enum", o:["left","center","right"], ol:["Links","Mitte","Rechts"], d:"left"},
+  {g:"logo", p:"logo.anchorY", l:"Vertikal", t:"enum", o:["top","middle","bottom"], ol:["Oben","Mitte","Unten"], d:"top"},
+  {g:"logo", p:"logo.offsetX", l:"Versatz X", t:"num", min:-400, max:400, step:10, f:px, d:0},
+  {g:"logo", p:"logo.offsetY", l:"Versatz Y", t:"num", min:-300, max:300, step:10, f:px, d:0},
+  {g:"logo", p:"logo.scale", l:"Größe", t:"num", min:.4, max:2, step:.05, f:pct, d:1},
+  {g:"logo", p:"logo.opacity", l:"Deckkraft", t:"num", min:.1, max:1, step:.05, f:pct, d:1},
+  {g:"logo", p:"logo.anim", l:"Einblendung", t:"enum", o:["slide","fade","zoom","none"], ol:["Gleiten","Blenden","Zoom","Keine"], d:"slide"},
+  {g:"logo", p:"logo.float", l:"Schwebebewegung", t:"bool", d:true},
+  {g:"logo", p:"logo.shadow", l:"Schatten", t:"bool", d:true},
+  {g:"logo", p:"logo.safeArea", l:"Sicherheitsbereich (verdeckt keine Kacheln)", t:"bool", d:true},
+  // Home-Hintergrund
+  {g:"home", p:"home.bgType", l:"Art", t:"enum", o:["gradient","animated","color","image"], ol:["Farbverlauf","Animierter Verlauf","Volltonfarbe","Eigenes Bild"], d:"gradient"},
+  {g:"home", p:"home.preset", l:"Verlauf", t:"num", min:0, max:7, step:1, f:v=>"Vorlage "+(v+1), d:0, w:()=>["gradient","animated"].includes(S.data.settings.home.bgType)},
+  {g:"home", p:"home.color", l:"Farbe", t:"color", d:"#0b0f17", w:()=>S.data.settings.home.bgType==="color"},
+  {g:"home", p:"home.image", l:"Bild", t:"image", d:null, w:()=>S.data.settings.home.bgType==="image"},
+  {g:"home", p:"home.dim", l:"Abdunkelung", t:"num", min:0, max:.9, step:.05, f:pct, d:0},
+  // Sperrbildschirm
+  {g:"lock", p:"lock.enabled", l:"Beim Start anzeigen", t:"bool", d:true},
+  {g:"lock", p:"lock.bgType", l:"Hintergrund", t:"enum", o:["hero","home","gradient","color","image"], ol:["Letzter Hero","Wie Home","Farbverlauf","Volltonfarbe","Eigenes Bild"], d:"hero"},
+  {g:"lock", p:"lock.preset", l:"Verlauf", t:"num", min:0, max:7, step:1, f:v=>"Vorlage "+(v+1), d:3, w:()=>S.data.settings.lock.bgType==="gradient"},
+  {g:"lock", p:"lock.color", l:"Farbe", t:"color", d:"#000000", w:()=>S.data.settings.lock.bgType==="color"},
+  {g:"lock", p:"lock.image", l:"Bild", t:"image", d:null, w:()=>S.data.settings.lock.bgType==="image"},
+  {g:"lock", p:"lock.dim", l:"Abdunkelung", t:"num", min:0, max:.9, step:.05, f:pct, d:.3},
+  {g:"lock", p:"lock.blur", l:"Unschärfe", t:"num", min:0, max:20, step:1, f:px, d:6},
+  {g:"lock", p:"lock.clockPos", l:"Uhr-Position", t:"enum", o:["center","topLeft","bottomLeft","bottomRight"], ol:["Mitte","Oben links","Unten links","Unten rechts"], d:"center"},
+  {g:"lock", p:"lock.clockSize", l:"Uhr-Größe", t:"num", min:60, max:240, step:10, f:px, d:140},
+  {g:"lock", p:"lock.clockFont", l:"Uhr-Schrift", t:"enum", o:FONTS, d:"Segoe UI"},
+  {g:"lock", p:"lock.textColor", l:"Schriftfarbe", t:"enum", o:["white","black"], ol:["Weiß","Schwarz"], d:"white"},
+  {g:"lock", p:"lock.clock24", l:"24-Stunden-Format", t:"bool", d:true},
+  {g:"lock", p:"lock.showDate", l:"Datum", t:"bool", d:true},
+  {g:"lock", p:"lock.showBattery", l:"Akku", t:"bool", d:true},
+  {g:"lock", p:"lock.hint", l:"Hinweis „Zum Entsperren …“", t:"bool", d:true},
+  {g:"lock", p:"lock.anim", l:"Entsperr-Animation", t:"enum", o:["slideUp","fade","zoom"], ol:["Nach oben schieben","Ausblenden","Zoom"], d:"slideUp"},
+  // Kachel-Standard
+  {g:"tiles", p:"tileDefaults.size", l:"Größe", t:"enum", o:["S","M","L","XL"], ol:["Klein","Mittel","Groß","Extra groß"], d:"M"},
+  {g:"tiles", p:"tileDefaults.ratio", l:"Seitenverhältnis", t:"enum", o:Object.keys(RATIOS), d:"2:3"},
+  {g:"tiles", p:"tileDefaults.radius", l:"Eckenradius", t:"num", min:0, max:40, step:2, f:px, d:10},
+  {g:"tiles", p:"tileDefaults.borderWidth", l:"Rahmenstärke", t:"num", min:0, max:8, step:1, f:px, d:0},
+  {g:"tiles", p:"tileDefaults.borderColor", l:"Rahmenfarbe", t:"color", d:"#ffffff"},
+  {g:"tiles", p:"tileDefaults.shadow", l:"Schatten", t:"bool", d:true},
+  {g:"tiles", p:"tileDefaults.opacity", l:"Transparenz", t:"num", min:.3, max:1, step:.05, f:pct, d:1},
+  {g:"tiles", p:"tileDefaults.focusZoom", l:"Fokus-Zoom", t:"num", min:1, max:1.25, step:.01, f:v=>"×"+(+v).toFixed(2), d:1.06},
+  {g:"tiles", p:"tileDefaults.showTitle", l:"Titelname", t:"bool", d:false},
+  {g:"tiles", p:"tileDefaults.fit", l:"Cover-Zuschnitt", t:"enum", o:["cover","contain"], ol:["Füllen","Einpassen"], d:"cover"},
+  {g:"tiles", p:"tileDefaults.posX", l:"Bildposition X", t:"num", min:0, max:100, step:5, f:v=>v+" %", d:50},
+  {g:"tiles", p:"tileDefaults.posY", l:"Bildposition Y", t:"num", min:0, max:100, step:5, f:v=>v+" %", d:50},
+  // Bibliothek
+  // RetroAchievements (nur Anzeige; Freischalten passiert weiterhin im Emulator/TICO)
+  {g:"ra", p:"ra.enabled", l:"RetroAchievements anzeigen", t:"bool", d:false},
+  {g:"ra", p:"ra.showTileBadge", l:"Fortschritt auf Kacheln", t:"bool", d:true},
+  {g:"ra", p:"ra.badgeStyle", l:"Kachel-Anzeige", t:"enum", o:["bar","percent","trophy"], ol:["Balken","Prozent","Pokal + Anzahl"], d:"bar"},
+  {g:"ra", p:"ra.showUnderLogo", l:"Fortschritt unter dem Logo", t:"bool", d:true},
+  {g:"ra", p:"ra.showProfile", l:"Profil & Punkte in der Kopfzeile", t:"bool", d:true},
+  {g:"ra", p:"ra.lockRecent", l:"Letzter Erfolg auf dem Sperrbildschirm", t:"bool", d:true},
+  {g:"ra", p:"ra.mapping", l:"Spiele zuordnen", t:"enum", o:["auto","manual"], ol:["Automatisch (Titelvergleich)","Nur manuell (Spiel-ID)"], d:"auto"},
+  {g:"ra", p:"ra.refreshMin", l:"Aktualisieren alle", t:"num", min:5, max:120, step:5, f:v=>v+" min", d:15},
+  {g:"ra", p:"ra.user", l:"", t:"str", d:"", hidden:true},
+  {g:"ra", p:"ra.key", l:"", t:"str", d:"", hidden:true},
+  {g:"lib", p:"library.sort", l:"„Alle Spiele“ sortieren", t:"enum", o:["name","recent"], ol:["Nach Name","Zuletzt gespielt"], d:"name"},
+  {g:"lib", p:"theme.name", l:"", t:"str", d:"Nexus Dunkel", hidden:true},
+  {g:"lib", p:"sgdbKey", l:"", t:"str", d:"", hidden:true},
+];
+const GROUPS = [["look","Darstellung & Schrift"],["top","Kopfzeile, Symbole & Hinweise"],["layout","Anordnung der Kacheln"],["anim","Animationen"],["tiles","Kacheln (Standard)"],["hero","Fokus: Hintergrund"],["logo","Fokus: Logo"],["home","Home-Hintergrund"],["lock","Sperrbildschirm"],["sections","Bereiche (Reihenfolge & Sichtbarkeit)"],["lib","Bibliothek & SteamGridDB"],["ra","RetroAchievements"],["sys","Themes, Backup & System"]];
+const TILE_SPEC = SPEC.filter(s=>s.g==="tiles").map(s=>({...s, p:s.p.replace("tileDefaults.","")}));
+const SECTION_IDS = Object.keys(SECTION_NAMES);
+function defaultSettings(){ const s = {}; SPEC.forEach(x=>setP(s, x.p, clone(x.d))); s.sections = SECTION_IDS.map(id=>({id, visible:true})); return s; }
+
+/* ---------------- Validierung (Stabilität) ---------------- */
+function validValue(spec, v){
+  switch(spec.t){
+    case "bool": return typeof v==="boolean";
+    case "enum": return spec.o.includes(v);
+    case "num": return typeof v==="number" && isFinite(v) && v>=spec.min-1e-9 && v<=spec.max+1e-9;
+    case "color": return typeof v==="string" && /^#[0-9a-f]{6}$/i.test(v);
+    case "image": return v===null || (typeof v==="string" && /^data:image\/(png|jpeg|svg\+xml)/.test(v) && v.length < 4e6);
+    case "str": return typeof v==="string" && v.length < 200;
+  } return false;
+}
+function sanitizeSettings(s, report){
+  const out = {}; s = (s && typeof s==="object") ? s : {};
+  for(const spec of SPEC){ let v = getP(s, spec.p);
+    if(spec.t==="num" && typeof v==="number" && isFinite(v)) v = clamp(v, spec.min, spec.max);
+    if(!validValue(spec, v)){ if(v!==undefined) report.push(spec.p); v = clone(spec.d); }
+    setP(out, spec.p, v); }
+  const seen = new Set(); out.sections = [];
+  (Array.isArray(s.sections)?s.sections:[]).forEach(x=>{ if(x && SECTION_IDS.includes(x.id) && !seen.has(x.id)){ seen.add(x.id); out.sections.push({id:x.id, visible:x.id==="settings" ? true : x.visible!==false}); } });
+  SECTION_IDS.forEach(id=>{ if(!seen.has(id)) out.sections.push({id, visible:true}); });
+  return out;
+}
+function sanitizeTile(t){ const out = {}; if(!t || typeof t!=="object") return out;
+  for(const spec of TILE_SPEC){ const v = t[spec.p]; if(v!==undefined && validValue(spec, v)) out[spec.p]=v; }
+  if(t.size==="custom") out.size="custom"; if(t.ratio==="custom") out.ratio="custom";
+  if(typeof t.customH==="number" && isFinite(t.customH)) out.customH = clamp(Math.round(t.customH),3,16);
+  if(typeof t.customRatio==="number" && isFinite(t.customRatio)) out.customRatio = clamp(t.customRatio,.4,2.5);
+  return out; }
+function sanitizeArt(a){ const out = {}; for(const k of ["cover","hero","logo"]){ const x = a && a[k]; out[k] = {v: (x && Number.isInteger(x.v)) ? clamp(x.v,0,5) : 0}; if(x && x.icon) out[k].icon = true; if(x && validValue({t:"image"}, x.custom) && x.custom) out[k].custom = x.custom; } return out; }
+function sanitizeData(d){
+  const report = [];
+  if(!d || typeof d!=="object") return {data:defaultData(), report:["komplette Datei"]};
+  const apps = (Array.isArray(d.apps)?d.apps:[]).filter(a=>a && typeof a.id==="string" && typeof a.name==="string").map(a=>({
+    id:a.id, name:a.name.slice(0,120), kind:["game","forwarder","homebrew"].includes(a.kind)?a.kind:"game", titleId:a.titleId, nroPath:a.nroPath, platform:a.platform,
+    hue:Number.isFinite(a.hue)?a.hue:hash(a.id)%360, favorite:a.favorite===true, lastPlayed:Number.isFinite(a.lastPlayed)?a.lastPlayed:0, tile:sanitizeTile(a.tile), art:sanitizeArt(a.art), raGameId:(Number.isInteger(a.raGameId)&&a.raGameId>0&&a.raGameId<1e7)?a.raGameId:0}));
+  const ids = new Set(apps.map(a=>a.id)); const owned = new Set();
+  const folders = (Array.isArray(d.folders)?d.folders:[]).filter(f=>f && typeof f.id==="string" && typeof f.name==="string").map(f=>({
+    id:f.id, kind:"folder", name:f.name.slice(0,60), accent:validValue({t:"color"}, f.accent)?f.accent:"#3ee0c8", hue:Number.isFinite(f.hue)?f.hue:hash(f.id)%360,
+    items:(Array.isArray(f.items)?f.items:[]).filter(i=>ids.has(i) && !owned.has(i) && owned.add(i)), tile:sanitizeTile(f.tile), art:sanitizeArt(f.art), sort:f.sort==="name"?"name":"manual"}));
+  const fids = new Set(folders.map(f=>f.id)); const inRoot = new Set();
+  const rootOrder = (Array.isArray(d.rootOrder)?d.rootOrder:[]).filter(i=>(fids.has(i) || (ids.has(i) && !owned.has(i))) && !inRoot.has(i) && inRoot.add(i));
+  [...folders.map(f=>f.id), ...apps.map(a=>a.id).filter(i=>!owned.has(i))].forEach(i=>{ if(!inRoot.has(i)){ rootOrder.push(i); report.push("rootOrder:"+i); } });
+  const settings = sanitizeSettings(d.settings, report);
+  const themes = (Array.isArray(d.themes)?d.themes:[]).filter(t=>t && typeof t.name==="string" && t.data).map(t=>({id:t.id||"th-"+uuid(), name:t.name.slice(0,60), builtin:!!t.builtin, data:t.data}));
+  return {data:{schema:2, settings, apps, folders, rootOrder, themes: themes.length?themes:builtinThemes()}, report};
+}
+function migrate(d){
+  if(d && d.schema===1){ // v1 → v2: grid.rows/gap → layout.height/gap
+    d.settings = d.settings||{}; d.settings.layout = d.settings.layout||{};
+    if(d.settings.grid){ d.settings.layout.height = d.settings.grid.rows; d.settings.layout.gap = d.settings.grid.gap; delete d.settings.grid; }
+    d.themes = builtinThemes(); d.schema = 2;
+  }
+  return d;
+}
+
+/* ---------------- Testdaten ---------------- */
+function themeSnapshot(s){ const t = clone(s); delete t.library; delete t.sgdbKey; delete t.ra; return t; }
+function builtinThemes(){
+  const mk = (name, f)=>{ const s = defaultSettings(); f(s); s.theme.name = name; return {id:"th-"+hash(name).toString(16), name, builtin:true, data:themeSnapshot(s)}; };
+  return [
+    mk("Nexus Dunkel", s=>{}),
+    mk("Aurora", s=>{ s.theme.accent="#e86cff"; s.theme.ui="#120a1f"; s.logo.anchorX="center"; s.layout.mode="carousel"; s.anim.focus="glow"; s.home.bgType="animated"; s.home.preset=2; s.tileDefaults.radius=18; }),
+    mk("Kino", s=>{ s.theme.accent="#ffd447"; s.theme.ui="#000000"; s.logo.anchorX="right"; s.logo.anchorY="middle"; s.logo.scale=1.15; s.layout.mode="coverflow"; s.layout.uniform=true; s.topbar.tabStyle="icons"; s.hints.style="plain"; s.tileDefaults.ratio="16:9"; s.tileDefaults.radius=4; }),
+    mk("Rad", s=>{ s.layout.mode="arc"; s.layout.uniform=true; s.tileDefaults.ratio="1:1"; s.tileDefaults.size="M"; s.logo.anchorX="center"; s.topbar.tabStyle="icons"; s.topbar.align="center"; s.anim.easing="spring"; }),
+    mk("Hell & klar", s=>{ s.theme.textColor="black"; s.theme.ui="#e9edf2"; s.theme.accent="#00a2ff"; s.icons.color="black"; s.topbar.tabStyle="both"; s.topbar.bg="glass"; s.hero.dim=0.05; s.layout.mode="rows"; s.home.bgType="color"; s.home.color="#e9edf2"; })
+  ];
+}
+function defaultData(){
+  const games = [["Starfall Odyssey","0100A1B2C3D40000",210,{size:"L",ratio:"2:3"}],["Neon Drift","0100A1B2C3D41000",300,{size:"M",ratio:"16:9"}],["Kingdom of Ash","0100A1B2C3D42000",15,{}],["Tidebound","0100A1B2C3D43000",190,{}],["Mecha Blitz","0100A1B2C3D44000",350,{size:"S",ratio:"1:1"}],["Verdant Trails","0100A1B2C3D45000",110,{}],["Cosmic Chef","0100A1B2C3D46000",40,{size:"S",ratio:"1:1"}],["Frostline","0100A1B2C3D47000",200,{size:"XL",ratio:"16:9"}],["Shadow Circuit","0100A1B2C3D48000",270,{}],["Sky Harbor","0100A1B2C3D49000",170,{size:"M",ratio:"4:3"}],["Ember Knights","0100A1B2C3D4A000",5,{}],["Puzzle Garden","0100A1B2C3D4B000",90,{size:"S",ratio:"3:2"}]];
+  const fwd = [["Crystal Caverns","05A1000000010000",260,"GBA"],["Retro Racer","05A1000000020000",20,"SNES"],["Dungeon Bit","05A1000000030000",130,"NES"]];
+  const hb = [["Datei-Explorer","sdmc:/switch/explorer.nro",220],["Systeminfo","sdmc:/switch/sysinfo.nro",60]];
+  const art = ()=>({cover:{v:0},hero:{v:0},logo:{v:0}}); const now = Date.now(); const apps = [];
+  games.forEach((g,i)=>apps.push({id:"app-"+g[1], titleId:g[1], name:g[0], kind:"game", hue:g[2], favorite:i%5===0, lastPlayed:i<6?now-i*3600e3:0, tile:g[3], art:art()}));
+  fwd.forEach((f,i)=>apps.push({id:"app-"+f[1], titleId:f[1], name:f[0], kind:"forwarder", platform:f[3], raGameId:1001+i, hue:f[2], favorite:false, lastPlayed:i===0?now-7200e3:0, tile:{ratio:"3:2", size:"S"}, art:art()}));
+  hb.forEach(h=>apps.push({id:"hb-"+hash(h[1]).toString(16), nroPath:h[1], name:h[0], kind:"homebrew", hue:h[2], favorite:false, lastPlayed:0, tile:{ratio:"1:1", size:"S"}, art:art()}));
+  const folders = [
+    {id:"fld-retro", kind:"folder", name:"Retro (TICO)", accent:"#ffb347", hue:30, items:apps.filter(a=>a.kind==="forwarder").map(a=>a.id), tile:{size:"M", ratio:"1:1"}, art:art(), sort:"manual"},
+    {id:"fld-adv", kind:"folder", name:"Abenteuer", accent:"#5fd35f", hue:120, items:["app-0100A1B2C3D42000","app-0100A1B2C3D45000","app-0100A1B2C3D4A000"], tile:{size:"M", ratio:"2:3"}, art:art(), sort:"manual"}];
+  const inF = new Set(folders.flatMap(f=>f.items)); const loose = apps.filter(a=>!inF.has(a.id)).map(a=>a.id);
+  return {schema:2, settings:defaultSettings(), apps, folders, rootOrder:[folders[0].id, ...loose.slice(0,4), folders[1].id, ...loose.slice(4)], themes:builtinThemes()};
+}
+
+/* ---------------- DataStore + Start-Wächter ---------------- */
+const KEY = "nexus.data.v2", BOOTKEY = "nexus.boot";
+const store = { get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }, set(k,v){ try{ localStorage.setItem(k,v); return true; }catch(e){ return false; } }, del(k){ try{ localStorage.removeItem(k); }catch(e){} } };
+const DataStore = {
+  load(){
+    for(const k of [KEY, KEY+".bak", "nexus.data.v1"]){
+      const raw = store.get(k); if(!raw) continue;
+      try{ const {data, report} = sanitizeData(migrate(JSON.parse(raw))); if(report.length) console.info("NEXUS: korrigierte Werte", report); if(k!==KEY) S.notice = "Konfiguration aus Sicherung wiederhergestellt."; return data; }
+      catch(e){ console.warn("NEXUS: Datei", k, "unlesbar", e); }
+    }
+    return defaultData();
+  },
+  save(){
+    const json = JSON.stringify(S.data); const prev = store.get(KEY);
+    const ok = store.set(KEY+".tmp", json) && (!prev || store.set(KEY+".bak", prev)) && store.set(KEY, json);
+    store.del(KEY+".tmp");
+    if(!ok) toast("Speichern fehlgeschlagen (Speicher voll?). Große eigene Bilder entfernen – Änderung gilt nur bis zum Neuladen.");
+  }
+};
+const BootGuard = {
+  start(){ const n = (+store.get(BOOTKEY)||0) + 1; store.set(BOOTKEY, String(n)); return n >= 3 || location.hash==="#safe"; },
+  ok(){ store.set(BOOTKEY, "0"); }
+};
+
+/* ---------------- Artwork (generierte Testgrafiken) ---------------- */
+const artCache = new Map();
+function genHero(e, v){
+  const r = rng(hash(e.id+"hero"+v)); const h = e.hue + v*47;
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${hsl(h,60,22)}"/><stop offset="1" stop-color="${hsl(h+50,70,10)}"/></linearGradient><radialGradient id="sun"><stop offset="0" stop-color="${hsl(h+20,90,75)}"/><stop offset="1" stop-color="${hsl(h+20,90,60)}" stop-opacity="0"/></radialGradient></defs><rect width="1280" height="720" fill="url(#g)"/>`;
+  for(let i=0;i<60;i++) s += `<circle cx="${r()*1280}" cy="${r()*360}" r="${r()*1.8+.3}" fill="#fff" opacity="${r()*.7}"/>`;
+  s += `<circle cx="${700+r()*450}" cy="${120+r()*160}" r="${160+r()*120}" fill="url(#sun)" opacity=".8"/>`;
+  for(let l=0;l<4;l++){ let pts = "0,720 "; const base = 380+l*80; for(let x=0;x<=1280;x+=80) pts += `${x},${base - r()*(170-l*30)} `; s += `<polygon points="${pts}1280,720" fill="${hsl(h+l*12,45,18-l*3)}" opacity="${.75+l*.08}"/>`; }
+  return svgURI(s+"</svg>");
+}
+const LOGO_FONTS = ["Impact, 'Arial Black', sans-serif","Georgia, serif","'Trebuchet MS', sans-serif","'Arial Black', sans-serif","'Courier New', monospace","Verdana, sans-serif"];
+function genLogo(e, v){
+  const h = e.hue + v*60; const name = e.name.toUpperCase(); const tl = Math.min(860, name.length*62);
+  return svgURI(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 300"><defs><linearGradient id="t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${hsl(h,90,85)}"/><stop offset="1" stop-color="${hsl(h+30,85,55)}"/></linearGradient></defs><text x="450" y="175" text-anchor="middle" font-family="${LOGO_FONTS[v%6]}" font-size="${v%2?104:112}" font-weight="900" ${v%3===2?'font-style="italic"':''} textLength="${tl}" lengthAdjust="spacingAndGlyphs" fill="url(#t)" stroke="${hsl(h,60,12)}" stroke-width="10" paint-order="stroke" stroke-linejoin="round">${esc(name)}</text><rect x="${450-tl/4}" y="208" width="${tl/2}" height="5" rx="2" fill="${hsl(h,90,70)}" opacity=".8"/>${e.kind==="forwarder"?`<text x="450" y="250" text-anchor="middle" font-family="Verdana" font-size="28" fill="#fff" opacity=".85">${esc(e.platform)} · RETRO</text>`:""}</svg>`);
+}
+function genCover(e, v, icon){
+  const r = rng(hash(e.id+"cover"+v)); const h = e.hue + v*35; const W = icon?512:600, H = icon?512:900;
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}"><defs><linearGradient id="c" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${hsl(h,65,48)}"/><stop offset="1" stop-color="${hsl(h+40,70,18)}"/></linearGradient></defs><rect width="${W}" height="${H}" fill="url(#c)"/>`;
+  if(e.kind==="folder"){ for(let i=0;i<4;i++) s += `<rect x="${W*.18+i*14}" y="${H*.22+i*14}" width="${W*.5}" height="${W*.5}" rx="22" fill="${hsl(h+i*20,60,60-i*8)}" stroke="#0004" stroke-width="4"/>`; }
+  else { const cx=W/2, cy=H*.42, R=W*.28, sh=v%3;
+    if(sh===0) s += `<circle cx="${cx}" cy="${cy}" r="${R}" fill="${hsl(h+180,70,70)}" opacity=".85"/><circle cx="${cx}" cy="${cy}" r="${R*.55}" fill="${hsl(h,60,25)}"/>`;
+    if(sh===1) s += `<polygon points="${cx},${cy-R} ${cx+R},${cy} ${cx},${cy+R} ${cx-R},${cy}" fill="${hsl(h+150,70,68)}"/>`;
+    if(sh===2) s += `<polygon points="${cx},${cy-R} ${cx+R*.95},${cy+R*.7} ${cx-R*.95},${cy+R*.7}" fill="${hsl(h+200,70,65)}"/>`;
+    for(let i=0;i<14;i++) s += `<rect x="${r()*W}" y="${r()*H*.8}" width="${4+r()*10}" height="${4+r()*10}" fill="#fff" opacity="${r()*.4}"/>`; }
+  if(!icon) s += `<rect x="0" y="${H-150}" width="${W}" height="150" fill="#0007"/><text x="${W/2}" y="${H-68}" text-anchor="middle" font-family="Verdana, sans-serif" font-size="44" font-weight="bold" fill="#fff" textLength="${Math.min(W-60,e.name.length*28)}" lengthAdjust="spacingAndGlyphs">${esc(e.name)}</text>`;
+  if(e.kind==="forwarder") s += `<rect x="20" y="20" width="110" height="46" rx="10" fill="#000a"/><text x="75" y="52" text-anchor="middle" font-family="Verdana" font-size="26" fill="#fff">${esc(e.platform)}</text>`;
+  return svgURI(s+"</svg>");
+}
+const PLACEHOLDER = svgURI(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#2a3242"/><text x="50" y="58" text-anchor="middle" font-size="30" fill="#8892a6">?</text></svg>`);
+const ArtworkManager = {
+  url(e, type, override){
+    try{
+      const a = override || (e.art && e.art[type]) || {v:0};
+      if(a.custom) return a.custom;
+      const k = e.id+"|"+type+"|"+a.v+"|"+(a.icon?1:0)+"|"+e.name;
+      if(!artCache.has(k)){ if(artCache.size > 300) artCache.delete(artCache.keys().next().value);
+        artCache.set(k, type==="hero"?genHero(e,a.v):type==="logo"?genLogo(e,a.v):genCover(e,a.v,a.icon)); }
+      return artCache.get(k);
+    }catch(err){ return PLACEHOLDER; }
+  }
+};
+const BG_PRESETS = [["#0b0f17","#1d2b4a","#0b0f17"],["#1a0b2e","#4a1d6b","#0f0a1f"],["#0d3b4c","#1b6e6b","#0a1f2b"],["#2b0f0f","#6b2a1d","#1a0a0a"],["#0f2b14","#2a6b3b","#0a1a0e"],["#2b2b0f","#6b5a1d","#14140a"],["#e9edf2","#c9d6ea","#f6f8fb"],["#101010","#3a3a3a","#000000"]];
+function bgCSS(type, preset, color, image, heroUrl){
+  if(type==="image") return image ? `url("${image}") center/cover` : "#111";
+  if(type==="color") return color;
+  if(type==="hero") return heroUrl ? `url("${heroUrl}") center/cover` : bgCSS("gradient",0);
+  const p = BG_PRESETS[clamp(preset|0,0,BG_PRESETS.length-1)];
+  return `linear-gradient(135deg, ${p[0]}, ${p[1]}, ${p[2]}, ${p[1]})`;
+}
+
+/* ---------------- RetroAchievements (Prototyp: Offline-Testdaten) ----------------
+   Switch-App: GET https://retroachievements.org/API/API_GetGameInfoAndUserProgress.php?g=<Spiel-ID>&u=<Benutzer>&y=<Web-API-Key>
+   Zuordnung automatisch über API_GetUserRecentlyPlayedGames (Titelvergleich) oder manuell per Spiel-ID. */
+const RA_NAMES = ["Erster Schritt","Schatzsucher","Ohne Treffer","Speedrunner","Sammler","Bossbezwinger","Geheimgang","Perfektionist","Nachtschicht","Unaufhaltsam"];
+const RetroAchievements = {
+  progress(e){
+    if(!ST().ra.enabled || !e || e.kind==="folder" || !e.raGameId) return null;
+    const r = rng(hash("ra"+e.raGameId)); const total = 20 + Math.floor(r()*30); const got = e.raGameId%3===2 ? total : Math.floor(r()*total*0.8);
+    return {gameId:e.raGameId, total, got, pct:Math.round(got/total*100), mastered:got===total,
+      achievements:Array.from({length:total},(_,i)=>({title:RA_NAMES[i%RA_NAMES.length]+(i>=RA_NAMES.length?" "+(1+Math.floor(i/RA_NAMES.length)):""), points:[5,10,25,50][i%4], unlocked:i<got}))};
+  },
+  profile(){ const u = ST().ra.user; return u ? {user:u, points:1234} : null; },
+  recent(){ const e = S.data.apps.find(a=>a.raGameId); const p = e && this.progress(e); return p && p.got ? {game:e.name, title:p.achievements[p.got-1].title} : null; }
+};
+function raBadge(e){
+  const s = ST().ra; if(!s.showTileBadge) return ""; const p = RetroAchievements.progress(e); if(!p) return "";
+  if(s.badgeStyle==="bar") return `<div class="ra-bar${p.mastered?" m":""}"><i style="width:${p.pct}%"></i></div>`;
+  return `<div class="ra-pct${p.mastered?" m":""}">${s.badgeStyle==="percent" ? p.pct+" %" : "🏆 "+p.got+"/"+p.total}</div>`;
+}
+function openRA(e){
+  const rows = ()=>{ const p = RetroAchievements.progress(e); const r = [
+    A_("RA-Spiel-ID: "+(e.raGameId||"nicht zugeordnet"), ()=>openOSK("RetroAchievements-Spiel-ID", String(e.raGameId||""), v=>{ const n = parseInt(v,10); e.raGameId = (Number.isInteger(n)&&n>0&&n<1e7) ? n : 0; DataStore.save(); render(); redraw(); })),
+    A_("Automatisch zuordnen", ()=>{ if(!e.raGameId) e.raGameId = 2000 + hash(e.name)%5000; DataStore.save(); render(); redraw(); toast("Simuliert: Titelvergleich mit „Zuletzt gespielt“ auf RetroAchievements."); }) ];
+    if(!ST().ra.enabled) r.unshift(A_("RetroAchievements aktivieren", ()=>{ ST().ra.enabled = true; DataStore.save(); render(); redraw(); }));
+    if(p){ r.push({head:`Erfolge · ${p.got} / ${p.total}${p.mastered?" · gemeistert":""}`}); p.achievements.forEach(a=>r.push({l:(a.unlocked?"✔ ":"○ ")+a.title, get:()=>a.points+" Pkt."})); }
+    return r; };
+  const p = RetroAchievements.progress(e);
+  pushDialog(rowsDialog({title:"RetroAchievements · "+e.name, sub: p ? `${p.pct} % abgeschlossen (Testdaten)` : (ST().ra.enabled ? "Diesem Titel ist noch kein RetroAchievements-Spiel zugeordnet." : "RetroAchievements ist in den Einstellungen ausgeschaltet."), rows, box:{l:panelX(410), t:topH()+4, w:410, h:SH-topH()-botH()-10}}));
+}
+
+/* ---------------- Zustand ---------------- */
+const S = {data:null, section:"start", openFolder:null, focus:0, scroll:0, dialogs:[], move:null, multi:null, list:[], items:[], nav:"spatial", draft:null, lastHero:null, entry:true, notice:null};
+const ST = ()=>S.data.settings;
+function entry(id){ return S.data.apps.find(a=>a.id===id) || S.data.folders.find(f=>f.id===id); }
+function tileCfg(e){ return {...ST().tileDefaults, ...((ST().layout.uniform) ? {} : (e.tile||{})), ...(ST().layout.uniform ? pickVisual(e.tile) : {})}; }
+function pickVisual(t){ const o = {...(t||{})}; delete o.size; delete o.ratio; delete o.customH; delete o.customRatio; return o; }
+function folderOf(id){ return S.data.folders.find(f=>f.items.includes(id)); }
+function vertical(){ const l = ST().layout; return l.mode==="vgrid" || l.mode==="list" || (l.mode==="arc" && (l.arcDir==="left"||l.arcDir==="right")); }
+
+function currentList(){
+  const d = S.data;
+  if(S.openFolder){ const f = entry(S.openFolder); if(!f){ S.openFolder=null; return currentList(); } const it = f.items.map(entry).filter(Boolean); if(f.sort==="name") it.sort((a,b)=>a.name.localeCompare(b.name)); return it; }
+  const games = d.apps.filter(a=>a.kind!=="homebrew");
+  switch(S.section){
+    case "start": case "settings": return d.rootOrder.map(entry).filter(Boolean);
+    case "all": return [...games].sort(ST().library.sort==="recent"?(a,b)=>b.lastPlayed-a.lastPlayed:(a,b)=>a.name.localeCompare(b.name));
+    case "fav": return d.apps.filter(a=>a.favorite);
+    case "folders": return [...d.folders];
+    case "recent": return d.apps.filter(a=>a.lastPlayed).sort((a,b)=>b.lastPlayed-a.lastPlayed).slice(0,10);
+    case "homebrew": return d.apps.filter(a=>a.kind==="homebrew");
+  } return [];
+}
+function manualOrderArray(){ if(S.openFolder){ const f=entry(S.openFolder); return f.sort==="manual"?f.items:null; } return S.section==="start"?S.data.rootOrder:null; }
+
+/* =====================================================================
+   TileLayoutEngine: 11 Anordnungen. Jede liefert pro Kachel
+   {x,y,w,h, rot, ry, sc, op, z} in Bühnenkoordinaten.
+   ===================================================================== */
+function topH(){ return ST().topbar.visible ? 60 : 14; }
+function botH(){ return ST().hints.visible ? HINT_H+10 : 14; }
+function area(){
+  const l = ST().layout;
+  if(vertical()){
+    const side = l.mode==="arc" ? l.arcDir : l.side;
+    const [x0,x1] = side==="left" ? [60,640] : side==="right" ? [640,1220] : [60,1220];
+    return {x0,x1,y0:topH()+(S.openFolder?26:16), y1:SH-botH(), v:true, side};
+  }
+  const h = l.height*U, tb = topH()+(S.openFolder?26:8), bb = SH-botH();
+  const y0 = l.position==="top" ? tb : l.position==="center" ? tb + (bb-tb-h)/2 : bb-h;
+  return {x0:60, x1:1220, y0, y1:y0+h, v:false};
+}
+function tileUnits(e, maxH){
+  const t = tileCfg(e); const size = ST().layout.uniform ? ST().tileDefaults.size : t.size; const ratioK = ST().layout.uniform ? ST().tileDefaults.ratio : t.ratio;
+  const h = clamp(size==="custom" ? (t.customH||7) : (SIZES[size]||7), 3, maxH);
+  const ratio = ratioK==="custom" ? (t.customRatio||1) : (RATIOS[ratioK]||1);
+  return {w:Math.max(2, Math.round(h*ratio)), h, ratio};
+}
+const base = (x,y,w,h)=>({x,y,w,h,rot:0,ry:0,sc:1,op:1,z:1});
+function packGrid(list, H, gap){
+  const occ = []; const HH = H + gap; const free=(x,y,w,h)=>{ for(let i=x;i<x+w;i++){ const c=occ[i]; if(!c) continue; for(let j=y;j<y+h;j++) if(c[j]) return false; } return true; };
+  const mark=(x,y,w,h)=>{ for(let i=x;i<x+w;i++){ occ[i]=occ[i]||[]; for(let j=y;j<y+h;j++) occ[i][j]=1; } };
+  let minX = 0;
+  return list.map(e=>{ const {w,h} = tileUnits(e, H); const W=w+gap, Hh=h+gap;
+    for(let x=minX; x<minX+4000; x++){ for(let y=0; y+Hh<=Math.max(HH,Hh); y++) if(free(x,y,W,Hh)){ mark(x,y,W,Hh); minX = Math.max(minX, x-12); return base(x*U, y*U, w*U, h*U); } }
+    return base(0,0,w*U,h*U); });
+}
+const LAYOUTS = {
+  grid(list, A){ return {items:packGrid(list, ST().layout.height, ST().layout.gap), nav:"spatial", scroll:"x"}; },
+  rows(list, A){
+    const l = ST().layout, n = l.rowCount, gapPx = l.gap*U; const laneH = Math.max(60, ((A.y1-A.y0) - gapPx*(n-1))/n); const cur = new Array(n).fill(0);
+    return {items:list.map((e,i)=>{ const lane = i%n; const {ratio} = tileUnits(e, 99); const w = Math.max(40, laneH*ratio); const it = base(cur[lane], lane*(laneH+gapPx), w, laneH); cur[lane] += w + gapPx; return it; }), nav:"spatial", scroll:"x"};
+  },
+  honeycomb(list, A){
+    const rows = Math.max(1, Math.floor(ST().layout.height/4)); const h = (A.y1-A.y0)/(0.75*(rows-1)+1); const w = h*0.866; const g = ST().layout.gap*6;
+    return {items:list.map((e,i)=>{ const c = Math.floor(i/rows), r = i%rows; const it = base(c*(w+g) + (r%2? (w+g)/2 : 0), r*h*0.75, w, h); it.hex = true; return it; }), nav:"spatial", scroll:"x"};
+  },
+  vgrid(list, A){
+    const l = ST().layout, cols = l.columns, gapPx = l.gap*U; const cw = ((A.x1-A.x0) - gapPx*(cols-1))/cols; const colH = new Array(cols).fill(0);
+    return {items:list.map(e=>{ const {ratio} = tileUnits(e, 99); const h = cw/ratio; let c = 0; for(let i=1;i<cols;i++) if(colH[i] < colH[c]-1) c = i; const it = base(c*(cw+gapPx), colH[c], cw, h); colH[c] += h + gapPx; return it; }), nav:"spatial", scroll:"y"};
+  },
+  list(list, A){ const h = 64*ST().icons.size, gap = 8+ST().layout.gap*6; return {items:list.map((e,i)=>({...base(0, i*(h+gap), A.x1-A.x0, h), li:true})), nav:"v", scroll:"y"}; },
+  carousel(list, A, f, wave){
+    const l = ST().layout, gapPx = Math.max(8, l.gap*U); const H = (A.y1-A.y0);
+    const dims = list.map(e=>{ const {w,h} = tileUnits(e, l.height); const k = Math.min(1, H/(h*U)); return {w:w*U*k, h:h*U*k}; });
+    const items = list.map(()=>base(0,0,0,0)); const cx = (A.x0+A.x1)/2;
+    const place = (i, centerX)=>{ const d = dims[i]; const k = i-f; const sc = k===0 ? 1 : l.sideScale; const it = items[i];
+      it.w = d.w; it.h = d.h; it.x = centerX - d.w/2; it.y = A.y1 - d.h - (wave ? (l.waveAmp*Math.sin(k*l.waveFreq) + l.waveAmp)/2 : 0) + (wave? 0 : 0);
+      if(wave) it.y = A.y0 + (H - d.h)/2 - l.waveAmp*Math.sin(k*l.waveFreq);
+      it.sc = sc; it.op = Math.abs(k)>8 ? 0 : (k===0 ? 1 : Math.max(.05, l.sideOpacity - (Math.abs(k)-1)*.12)); it.z = 100-Math.abs(k); };
+    if(!list.length) return {items, nav:"h"};
+    place(f, cx); let x = cx + dims[f].w/2;
+    for(let i=f+1;i<list.length;i++){ const w = dims[i].w*l.sideScale; place(i, x + gapPx + w/2); x += gapPx + w; }
+    x = cx - dims[f].w/2;
+    for(let i=f-1;i>=0;i--){ const w = dims[i].w*l.sideScale; place(i, x - gapPx - w/2); x -= gapPx + w; }
+    return {items, nav:"h"};
+  },
+  wave(list, A, f){ return LAYOUTS.carousel(list, A, f, true); },
+  arc(list, A, f){
+    const l = ST().layout, R = l.arcRadius, sp = l.arcSpread*Math.PI/180; const n = list.length;
+    const side = l.arcDir==="left"||l.arcDir==="right";
+    const maxH = side ? 7 : l.height;
+    return {items:list.map((e,i)=>{ let k = i-f; if(l.wrap && n>2){ if(k > n/2) k -= n; if(k < -n/2) k += n; }
+      const {w,h} = tileUnits(e, maxH); const W=w*U, Hh=h*U; const th = k*sp; const it = base(0,0,W,Hh);
+      let cx, cy, rot;
+      if(l.arcDir==="up"){ const ay = (A.y0+A.y1)/2; cx = 640 + R*Math.sin(th); cy = ay + R - R*Math.cos(th); rot = th; }
+      else if(l.arcDir==="down"){ const ay = (A.y0+A.y1)/2; cx = 640 + R*Math.sin(th); cy = ay - R + R*Math.cos(th); rot = -th; }
+      else if(l.arcDir==="left"){ const ax = A.x0 + 40 + W/2; cx = ax - R + R*Math.cos(th); cy = 360 + R*Math.sin(th); rot = th; }
+      else { const ax = A.x1 - 40 - W/2; cx = ax + R - R*Math.cos(th); cy = 360 + R*Math.sin(th); rot = -th; }
+      it.x = cx - W/2; it.y = cy - Hh/2; it.rot = l.rotateTiles ? rot*180/Math.PI : 0; it.sc = k===0 ? 1 : l.sideScale;
+      it.op = Math.abs(th) > 1.7 ? 0 : (k===0?1:Math.max(.05, l.sideOpacity - (Math.abs(k)-1)*.1)); it.z = 100-Math.abs(k); return it; }), nav: side ? "v" : "h", wrapForce:false};
+  },
+  ring(list, A, f){
+    const l = ST().layout, n = Math.max(list.length, 1), R = l.ringRadius; const step = 2*Math.PI/Math.max(n, 6); const cy = (A.y0+A.y1)/2;
+    return {items:list.map((e,i)=>{ let k = i-f; if(k > n/2) k -= n; if(k < -n/2) k += n; const th = k*step; const d = Math.cos(th);
+      const {w,h} = tileUnits(e, l.height); const W=w*U*.8, Hh=h*U*.8; const it = base(640 + R*Math.sin(th) - W/2, cy - Hh/2 - (1-d)*30, W, Hh);
+      it.sc = k===0 ? 1 : (0.45 + 0.55*(d+1)/2) * l.sideScale; it.ry = -th*180/Math.PI*(l.tilt/75); it.z = Math.round(100+d*100); it.op = d < -0.3 ? 0 : (k===0 ? 1 : clamp(l.sideOpacity*(0.4+0.6*(d+1)/2), .05, 1)); return it; }), nav:"h", wrapForce:true};
+  },
+  coverflow(list, A, f){
+    const l = ST().layout; const cy = (A.y0+A.y1)/2;
+    return {items:list.map((e,i)=>{ const k = i-f; const {w,h} = tileUnits(e, l.height); const W=w*U, Hh=h*U; const s = Math.sign(k);
+      const cx = 640 + (k===0 ? 0 : s*(W*0.62 + (Math.abs(k)-1)*W*0.28));
+      const it = base(cx - W/2, cy - Hh/2, W, Hh); it.ry = -s*l.tilt; it.sc = k===0 ? 1 : l.sideScale; it.z = 100-Math.abs(k); it.op = Math.abs(k)>7 ? 0 : (k===0?1:l.sideOpacity); return it; }), nav:"h"};
+  },
+  stack(list, A, f){
+    const l = ST().layout, o = l.stackOffset; const cy = (A.y0+A.y1)/2;
+    return {items:list.map((e,i)=>{ const k = i-f; const {w,h} = tileUnits(e, l.height); const W=w*U, Hh=h*U;
+      const it = base(640 - W/2 + (k<0 ? -520 : k*o), cy - Hh/2 - (k>0 ? k*o*0.5 : 0), W, Hh);
+      it.sc = k<=0 ? 1 : 1 - k*0.06; it.op = k<0 ? 0 : k>5 ? 0 : (k===0 ? 1 : Math.max(.05, l.sideOpacity - (k-1)*.15)); it.z = 100-Math.abs(k); it.rot = k<0 ? -12 : 0; return it; }), nav:"h"};
+  }
+};
+function computeLayout(){
+  const A = area(); const mode = ST().layout.mode; const fn = LAYOUTS[mode] || LAYOUTS.grid;
+  const res = fn(S.list, A, clamp(S.focus,0,Math.max(0,S.list.length-1)));
+  if(res.scroll){ // Inhalt + Scrollen
+    const it = res.items; const horiz = res.scroll==="x";
+    const extent = it.reduce((m,r)=>Math.max(m, horiz ? r.x+r.w : r.y+r.h), 0);
+    const view = horiz ? A.x1-A.x0 : A.y1-A.y0; let off = 0;
+    if(ST().layout.align==="center" && horiz && extent < view && mode!=="list") off = (view-extent)/2;
+    const r = it[S.focus];
+    if(r){ const a = horiz ? r.x : r.y, b = horiz ? r.x+r.w : r.y+r.h;
+      if(ST().layout.focusMode==="center") S.scroll = (a+b)/2 - view/2;
+      else { if(a - S.scroll < 0) S.scroll = a - (S.focus===0?0:20); if(b - S.scroll > view) S.scroll = b - view + 20; }
+      S.scroll = clamp(S.scroll, 0, Math.max(0, extent - view)); }
+    it.forEach(r=>{ if(horiz){ r.x += A.x0 + off - S.scroll; r.y += A.y0; } else { r.x += A.x0; r.y += A.y0 - S.scroll; }
+      if(horiz && (r.x+r.w < -200 || r.x > SW+200)) r.op = 0; if(!horiz && (r.y+r.h < 0 || r.y > SH)) r.op = 0; });
+  }
+  S.items = res.items; S.nav = res.nav; S.wrapForce = !!res.wrapForce;
+}
+
+/* ---------------- Navigation ---------------- */
+function navigate(dir){
+  if(!S.list.length) return;
+  const dx = dir==="left"?-1:dir==="right"?1:0, dy = dir==="up"?-1:dir==="down"?1:0;
+  if(S.nav !== "spatial"){
+    const along = S.nav==="h" ? dx : dy; if(!along) return;
+    let n = S.focus + along; const wrap = S.wrapForce || ST().layout.wrap;
+    if(n < 0) n = wrap ? S.list.length-1 : 0; if(n >= S.list.length) n = wrap ? 0 : S.list.length-1;
+    if(n !== S.focus) setFocus(n); return;
+  }
+  const R = S.items; const c = R[S.focus]; const cx = c.x+c.w/2, cy = c.y+c.h/2; let best=-1, bs=1e9;
+  R.forEach((r,i)=>{ if(i===S.focus) return; const ox = r.x+r.w/2-cx, oy = r.y+r.h/2-cy; const prim = dx ? ox*dx : oy*dy; if(prim <= 4) return;
+    const ov = dx ? Math.min(c.y+c.h, r.y+r.h) - Math.max(c.y, r.y) : Math.min(c.x+c.w, r.x+r.w) - Math.max(c.x, r.x);
+    const score = prim + Math.abs(dx ? oy : ox)*2 - (ov>0 ? 200 : 0); if(score < bs){ bs=score; best=i; } });
+  if(best>=0) setFocus(best);
+}
+
+/* ---------------- Rendering ---------------- */
+const EASE = {smooth:"cubic-bezier(.2,.8,.2,1)", spring:"cubic-bezier(.34,1.56,.64,1)", snappy:"cubic-bezier(.1,.9,.1,1)", linear:"linear", bounce:"cubic-bezier(.68,-0.55,.27,1.55)"};
+function animOn(){ return ST().anim.enabled; }
+function applyTheme(){
+  const s = ST(), t = s.theme, st = $("#stage");
+  const light = t.textColor==="black" || (t.textColor==="auto" && lum(t.ui) > .55);
+  st.classList.toggle("light", light);
+  st.classList.remove("ps-glass","ps-solid","ps-outline"); st.classList.add("ps-"+t.panelStyle);
+  st.style.setProperty("--accent", t.accent); st.style.setProperty("--ui", t.ui); st.style.setProperty("--font", `"${t.font}", system-ui, sans-serif`);
+  st.style.setProperty("--heroMs", s.hero.transitionMs+"ms"); st.style.setProperty("--iconScale", s.icons.size);
+  const dur = !animOn() ? 0 : s.anim.reduce ? 120 : s.anim.speed;
+  st.style.setProperty("--tileMs", dur+"ms"); st.style.setProperty("--ease", EASE[s.anim.easing]);
+  // Home-Hintergrund
+  const hb = $("#homeBg"); hb.style.background = bgCSS(s.home.bgType, s.home.preset, s.home.color, s.home.image);
+  hb.classList.toggle("anim", s.home.bgType==="animated" && animOn() && !s.anim.reduce);
+  hb.style.filter = s.home.dim ? `brightness(${1-s.home.dim})` : "";
+  $("#hints").style.display = s.hints.visible ? "flex" : "none"; $("#hints").classList.toggle("plain", s.hints.style==="plain");
+  $("#layerLbl").style.display = s.hints.visible && s.hints.layerLabel ? "block" : "none";
+}
+function iconColor(){ const c = ST().icons.color; return c==="text" ? null : c==="accent" ? ST().theme.accent : c==="white" ? "#ffffff" : "#000000"; }
+function fmtTime(d, h24){ return d.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit",hour12:!h24}); }
+function renderTopbar(){
+  const s = ST(), tb = $("#topbar"); tb.style.display = s.topbar.visible ? "flex" : "none";
+  tb.className = s.topbar.bg + " al-" + s.topbar.align; const ic = iconColor();
+  const tabs = s.sections.filter(x=>x.visible);
+  $("#tabs").innerHTML = tabs.map(x=>`<div class="tab ${x.id===S.section&&!S.openFolder?"active":""}" data-sec="${x.id}" title="${SECTION_NAMES[x.id]}">${s.topbar.tabStyle!=="text"?icon(x.id, ic):""}${s.topbar.tabStyle!=="icons"?SECTION_NAMES[x.id]:""}</div>`).join("");
+  $("#tabs").querySelectorAll(".tab").forEach(el=>el.onclick=()=>{ if(S.dialogs.some(d=>d.kind==="lock")) return; closeAllDialogs(); switchSection(el.dataset.sec); });
+  renderStatus();
+}
+function renderStatus(){
+  const s = ST().topbar, now = new Date(), ic = iconColor(); let h = "";
+  const rap = ST().ra.enabled && ST().ra.showProfile ? RetroAchievements.profile() : null;
+  if(rap) h += `<span title="RetroAchievements">🏆 ${esc(rap.user)} · ${rap.points}</span>`;
+  if(s.showDate) h += `<span>${now.toLocaleDateString("de-DE",{weekday:"short",day:"2-digit",month:"2-digit"})}</span>`;
+  if(s.showClock) h += `<span>${fmtTime(now, s.clock24)}</span>`;
+  if(s.showWifi) h += icon("wifi", ic);
+  if(s.showBattery) h += `<span style="display:flex;align-items:center;gap:4px">${batteryIcon(ic)}${s.batteryPct?"87 %":""}</span>`;
+  $("#status").innerHTML = h;
+}
+function render(){
+  try{
+    applyTheme(); renderTopbar();
+    S.list = currentList(); S.focus = clamp(S.focus, 0, Math.max(0, S.list.length-1));
+    const f = S.openFolder ? entry(S.openFolder) : null;
+    $("#crumb").innerHTML = f ? `${SECTION_NAMES[S.section]} › <b style="color:${f.accent}">${esc(f.name)}</b> · B = zurück` : "";
+    $("#crumb").style.top = topH()+"px";
+    computeLayout();
+    const tiles = $("#tiles"); tiles.classList.add("noanim"); $("#ringWrap").classList.add("noanim");
+    const isList = ST().layout.mode==="list";
+    tiles.innerHTML = S.list.map((e,i)=>{ const t = tileCfg(e); const sel = S.multi && S.multi.has(e.id);
+      const art = (S.draft && S.draft.id===e.id) ? S.draft.art.cover : null; const img = ArtworkManager.url(e, "cover", art); const it = S.items[i];
+      const shadow = [t.borderWidth?`inset 0 0 0 ${t.borderWidth}px ${t.borderColor}`:"", t.shadow?"0 8px 20px rgba(0,0,0,.5)":""].filter(Boolean).join(",") || "none";
+      const badge = e.kind==="folder"?`<div class="badge" style="color:${e.accent}">▣ ${e.items.length}</div>`:e.kind==="forwarder"?`<div class="badge">TICO</div>`:e.kind==="homebrew"?`<div class="badge">NRO</div>`:"";
+      const clip = it.hex ? "clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);" : `border-radius:${t.radius}px;`;
+      if(isList) return `<div class="tile li" draggable="true" data-i="${i}"><div class="in" style="border-radius:${t.radius}px;box-shadow:${shadow}"><img class="cover" src="${img}" onerror="this.src=PLACEHOLDER"><div style="min-width:0"><div class="nm">${esc(e.name)}</div><div class="kd">${e.kind==="folder"?"Ordner · "+e.items.length+" Einträge":e.kind==="forwarder"?"TICO-Forwarder · "+esc(e.platform):e.kind==="homebrew"?"Homebrew":"Spiel"}</div></div>${badge}${e.favorite?`<div class="fav">★</div>`:""}${sel?`<div class="sel"></div>`:""}</div></div>`;
+      return `<div class="tile" draggable="true" data-i="${i}" style="opacity:${t.opacity}"><div class="in" style="${clip}box-shadow:${it.hex?"none":shadow}"><img class="cover" src="${img}" onerror="this.src=PLACEHOLDER" style="object-fit:${t.fit};object-position:${t.posX}% ${t.posY}%">${t.showTitle?`<div class="ttl">${esc(e.name)}</div>`:""}${raBadge(e)}${badge}${e.favorite?`<div class="fav">★</div>`:""}${sel?`<div class="sel"></div>`:""}</div></div>`;
+    }).join("") || `<div class="empty" style="top:${(area().y0+area().y1)/2}px">Keine Einträge in diesem Bereich.</div>`;
+    bindTiles();
+    const doEntry = S.entry && animOn() && !ST().anim.reduce && ST().anim.entry!=="none";
+    place(doEntry ? "from" : null);
+    requestAnimationFrame(()=>{ tiles.offsetHeight; tiles.classList.remove("noanim"); $("#ringWrap").classList.remove("noanim"); if(doEntry){ place("entry"); } });
+    S.entry = false;
+    FocusPresentationManager.show(S.list[S.focus], true);
+    renderHints();
+  }catch(err){ crashHandler(err); }
+}
+function tileTransform(it, i, focused){
+  const fx = ST().anim.focus; const t = S.list[i] ? tileCfg(S.list[i]) : ST().tileDefaults;
+  let sc = it.sc, dy = 0, rot = it.rot;
+  if(focused){ if(fx==="zoom"||fx==="glow"||fx==="pulse"||fx==="wobble") sc *= t.focusZoom; if(fx==="lift"){ dy = -14; sc *= 1.02; } if(fx==="tilt") rot += -3; }
+  return `translate(${it.x}px,${it.y+dy}px) rotate(${rot}deg) rotateY(${it.ry}deg) scale(${sc})`;
+}
+function place(phase){
+  const els = $("#tiles").querySelectorAll(".tile"); const s = ST().anim; const idle = animOn() && !s.reduce ? s.idle : "none";
+  els.forEach((el,i)=>{ const it = S.items[i]; if(!it) return; const foc = i===S.focus; const t = tileCfg(S.list[i]);
+    el.style.width = it.w+"px"; el.style.height = it.h+"px"; el.style.zIndex = foc ? 1000 : it.z;
+    el.style.pointerEvents = it.op < .05 ? "none" : "";
+    let tr = tileTransform(it, i, foc), op = it.op * (S.list[i].kind ? t.opacity : 1);
+    if(phase==="from"){ const e = s.entry; op = 0;
+      if(e==="slideUp") tr += " translateY(60px)"; else if(e==="slideSide") tr += " translateX(120px)"; else if(e==="pop") tr += " scale(.6)"; else if(e==="flip") tr += " rotateY(90deg)"; }
+    el.style.transitionDelay = phase==="entry" ? Math.min(i,24)*s.stagger+"ms" : "0ms";
+    el.style.transform = tr; el.style.opacity = op;
+    const inn = el.firstElementChild; inn.classList.remove("idle-float","idle-breathe","idle-sway");
+    if(idle!=="none" && (!s.idleFocusOnly || foc)) inn.classList.add("idle-"+idle);
+  });
+  if(phase==="entry") setTimeout(()=>$("#tiles").querySelectorAll(".tile").forEach(el=>el.style.transitionDelay="0ms"), 40*24+800);
+  placeRing();
+}
+function placeRing(){
+  const ring = $("#ring"); const it = S.items[S.focus];
+  if(!it || S.section==="settings" && S.dialogs.some(d=>d.kind==="settings") && false){ ring.style.display="none"; return; }
+  if(!it){ ring.style.display="none"; return; }
+  const fx = ST().anim.focus; const t = tileCfg(S.list[S.focus]);
+  ring.style.display = "block"; ring.style.width = it.w+"px"; ring.style.height = it.h+"px"; ring.style.transform = tileTransform(it, S.focus, true);
+  ring.className = (it.hex ? "" : "box") + (fx==="glow" ? " glow" : "") + (fx==="pulse" && animOn() ? " pulse" : "");
+  ring.style.borderRadius = (ST().layout.mode==="list" ? t.radius : t.radius)+"px";
+  ring.innerHTML = it.hex ? `<svg viewBox="0 0 100 100" preserveAspectRatio="none"><polygon points="50,0 100,25 100,75 50,100 0,75 0,25" fill="none" stroke="${ST().theme.accent}" stroke-width="3" vector-effect="non-scaling-stroke" style="filter:drop-shadow(0 0 8px ${ST().theme.accent})"/></svg>` : "";
+  ring.style.zIndex = 1;
+}
+function bindTiles(){
+  $("#tiles").querySelectorAll(".tile").forEach(el=>{
+    const i = +el.dataset.i;
+    el.onclick = ()=>{ if(S.dialogs.length) return; if(S.focus===i) press("A"); else setFocus(i); };
+    el.oncontextmenu = ev=>{ ev.preventDefault(); if(S.dialogs.length) return; setFocus(i); press("X"); };
+    el.ondragstart = ev=>{ S.dragI=i; ev.dataTransfer.effectAllowed="move"; };
+    el.ondragover = ev=>ev.preventDefault();
+    el.ondrop = ev=>{ ev.preventDefault(); dropOn(S.dragI, i); };
+  });
+}
+function dropOn(from, to){
+  if(from==null || from===to || !S.list[from] || !S.list[to]) return;
+  const src = S.list[from], dst = S.list[to];
+  if(dst.kind==="folder" && src.kind!=="folder"){ addToFolder(src.id, dst.id); toast(`„${src.name}“ → Ordner „${dst.name}“`); return; }
+  const arr = manualOrderArray(); if(!arr){ toast("Sortieren nur in Startseite und Ordnern mit manueller Sortierung."); return; }
+  const a = arr.indexOf(src.id), b = arr.indexOf(dst.id); if(a<0||b<0) return; arr.splice(a,1); arr.splice(b,0,src.id);
+  S.focus = to; DataStore.save(); render();
+}
+function setFocus(i){
+  const prev = S.focus; S.focus = clamp(i,0,S.list.length-1);
+  try{ computeLayout(); place(); if(ST().anim.focus==="wobble" && animOn()){ const el = $("#tiles").querySelectorAll(".tile")[S.focus]; if(el){ el.firstElementChild.classList.remove("wobble"); void el.offsetWidth; el.firstElementChild.classList.add("wobble"); } } }
+  catch(err){ crashHandler(err); }
+  FocusPresentationManager.show(S.list[S.focus], false); renderHints();
+}
+
+/* ---------------- FocusPresentationManager (Ebenen 1–3) ---------------- */
+const FocusPresentationManager = {
+  front:"A", timer:null, curKey:null,
+  show(e, immediate){ clearTimeout(this.timer); this.timer = setTimeout(()=>this.apply(e), immediate?0:ST().hero.debounce); this.applyEffects(); },
+  heroFor(e){ if(!e) return null; const d = S.draft && S.draft.id===e.id ? S.draft.art.hero : null; return ArtworkManager.url(e,"hero",d); },
+  logoFor(e){ if(!e) return null; const d = S.draft && S.draft.id===e.id ? S.draft.art.logo : null; return ArtworkManager.url(e,"logo",d); },
+  applyEffects(){
+    const h = ST().hero; $("#dim").style.opacity = h.enabled ? h.dim : 0; $("#grad").style.display = h.gradient ? "block" : "none";
+    const blur = h.blur ? `blur(${h.blur}px)` : "none"; $("#heroA").style.filter = $("#heroB").style.filter = blur;
+    const it = S.items[S.focus]; const px = h.parallax && it && animOn() ? -((it.x+it.w/2) - 640)/40 : 0;
+    $("#heroA").style.transform = $("#heroB").style.transform = `translateX(${px}px)`;
+    [$("#heroA"),$("#heroB")].forEach(x=>x.classList.toggle("kb", h.kenBurns && animOn()));
+    this.placeLogo();
+  },
+  apply(e){
+    const hs = ST().hero; const heroUrl = hs.enabled ? this.heroFor(e) : null; if(heroUrl) S.lastHero = heroUrl;
+    const key = heroUrl || "none";
+    if(key !== this.curKey){ const back = this.front==="A" ? $("#heroB") : $("#heroA"), front = this.front==="A" ? $("#heroA") : $("#heroB");
+      back.style.backgroundImage = heroUrl ? `url("${heroUrl}")` : "none"; if(heroUrl) back.classList.add("on"); else back.classList.remove("on"); front.classList.remove("on");
+      this.front = this.front==="A"?"B":"A"; this.curKey = key; }
+    const logo = $("#logo"), ls = ST().logo, img = logo.querySelector("img"); const url = this.logoFor(e);
+    const ri = $("#raInfo"); const rp = ST().ra.showUnderLogo ? RetroAchievements.progress(e) : null;
+    if(rp){ ri.innerHTML = `🏆 ${rp.got} / ${rp.total} Erfolge · ${rp.pct} %<br><span class="rb"><i style="width:${rp.pct}%"></i></span>`; ri.classList.toggle("m", rp.mastered); ri.classList.add("on"); } else ri.classList.remove("on");
+    if(!ls.visible || !e){ logo.classList.remove("on"); return; }
+    if(img.dataset.src !== url){ logo.classList.remove("on");
+      const st = !animOn() ? "none" : ls.anim==="slide" ? "translateX(-30px)" : ls.anim==="zoom" ? "scale(.9)" : "none";
+      logo.style.transition = "none"; logo.style.transform = st;
+      img.onload = ()=>requestAnimationFrame(()=>{ logo.style.transition = animOn() && ls.anim!=="none" ? "" : "none"; logo.style.transform = "none"; logo.classList.add("on"); });
+      img.onerror = ()=>{ logo.classList.remove("on"); };
+      img.dataset.src = url; img.src = url;
+    } else logo.classList.add("on");
+  },
+  logoBox(){
+    const A = area(), t = topH(), b = SH-botH();
+    if(!ST().logo.safeArea) return {x0:0,x1:SW,y0:t,y1:b};
+    if(A.v){ if(A.side==="right") return {x0:0,x1:A.x0-20,y0:t,y1:b}; if(A.side==="left") return {x0:A.x1+20,x1:SW,y0:t,y1:b}; return {x0:0,x1:SW,y0:t,y1:Math.max(t+80,A.y0)}; }
+    const above = {x0:0,x1:SW,y0:t,y1:A.y0-16}, below = {x0:0,x1:SW,y0:A.y1+16,y1:b};
+    const pos = ST().layout.position; return pos==="bottom" ? above : pos==="top" ? below : ((above.y1-above.y0) >= (below.y1-below.y0) ? above : below);
+  },
+  placeLogo(){
+    const ls = ST().logo, logo = $("#logo"), B = this.logoBox();
+    let w = 460*ls.scale, h = w/3; const bw = B.x1-B.x0, bh = B.y1-B.y0;
+    if(ls.safeArea && (w > bw-20 || h > bh)){ const k = Math.max(.1, Math.min((bw-20)/w, bh/h)); w *= k; h *= k; }
+    let x = ls.anchorX==="left" ? B.x0+50 : ls.anchorX==="center" ? (B.x0+B.x1-w)/2 : B.x1-w-50;
+    let y = ls.anchorY==="top" ? B.y0+16 : ls.anchorY==="middle" ? (B.y0+B.y1-h)/2 : B.y1-h;
+    x += ls.offsetX; y += ls.offsetY;
+    if(ls.safeArea){ x = clamp(x, B.x0, Math.max(B.x0, B.x1-w)); y = clamp(y, B.y0, Math.max(B.y0, B.y1-h)); }
+    Object.assign(logo.style, {left:x+"px", top:y+"px", width:w+"px"}); logo.style.setProperty("--logoOpacity", ls.opacity);
+    const ri = $("#raInfo"); Object.assign(ri.style, {left:x+"px", width:w+"px", top:(ls.visible ? y+h+8 : y)+"px", textAlign: ls.anchorX==="left"?"left":ls.anchorX==="center"?"center":"right"});
+    logo.classList.toggle("float", ls.float && animOn() && !ST().anim.reduce); logo.classList.toggle("shadow", ls.shadow);
+    Object.assign($("#safeArea").style, {left:B.x0+"px", top:B.y0+"px", width:(B.x1-B.x0)+"px", height:Math.max(0,B.y1-B.y0)+"px"});
+  }
+};
+
+/* ---------------- Hinweise / Toast / Absturzbehandlung ---------------- */
+function renderHints(){
+  let h; const top = S.dialogs[S.dialogs.length-1];
+  if(top) h = top.hints || [["A","Auswählen"],["B","Zurück"]];
+  else if(S.move) h = [["←→","Verschieben"],["A","Übernehmen"],["B","Verwerfen"]];
+  else if(S.multi) h = [["A","Markieren"],["X","Aktionen ("+S.multi.size+")"],["B","Beenden"]];
+  else h = [["A", S.list[S.focus]?.kind==="folder"?"Öffnen":"Starten"],["B", S.openFolder?"Zurück":"—"],["X","Optionen"],["Y","Favorit"],["L/R","Bereich"]];
+  $("#hints").innerHTML = h.map(([k,v])=>`<span><span class="k">${k}</span>${v}</span>`).join("");
+  $("#moveBanner").style.display = S.move||S.multi ? "block":"none";
+  $("#moveBanner").textContent = S.move ? "Positionsmodus – Layout-Vorschau aktiv" : S.multi ? `Mehrfachauswahl: ${S.multi.size} markiert` : "";
+}
+let toastT; function toast(m){ const t=$("#toast"); t.textContent=m; t.classList.add("on"); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove("on"),3200); }
+let crashCount = 0;
+function crashHandler(err){
+  console.error("NEXUS Fehler:", err); crashCount++;
+  if(crashCount === 1){ // Stufe 1: sichere Darstellung, Bibliothek bleibt
+    const s = ST(); s.layout = clone(defaultSettings().layout); s.anim.reduce = true; S.dialogs = []; $("#L6").innerHTML = "";
+    toast("Darstellungsfehler – auf sichere Anordnung „Raster“ zurückgesetzt."); DataStore.save(); render(); return; }
+  $("#fatalMsg").textContent = String(err && err.message || err); $("#fatal").style.display = "flex";
+}
+$("#fatalBtn").onclick = ()=>{ const keep = S.data; keep.settings = defaultSettings(); S.data = sanitizeData(keep).data; DataStore.save(); $("#fatal").style.display="none"; crashCount = 0; S.dialogs=[]; render(); };
+window.addEventListener("error", ev=>{ if(ev.message && !/ResizeObserver/.test(ev.message)) console.warn("NEXUS window.onerror", ev.message); });
+
+/* ---------------- SystemAdapter (simuliert) ---------------- */
+const SystemAdapter = { launch(e){ e.lastPlayed = Date.now(); DataStore.save();
+  toast(e.kind==="homebrew" ? `SystemAdapter → LaunchHomebrew("${e.nroPath}") – simuliert` : `SystemAdapter → LaunchApplication(0x${e.titleId})${e.kind==="forwarder"?" · Emulation übernimmt TICO":""} – simuliert`); } };
+
+/* ---------------- Dialog-System ---------------- */
+function pushDialog(d){ S.dialogs.push(d); drawDialogs(); renderHints(); }
+function popDialog(){ const d = S.dialogs.pop(); if(d && d.onClose) d.onClose(); drawDialogs(); renderHints(); }
+function closeAllDialogs(){ while(S.dialogs.length) popDialog(); }
+function drawDialogs(){
+  const L6 = $("#L6"); L6.innerHTML = "";
+  S.dialogs.forEach((d,idx)=>{ const isTop = idx===S.dialogs.length-1;
+    if(d.shade){ const sh=document.createElement("div"); sh.className="shade"; sh.onclick=()=>{ if(isTop) press("B"); }; L6.appendChild(sh); }
+    try{ const el = d.draw(); L6.appendChild(el); d.el = el; }catch(err){ console.error(err); } });
+}
+function panelX(w){ const it = S.items[S.focus]; return it && (it.x+it.w/2) > 700 ? 20 : SW-w-20; }
+function rowsDialog(o){
+  const rows = ()=> (typeof o.rows==="function" ? o.rows() : o.rows).filter(r=>!r.w || r.w());
+  o.sel = o.sel ?? 0;
+  const fix = R => { if(!R.length) return; o.sel = clamp(o.sel, 0, R.length-1); if(R[o.sel].head){ const n = R.findIndex((r,i)=>i>o.sel && !r.head); o.sel = n>=0 ? n : R.findIndex(r=>!r.head); } };
+  o.draw = ()=>{
+    const R = rows(); fix(R); const box = typeof o.box==="function" ? o.box() : o.box;
+    const p = document.createElement("div"); p.className="panel";
+    Object.assign(p.style,{left:box.l+"px",top:box.t+"px",width:box.w+"px",height:box.h?box.h+"px":"auto",maxHeight:(SH-box.t-botH())+"px"});
+    p.innerHTML = `<h2>${esc(o.title)}</h2>${o.sub?`<div class="sub">${o.sub}</div>`:""}<div class="rows"></div>${o.buttons?`<div class="btnbar">${o.buttons.map(([k,v])=>`<span><span class="k">${k}</span>${v}</span>`).join("")}</div>`:""}`;
+    const rc = p.querySelector(".rows");
+    R.forEach((r,i)=>{ const el = document.createElement("div");
+      if(r.head){ el.className="row head"; el.textContent=r.head; rc.appendChild(el); return; }
+      el.className = "row"+(i===o.sel?" cur":""); let val = "";
+      if(r.get){ const v = r.get();
+        if(r.t==="color") val = `<span class="sw" style="background:${v}"></span>${v}`;
+        else if(r.t==="bool") val = v ? "✔ an" : "✖ aus";
+        else if(r.t==="image") val = v ? "Bild gesetzt (A = ändern)" : "kein Bild (A = laden)";
+        else val = esc(r.f ? r.f(v) : (r.o && r.ol ? (r.ol[r.o.indexOf(v)] ?? v) : v)); }
+      const adj = r.get && r.set && r.t!=="image";
+      el.innerHTML = `<span>${esc(r.l)}</span><span class="val">${adj?`<span class="arr" data-d="-1">◀</span>`:""}${val}${adj?`<span class="arr" data-d="1">▶</span>`:(r.act||r.t==="image"?" ›":"")}</span>`;
+      el.onclick = ev=>{ const d = ev.target.dataset.d; o.sel=i; if(d) adjustRow(o, +d); else activateRow(o); };
+      rc.appendChild(el); });
+    requestAnimationFrame(()=>{ const c = rc.querySelector(".cur"); if(c) c.scrollIntoView({block:"nearest"}); });
+    return p;
+  };
+  o.cur = ()=>{ const R = rows(); fix(R); return R[o.sel]; };
+  o.input = k=>{
+    if(k==="up"||k==="down"){ const R = rows(); if(!R.length) return; let i=o.sel, n=0; do{ i = (i + (k==="up"?-1:1) + R.length) % R.length; n++; } while(R[i].head && n<R.length); o.sel=i; redraw(); }
+    else if(k==="left"||k==="right") adjustRow(o, k==="left"?-1:1);
+    else if(k==="A") activateRow(o);
+    else if(k==="B"){ if(o.onB) o.onB(); else popDialog(); }
+    else if(k==="X" && o.onX) o.onX(); else if(k==="Y" && o.onY) o.onY();
+    else if((k==="L"||k==="R") && o.onLR) o.onLR(k);
+  };
+  return o;
+}
+function adjustRow(o, d){
+  const r = o.cur(); if(!r || !r.set) return; const v = r.get();
+  if(r.t==="bool") r.set(!v);
+  else if(r.o){ const i = r.o.indexOf(v); r.set(r.o[(i+d+r.o.length)%r.o.length]); }
+  else if(r.t==="color"){ const i = PALETTE.indexOf(v); r.set(PALETTE[(i+d+PALETTE.length)%PALETTE.length]); }
+  else if(r.t==="num"){ r.set(+clamp(+(v + d*r.step).toFixed(3), r.min, r.max)); }
+  else return;
+  if(o.onChange) o.onChange(r); redraw();
+}
+function activateRow(o){ const r = o.cur(); if(!r) return;
+  if(r.act) r.act(); else if(r.t==="bool") adjustRow(o,1);
+  else if(r.t==="image") pickLocal(url=>{ r.set(url); if(o.onChange) o.onChange(r); redraw(); }, 1280);
+  else if(o.onA) o.onA(); }
+function redraw(){ drawDialogs(); }
+const A_ = (l,act,w)=>({l,act,w});
+
+/* ---------------- Kontextmenü ---------------- */
+function openContext(){
+  const e = S.list[S.focus]; if(!e) return; const isF = e.kind==="folder";
+  const rows = [A_(isF?"Öffnen":"Starten", ()=>{ popDialog(); press("A"); }), A_("Kachel bearbeiten", ()=>{ popDialog(); openEditor(e); }),
+    A_("Cover ändern", ()=>{ popDialog(); openArtPicker(e,"cover"); }), A_("Hintergrund ändern", ()=>{ popDialog(); openArtPicker(e,"hero"); }), A_("Logo ändern", ()=>{ popDialog(); openArtPicker(e,"logo"); }),
+    A_("SteamGridDB durchsuchen", ()=>{ popDialog(); openSGDB(e); }),
+    ...(isF ? [] : [A_("RetroAchievements…", ()=>{ popDialog(); openRA(e); })]), A_("Größe ändern", ()=>{ popDialog(); openEditor(e,1); }), A_("Format ändern", ()=>{ popDialog(); openEditor(e,3); }),
+    A_("Position ändern", ()=>{ popDialog(); startMove(); }), A_("Anordnung ändern…", ()=>{ popDialog(); openSettings("layout"); })];
+  if(isF){ rows.push(A_("Ordner umbenennen", ()=>{ popDialog(); openOSK("Ordnername", e.name, v=>{ if(v.trim()){ e.name=v.trim().slice(0,60); DataStore.save(); render(); } }); }), A_("Ordner löschen (Inhalt bleibt)", ()=>{ popDialog(); deleteFolder(e); })); }
+  else { rows.push(A_("Zu Ordner hinzufügen…", ()=>{ popDialog(); openFolderPicker([e.id]); })); if(S.openFolder) rows.push(A_("Aus Ordner entfernen", ()=>{ popDialog(); removeFromFolder(e.id); }));
+    rows.push(A_(e.favorite?"Aus Favoriten entfernen":"Zu Favoriten hinzufügen", ()=>{ popDialog(); toggleFav(e); })); }
+  rows.push(A_("Mehrfachauswahl starten", ()=>{ popDialog(); S.multi = new Set([e.id]); render(); }), A_("Neuer Ordner…", ()=>{ popDialog(); createFolderFlow([]); }),
+    A_("Darstellung zurücksetzen", ()=>{ popDialog(); e.tile = {}; e.art = {cover:{v:0},hero:{v:0},logo:{v:0}}; DataStore.save(); FocusPresentationManager.curKey=null; render(); toast("Darstellung zurückgesetzt."); }));
+  pushDialog(rowsDialog({title:e.name, sub: isF?`Ordner · ${e.items.length} Einträge`:(e.kind==="forwarder"?`TICO-Forwarder · ${e.platform} · ${e.titleId}`:e.kind==="homebrew"?`Homebrew · ${e.nroPath}`:`Titel-ID ${e.titleId}`), rows, box:{l:panelX(330), t:70, w:330}, shade:true}));
+}
+
+/* ---------------- Kachel-Editor ---------------- */
+function openEditor(e, selRow){
+  const original = {tile:clone(e.tile||{}), name:e.name, accent:e.accent, sort:e.sort}; S.draft = {id:e.id, art:clone(e.art)};
+  const t = ()=>{ e.tile = e.tile||{}; return e.tile; }; const g = k => ({...ST().tileDefaults, ...(e.tile||{})})[k]; const st = k=> v=>{ t()[k]=v; };
+  const isF = e.kind==="folder";
+  const rows = ()=>[
+    {head:"Kachel (Ebene 4)"},
+    {l:"Größe", get:()=>g("size"), set:st("size"), o:["S","M","L","XL","custom"], ol:["Klein","Mittel","Groß","Extra groß","Benutzerdefiniert"]},
+    {l:"  Höhe (benutzerdef.)", get:()=>g("customH")||7, set:st("customH"), t:"num", min:3, max:16, step:1, f:v=>v+" Einh.", w:()=>g("size")==="custom"},
+    {l:"Seitenverhältnis", get:()=>g("ratio"), set:st("ratio"), o:["1:1","2:3","3:2","4:3","16:9","custom"], ol:["1:1","2:3","3:2","4:3","16:9","Benutzerdefiniert"]},
+    {l:"  Verhältnis (benutzerdef.)", get:()=>g("customRatio")||1, set:st("customRatio"), t:"num", min:.4, max:2.5, step:.05, f:v=>(+v).toFixed(2)+" : 1", w:()=>g("ratio")==="custom"},
+    ...TILE_SPEC.filter(s=>!["size","ratio"].includes(s.p)).map(s=>({l:s.l, get:()=>g(s.p), set:st(s.p), t:s.t, o:s.o, ol:s.ol, min:s.min, max:s.max, step:s.step, f:s.f})),
+    {head:"Artwork – getrennte Ebenen"},
+    {l:"Cover (nur Kachel)", get:()=>S.draft.art.cover.v, set:v=>{ S.draft.art.cover={v}; }, t:"num", min:0, max:5, step:1, f:v=>"Variante "+(v+1)},
+    {l:"Hintergrund / Hero (Ebene 1)", get:()=>S.draft.art.hero.v, set:v=>{ S.draft.art.hero={v}; }, t:"num", min:0, max:5, step:1, f:v=>"Variante "+(v+1)},
+    {l:"Schwebendes Logo (Ebene 3)", get:()=>S.draft.art.logo.v, set:v=>{ S.draft.art.logo={v}; }, t:"num", min:0, max:5, step:1, f:v=>"Variante "+(v+1)},
+    A_("Eigenes Cover laden (PNG/JPEG)…", ()=>pickLocal(url=>{ S.draft.art.cover={v:0,custom:url}; live(); }, 600)),
+    A_("Eigenen Hintergrund laden…", ()=>pickLocal(url=>{ S.draft.art.hero={v:0,custom:url}; live(); }, 1280)),
+    A_("Eigenes Logo laden (transparentes PNG)…", ()=>pickLocal(url=>{ S.draft.art.logo={v:0,custom:url}; live(); }, 900)),
+    ...(isF ? [{head:"Ordner"}, A_("Name: "+e.name, ()=>openOSK("Ordnername", e.name, v=>{ if(v.trim()) e.name=v.trim().slice(0,60); live(); })),
+      {l:"Akzentfarbe", get:()=>e.accent, set:v=>{ e.accent=v; }, t:"color"}, {l:"Sortierung im Ordner", get:()=>e.sort, set:v=>{ e.sort=v; }, o:["manual","name"], ol:["Manuell","Nach Name"]}] : [])
+  ];
+  const live = ()=>{ FocusPresentationManager.curKey=null; render(); redraw(); };
+  const finish = ()=>{ $("#safeArea").style.display="none"; };
+  const dlg = rowsDialog({title:"Kachel-Editor · "+e.name, sub:"Live-Vorschau im Menü. Gespeichert wird erst mit <b>Y = Übernehmen</b>.", rows, box:()=>({l:panelX(390), t:topH()+4, w:390, h:SH-topH()-botH()-10}),
+    buttons:[["Y","Übernehmen"],["X","Zurücksetzen"],["B","Abbrechen"]], hints:[["↑↓","Option"],["←→","Wert"],["Y","Übernehmen"],["X","Zurücksetzen"],["B","Abbrechen"]],
+    onChange: live,
+    onY: ()=>{ finish(); e.art = clone(S.draft.art); e.tile = sanitizeTile(e.tile); S.draft=null; DataStore.save(); dlg.onClose=null; popDialog(); FocusPresentationManager.curKey=null; render(); toast("Gespeichert."); },
+    onX: ()=>{ e.tile = {}; S.draft.art = {cover:{v:0},hero:{v:0},logo:{v:0}}; live(); toast("Zurückgesetzt (noch nicht gespeichert)."); },
+    onClose: ()=>{ finish(); e.tile = original.tile; e.name = original.name; if(isF){ e.accent = original.accent; e.sort = original.sort; } S.draft=null; FocusPresentationManager.curKey=null; render(); }
+  });
+  if(selRow) dlg.sel = selRow; pushDialog(dlg); $("#safeArea").style.display="block";
+}
+function pickLocal(cb, maxW){
+  const inp = $("#fileIn"); inp.value="";
+  inp.onchange = ()=>{ const f = inp.files[0]; if(!f) return; if(!/image\/(png|jpeg)/.test(f.type)){ toast("Nur PNG oder JPEG."); return; }
+    const img = new Image(); img.onerror = ()=>toast("Bild konnte nicht gelesen werden – nichts geändert.");
+    img.onload = ()=>{ try{ const sc = Math.min(1, maxW/img.width); const c = document.createElement("canvas"); c.width = Math.max(1,Math.round(img.width*sc)); c.height = Math.max(1,Math.round(img.height*sc));
+      c.getContext("2d").drawImage(img,0,0,c.width,c.height); cb(c.toDataURL(f.type==="image/png"?"image/png":"image/jpeg", .85)); toast(`Bild normalisiert auf ${c.width}×${c.height} (→ sdmc:/nexus/art/…)`); }catch(err){ toast("Bild zu groß oder fehlerhaft – nichts geändert."); } };
+    img.src = URL.createObjectURL(f); };
+  inp.click();
+}
+
+/* ---------------- Bildauswahl / SteamGridDB ---------------- */
+function openArtPicker(e, type, opts={}){
+  const before = clone(e.art); S.draft = {id:e.id, art:clone(e.art)};
+  const labels = {cover:"Cover / Grid (nur Kachel)", hero:"Hintergrund / Hero (Vollbild-Ebene)", logo:"Schwebendes Logo (über dem Hero)", icon:"Icon (quadratisch, Kachel)"};
+  const at = type==="icon"?"cover":type; let sel = type==="icon" ? 0 : (e.art[at].v||0); const N6 = 6;
+  const preview = ()=>{ if(type==="icon") S.draft.art.cover = {v:sel, icon:true}; else S.draft.art[at] = {v:sel}; FocusPresentationManager.curKey=null; if(at==="cover") render(); else FocusPresentationManager.apply(e); };
+  const d = { hints:[["←→↑↓","Bild"],["A","Übernehmen"],["B","Abbrechen"]],
+    draw(){ const p = document.createElement("div"); p.className="panel"; const w=410; Object.assign(p.style,{left:panelX(w)+"px",top:(topH()+4)+"px",width:w+"px",maxHeight:(SH-topH()-botH()-10)+"px"});
+      const ar = at==="hero"?"16/9":at==="logo"?"3/1":type==="icon"?"1/1":"2/3";
+      p.innerHTML = `<h2>${opts.title||"Bild auswählen"}</h2><div class="sub">${labels[type]}<br>${opts.sub||"Generierte Testgrafiken. Vorschau wirkt direkt auf die passende Ebene."}</div><div class="grid6" style="--ar:${ar}"></div><div class="btnbar"><span><span class="k">A</span>Übernehmen</span><span><span class="k">B</span>Abbrechen</span></div>`;
+      const g = p.querySelector(".grid6");
+      for(let i=0;i<N6;i++){ const o = document.createElement("div"); o.className = "opt"+(at==="cover"?" cover":"")+(i===sel?" cur":"");
+        o.innerHTML = `<img src="${ArtworkManager.url(e, at, {v:i, icon:type==="icon"})}">`; if(at==="logo") o.style.background = `url("${ArtworkManager.url(e,"hero",S.draft.art.hero)}") center/cover`;
+        o.onclick = ()=>{ if(sel===i) d.input("A"); else { sel=i; preview(); redraw(); } }; g.appendChild(o); }
+      return p; },
+    input(k){ if(k==="left") sel=(sel+N6-1)%N6; else if(k==="right") sel=(sel+1)%N6; else if(k==="up") sel=(sel+N6-3)%N6; else if(k==="down") sel=(sel+3)%N6;
+      else if(k==="A"){ e.art = clone(S.draft.art); S.draft=null; DataStore.save(); d.onClose=null; popDialog(); FocusPresentationManager.curKey=null; render(); toast(opts.saved || "Bild zugeordnet und gespeichert."); return; }
+      else if(k==="B"){ popDialog(); return; } else return; preview(); redraw(); },
+    onClose(){ e.art = before; S.draft=null; FocusPresentationManager.curKey=null; render(); } };
+  pushDialog(d); preview();
+}
+function openSGDB(e, query){
+  const key = ST().sgdbKey; query = (query ?? e.name).replace(/[™®©]/g,"").trim().slice(0,80);
+  const results = [{id:hash(query)%90000+10000, name:query}, {id:hash(query+"r")%90000+10000, name:query+" – Remastered"}];
+  const pick = (r, type)=>{ closeAllDialogs(); openArtPicker(e, type, {title:"SteamGridDB · "+r.name, sub:`Simuliert: GET /${type==="cover"?"grids":type+"s"}/game/${r.id}?types=static`, saved:`Heruntergeladen → sdmc:/nexus/art/${e.titleId||e.id}/${type==="cover"?"grid.jpg":type==="hero"?"hero.jpg":type+".png"} (simuliert)`}); };
+  const chooseType = r => pushDialog(rowsDialog({title:"Bildtyp wählen", sub:`${esc(r.name)} · SteamGridDB #${r.id}`, box:{l:panelX(410),t:120,w:410}, rows:[A_("Grids → Spielecover", ()=>pick(r,"cover")), A_("Heroes → Hintergrund", ()=>pick(r,"hero")), A_("Logos → schwebendes Logo", ()=>pick(r,"logo")), A_("Icons → Anwendungssymbol", ()=>pick(r,"icon"))]}));
+  pushDialog(rowsDialog({title:"SteamGridDB durchsuchen", sub: key ? `API-Key hinterlegt (••••${esc(key.slice(-4))}). Im Prototyp werden keine echten Anfragen gesendet.` : "Kein API-Key hinterlegt (Einstellungen → Bibliothek & SteamGridDB). Ablauf mit Offline-Testdaten.",
+    rows:[{head:"1 · Suche"}, A_("Suchbegriff: "+query, ()=>openOSK("SteamGridDB-Suche", query, v=>{ popDialog(); openSGDB(e, v); })), {head:"2 · Treffer (Testdaten)"}, ...results.map(r=>A_(`${r.name} · #${r.id}`, ()=>chooseType(r)))],
+    box:{l:panelX(410),t:topH()+4,w:410}}));
+}
+
+/* ---------------- Bildschirmtastatur ---------------- */
+function openOSK(title, init, cb){
+  const keys = "1234567890QWERTZUIOPASDFGHJKLÖYXCVBNMÄÜ-_.&()!?' ".split("").concat(["⇧","⌫","OK"]); let val = init||"", sel = 0, lower = false;
+  const finish = ()=>{ popDialog(); try{ cb(val.slice(0,120)); }catch(err){ crashHandler(err); } };
+  const d = { hints:[["A","Taste"],["Y","Löschen"],["Enter","OK"],["B","Abbrechen"]], wantsKeys:true,
+    draw(){ const p = document.createElement("div"); p.className="panel"; Object.assign(p.style,{left:"290px",top:"150px",width:"700px"});
+      p.innerHTML = `<h2>${esc(title)}</h2><div class="oskIn">${esc(val)}<span style="opacity:.6">▏</span></div><div class="osk"></div><div class="sub">Physische Tastatur funktioniert ebenfalls.</div>`;
+      const g = p.querySelector(".osk"); keys.forEach((k,i)=>{ const el=document.createElement("div"); el.className=i===sel?"cur":""; el.textContent = k===" "?"␣":(lower&&k.length===1?k.toLowerCase():k); el.onclick=()=>{ sel=i; d.input("A"); }; g.appendChild(el); }); return p; },
+    input(k, raw){
+      if(raw){ if(raw==="Backspace") val=val.slice(0,-1); else if(raw==="Enter") return finish(); else if(raw.length===1 && val.length<120) val+=raw; redraw(); return; }
+      if(k==="left") sel=(sel+keys.length-1)%keys.length; else if(k==="right") sel=(sel+1)%keys.length; else if(k==="up") sel=Math.max(0,sel-10); else if(k==="down") sel=Math.min(keys.length-1,sel+10);
+      else if(k==="A"){ const c = keys[sel]; if(c==="⌫") val=val.slice(0,-1); else if(c==="⇧") lower=!lower; else if(c==="OK") return finish(); else if(val.length<120) val += lower?c.toLowerCase():c; }
+      else if(k==="Y") val=val.slice(0,-1); else if(k==="B"){ popDialog(); return; } redraw(); } };
+  pushDialog(d);
+}
+
+/* ---------------- Ordner ---------------- */
+function addToFolder(appId, folderId){ const d = S.data, f = entry(folderId); if(!f || !entry(appId) || entry(appId).kind==="folder") return;
+  d.folders.forEach(x=>x.items = x.items.filter(i=>i!==appId)); d.rootOrder = d.rootOrder.filter(i=>i!==appId); f.items.push(appId); DataStore.save(); render(); }
+function removeFromFolder(appId){ const d = S.data, f = folderOf(appId); if(!f) return; f.items = f.items.filter(i=>i!==appId); const at = d.rootOrder.indexOf(f.id); d.rootOrder.splice(at+1,0,appId); DataStore.save(); render(); toast("Aus Ordner entfernt – wieder auf der Startseite."); }
+function deleteFolder(f){
+  pushDialog(rowsDialog({title:`Ordner „${f.name}“ löschen?`, sub:"Die Spiele werden <b>nicht</b> deinstalliert. Nur die NEXUS-Zuordnung wird entfernt; die Einträge wandern auf die Startseite.", box:{l:390,t:200,w:500}, shade:true, rows:[
+    A_("Abbrechen", ()=>popDialog()),
+    A_("Ordner löschen", ()=>{ popDialog(); const d=S.data; const at = d.rootOrder.indexOf(f.id); d.rootOrder.splice(at<0?d.rootOrder.length:at, at<0?0:1, ...f.items); d.folders = d.folders.filter(x=>x!==f); if(S.openFolder===f.id) S.openFolder=null; DataStore.save(); render(); toast(`Ordner gelöscht, ${f.items.length} Einträge auf die Startseite verschoben.`); })]}));
+}
+function createFolderFlow(ids){
+  openOSK("Neuer Ordner – Name", "Neuer Ordner", name=>{ if(!name.trim()) return;
+    const f = {id:"fld-"+uuid(), kind:"folder", name:name.trim().slice(0,60), accent:PALETTE[S.data.folders.length%PALETTE.length], hue:hash(name)%360, items:[], tile:{}, art:{cover:{v:0},hero:{v:0},logo:{v:0}}, sort:"manual"};
+    S.data.folders.push(f); S.data.rootOrder.splice(S.section==="start"&&!S.openFolder?S.focus+1:S.data.rootOrder.length,0,f.id);
+    ids.forEach(id=>addToFolder(id, f.id)); S.multi=null; DataStore.save(); render(); toast(`Ordner „${f.name}“ erstellt.`); });
+}
+function openFolderPicker(ids){
+  const rows = S.data.folders.map(f=>A_(f.name, ()=>{ popDialog(); ids.forEach(id=>addToFolder(id,f.id)); toast(`${ids.length} Eintrag/Einträge → „${f.name}“`); S.multi=null; render(); }));
+  rows.push(A_("+ Neuen Ordner erstellen…", ()=>{ popDialog(); createFolderFlow(ids); }));
+  pushDialog(rowsDialog({title:"Zu Ordner hinzufügen", rows, box:{l:440,t:150,w:400}, shade:true}));
+}
+function toggleFav(e){ if(e.kind==="folder"){ toast("Ordner können nicht favorisiert werden."); return; } e.favorite=!e.favorite; DataStore.save(); render(); toast(e.favorite?"★ Zu Favoriten hinzugefügt":"Aus Favoriten entfernt"); }
+function startMove(){ const arr = manualOrderArray(); if(!arr){ toast("Position nur in Startseite oder Ordnern mit manueller Sortierung änderbar."); return; } S.move = {arr, backup:[...arr], id:S.list[S.focus].id}; renderHints(); }
+function moveStep(d){ const m = S.move; const i = m.arr.indexOf(m.id); const j = clamp(i+d,0,m.arr.length-1); if(i===j) return; m.arr.splice(i,1); m.arr.splice(j,0,m.id); S.list = currentList(); S.focus = S.list.findIndex(x=>x.id===m.id); render(); }
+
+/* ---------------- Einstellungen (aus SPEC erzeugt) ---------------- */
+function specRow(spec){ return {l:spec.l, get:()=>getP(ST(), spec.p), set:v=>setP(ST(), spec.p, v), t:spec.t, o:spec.o, ol:spec.ol, min:spec.min, max:spec.max, step:spec.step, f:spec.f, w:spec.w}; }
+function settingsBox(){ const w = 470; const A = area(); const left = vertical() && A.side==="right"; return {l:left?20:SW-w-20, t:topH()+4, w, h:SH-topH()-botH()-10}; }
+function liveApply(){ DataStore.save(); applyTheme(); renderTopbar(); computeLayout(); place(); FocusPresentationManager.applyEffects(); FocusPresentationManager.curKey=null; FocusPresentationManager.apply(S.list[S.focus]); }
+function openSettings(group){
+  if(S.section!=="settings"){ S.section="settings"; S.openFolder=null; S.focus=0; S.scroll=0; S.entry=true; render(); }
+  const cats = rowsDialog({title:"Einstellungen", kind:"settings", sub:"Alle Werte wirken sofort und werden automatisch gespeichert. Die Startseite dient als Live-Vorschau.",
+    rows: GROUPS.map(([id,label])=>A_(label, ()=>openGroup(id))), box:settingsBox,
+    hints:[["A","Öffnen"],["L/R","Bereich"],["B","Zur Startseite"]], onB:()=>{ closeAllDialogs(); switchSection("start"); }, onLR:k=>cycleSection(k==="L"?-1:1)});
+  pushDialog(cats);
+  if(group){ cats.sel = GROUPS.findIndex(g=>g[0]===group); openGroup(group); }
+}
+function openGroup(id){
+  const label = GROUPS.find(g=>g[0]===id)[1]; let rows;
+  if(id==="sections") rows = ()=>ST().sections.map((sec,i)=>({l:SECTION_NAMES[sec.id], get:()=>sec.visible?"sichtbar":"versteckt", set:null, act:()=>{ if(sec.id==="settings"){ toast("Einstellungen bleiben immer erreichbar."); return; } sec.visible=!sec.visible; liveApply(); redraw(); }, move:true, idx:i}));
+  else if(id==="sys") rows = sysRows;
+  else if(id==="ra") rows = ()=>[...SPEC.filter(s=>s.g==="ra" && !s.hidden).map(specRow), {head:"Konto"},
+    A_("Benutzername: "+(ST().ra.user||"nicht hinterlegt"), ()=>openOSK("RetroAchievements-Benutzername", ST().ra.user||"", v=>{ ST().ra.user = v.trim().slice(0,60); DataStore.save(); renderStatus(); redraw(); })),
+    A_("Web-API-Key: "+(ST().ra.key?"••••"+ST().ra.key.slice(-4):"nicht hinterlegt"), ()=>openOSK("RetroAchievements Web-API-Key", "", v=>{ ST().ra.key = v.trim().slice(0,120); DataStore.save(); redraw(); toast("Key nur lokal gespeichert, nie im Log. Zu finden auf retroachievements.org unter Einstellungen → Keys."); })),
+    A_("Verbindung testen", ()=>toast(ST().ra.user && ST().ra.key ? "Simuliert: Profil geladen. Die Switch-App prüft hier API_GetUserProfile." : "Bitte zuerst Benutzername und Web-API-Key eintragen."))];
+  else if(id==="lib") rows = ()=>[...SPEC.filter(s=>s.g==="lib" && !s.hidden).map(specRow), {head:"SteamGridDB"},
+    A_("API-Key: "+(ST().sgdbKey?"••••"+ST().sgdbKey.slice(-4):"nicht hinterlegt"), ()=>openOSK("SteamGridDB-API-Key", "", v=>{ ST().sgdbKey = v.trim().slice(0,120); DataStore.save(); redraw(); toast("Key nur lokal gespeichert. Hinweis: Auf einer modifizierten Konsole kann jede Homebrew die SD-Karte lesen."); })),
+    A_("Bildcache leeren", ()=>{ artCache.clear(); toast("Texturcache geleert (Downloads auf SD bleiben)."); })];
+  else rows = ()=>{ const r = SPEC.filter(s=>s.g===id && !s.hidden).map(specRow); if(id==="lock") r.push(A_("Sperrbildschirm jetzt anzeigen", ()=>showLock())); return r; };
+  const previewHint = ["layout","anim","tiles","hero","logo"].includes(id);
+  const dlg = rowsDialog({title:label, kind:"settings", sub: id==="sections" ? "A = ein/aus · ←→ = Reihenfolge ändern" : previewHint ? "Y = Vorschau-Fokus zur nächsten Kachel" : "", rows, box:settingsBox,
+    hints:[["↑↓","Option"],["←→","Wert"],["A","Wählen"],...(previewHint?[["Y","Vorschau-Fokus"]]:[]),["B","Zurück"]],
+    onChange: r=>{ liveApply(); if(id==="ra"){ render(); FocusPresentationManager.curKey=null; FocusPresentationManager.apply(S.list[S.focus]); } if(id==="logo"||id==="layout") $("#safeArea").style.display = ST().logo.safeArea ? "block" : "none"; },
+    onY: ()=>{ if(S.list.length){ let n = S.focus+1; if(n>=S.list.length) n=0; setFocus(n); } },
+    onClose: ()=>{ $("#safeArea").style.display = "none"; }});
+  if(id==="sections"){ const orig = dlg.input; dlg.input = k=>{ if(k==="left"||k==="right"){ const r = dlg.cur(); const a = ST().sections; const j = clamp(r.idx + (k==="left"?-1:1), 0, a.length-1); if(j!==r.idx){ const [x] = a.splice(r.idx,1); a.splice(j,0,x); dlg.sel = j; liveApply(); redraw(); } } else orig(k); }; }
+  pushDialog(dlg); if(id==="logo") $("#safeArea").style.display = ST().logo.safeArea ? "block" : "none";
+}
+function sysRows(){
+  const s = ST();
+  return [{l:"Theme", get:()=>s.theme.name, set:v=>applyThemeByName(v), o:S.data.themes.map(t=>t.name)},
+    A_("Aktuelles Design als neues Theme speichern", ()=>openOSK("Theme-Name", "Mein Theme", n=>{ n = n.trim().slice(0,60)||"Mein Theme"; s.theme.name = n; S.data.themes.push({id:"th-"+uuid(), name:n, data:themeSnapshot(s)}); DataStore.save(); redraw(); toast(`Theme „${n}“ gespeichert. Spielbilder sind nicht Teil des Themes.`); })),
+    A_("Theme exportieren (JSON)", ()=>download(`nexus-theme-${s.theme.name}.json`, {nexusTheme:2, data:themeSnapshot(s)})),
+    A_("Theme importieren…", ()=>importJSON(j=>{ if(!j || !j.nexusTheme || !j.data) throw new Error("kein Theme"); const name = (j.data.theme&&j.data.theme.name||"Import")+" (Import)"; const clean = themeSnapshot(sanitizeSettings(j.data, [])); clean.theme.name = name; S.data.themes.push({id:"th-"+uuid(), name, data:clean}); applyThemeByName(name); })),
+    {head:"Sicherung"},
+    A_("Konfiguration sichern (Backup herunterladen)", ()=>download(`nexus-backup-${new Date().toISOString().slice(0,10)}.json`, S.data)),
+    A_("Konfiguration wiederherstellen…", ()=>importJSON(j=>{ const r = sanitizeData(migrate(j)); S.data = r.data; if(r.report.length) toast(`${r.report.length} ungültige Werte korrigiert.`); })),
+    A_("Darstellung auf Standard (Bibliothek bleibt)", ()=>{ const keep = s.sgdbKey; S.data.settings = defaultSettings(); S.data.settings.sgdbKey = keep; DataStore.save(); closeAllDialogs(); openSettings("sys"); toast("Darstellung zurückgesetzt."); }),
+    A_("Alles auf Werkszustand (Testdaten neu)", ()=>{ S.data = defaultData(); DataStore.save(); closeAllDialogs(); openSettings("sys"); toast("Werkszustand wiederhergestellt."); }),
+    {head:"Stabilität"},
+    A_("Konfiguration prüfen und reparieren", ()=>{ const r = sanitizeData(JSON.parse(JSON.stringify(S.data))); S.data = r.data; DataStore.save(); toast(r.report.length ? `${r.report.length} Werte repariert.` : "Konfiguration ist in Ordnung."); }),
+    A_("Abgesicherten Modus testen (Neustart mit #safe)", ()=>{ location.hash = "safe"; location.reload(); })];
+}
+function applyThemeByName(name){
+  const th = S.data.themes.find(t=>t.name===name); if(!th) return;
+  const keep = {library:ST().library, sgdbKey:ST().sgdbKey, ra:ST().ra}; // Theme ersetzt nur globale Werte – individuelle Spielanpassungen bleiben erhalten
+  S.data.settings = sanitizeSettings({...clone(th.data), ...keep}, []); S.data.settings.theme.name = name; DataStore.save(); liveApply(); redraw();
+  toast(`Theme „${name}“ aktiv. Individuelle Cover/Logos/Hintergründe unverändert.`);
+}
+function download(name, obj){ try{ const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(obj,null,2)],{type:"application/json"})); a.download = name; a.click(); toast("Export: "+name+" (in der Online-Vorschau ggf. blockiert – lokal öffnen)"); }catch(e){ toast("Export nicht möglich."); } }
+function importJSON(apply){ const inp = $("#jsonIn"); inp.value=""; inp.onchange = async ()=>{ try{ const j = JSON.parse(await inp.files[0].text()); apply(j); DataStore.save(); closeAllDialogs(); S.entry=true; render(); toast("Import erfolgreich."); }catch(e){ toast("Import fehlgeschlagen – Datei ungültig. Nichts wurde verändert."); } }; inp.click(); }
+
+/* ---------------- Sperrbildschirm ---------------- */
+function showLock(){
+  if(S.dialogs.some(d=>d.kind==="lock")) return;
+  const d = {kind:"lock", hints:[["A","Entsperren"]], unlocking:false,
+    draw(){ const l = ST().lock; const el = document.createElement("div"); el.className = "lock";
+      const hero = S.lastHero || FocusPresentationManager.heroFor(S.list[0]);
+      el.style.background = l.bgType==="home" ? bgCSS(ST().home.bgType, ST().home.preset, ST().home.color, ST().home.image) : bgCSS(l.bgType, l.preset, l.color, l.image, hero);
+      const col = l.textColor==="black" ? "#111" : "#fff"; const now = new Date();
+      const pos = {center:"left:0;right:0;top:34%;text-align:center", topLeft:"left:70px;top:80px", bottomLeft:"left:70px;bottom:110px", bottomRight:"right:70px;bottom:110px;text-align:right"}[l.clockPos];
+      el.innerHTML = `<div class="ld" style="opacity:${l.dim};backdrop-filter:blur(${l.blur}px);-webkit-backdrop-filter:blur(${l.blur}px)"></div>
+        <div class="clk" style="${pos};font-size:${l.clockSize}px;font-family:'${l.clockFont}',system-ui;color:${col}">${fmtTime(now, l.clock24)}${l.showDate?`<div class="dt">${now.toLocaleDateString("de-DE",{weekday:"long",day:"numeric",month:"long"})}</div>`:""}</div>
+        ${l.showBattery?`<div class="lb" style="color:${col}">${batteryIcon(col)} 87 %</div>`:""}${l.hint?`<div class="lh" style="color:${col}">Zum Entsperren A drücken oder tippen</div>`:""}${(ST().ra.enabled && ST().ra.lockRecent && RetroAchievements.recent()) ? `<div class="lh" style="color:${col};bottom:80px;animation:none;opacity:.9">🏆 Zuletzt freigeschaltet: „${esc(RetroAchievements.recent().title)}“ in ${esc(RetroAchievements.recent().game)}</div>` : ""}`;
+      el.onclick = ()=>d.input("A"); return el; },
+    input(k){ if(d.unlocking || !["A","B","X","Y"].includes(k)) return;
+      d.unlocking = true; const el = d.el; const a = ST().lock.anim; if(!animOn()) { popDialog(); return; }
+      el.style.transform = a==="slideUp" ? "translateY(-100%)" : a==="zoom" ? "scale(1.15)" : ""; el.style.opacity = a==="slideUp" ? "1" : "0";
+      setTimeout(()=>popDialog(), 520); }};
+  pushDialog(d);
+}
+setInterval(()=>{ renderStatus(); const lk = S.dialogs.find(d=>d.kind==="lock"); if(lk && !lk.unlocking && lk.el){ const c = lk.el.querySelector(".clk"); if(c && c.firstChild) c.firstChild.textContent = fmtTime(new Date(), ST().lock.clock24); } }, 1000);
+
+/* ---------------- Bereiche ---------------- */
+function switchSection(id){ if(id==="settings"){ closeAllDialogs(); openSettings(); return; } S.section = id; S.openFolder = null; S.focus = 0; S.scroll = 0; S.move=null; S.multi=null; S.entry=true; closeAllDialogs(); render(); }
+function cycleSection(d){ const vis = ST().sections.filter(s=>s.visible).map(s=>s.id); const i = vis.indexOf(S.section); closeAllDialogs(); switchSection(vis[(i+d+vis.length)%vis.length]); }
+
+/* ---------------- Eingabe ---------------- */
+let lastInput = 0;
+function press(k, raw){
+  try{
+    lastInput = performance.now();
+    const top = S.dialogs[S.dialogs.length-1];
+    if(k==="LOCK"){ showLock(); return; }
+    if(top){ if((k==="L"||k==="R") && top.kind==="settings" && top.onLR){ top.onLR(k); return; } if((k==="L"||k==="R") && top.kind==="settings"){ cycleSection(k==="L"?-1:1); return; } top.input(k, raw); return; }
+    if(S.move){ if(k==="left"||k==="up") moveStep(-1); else if(k==="right"||k==="down") moveStep(1);
+      else if(k==="A"){ S.move=null; DataStore.save(); renderHints(); toast("Neue Position gespeichert."); }
+      else if(k==="B"){ const m=S.move; m.arr.splice(0,m.arr.length,...m.backup); S.move=null; S.list=currentList(); S.focus=Math.max(0,S.list.findIndex(x=>x.id===m.id)); render(); toast("Layout-Änderung verworfen."); } return; }
+    const e = S.list[S.focus];
+    switch(k){
+      case "left": case "right": case "up": case "down": navigate(k); break;
+      case "L": cycleSection(-1); break; case "R": cycleSection(1); break;
+      case "A": if(!e) return; if(S.multi){ S.multi.has(e.id)?S.multi.delete(e.id):S.multi.add(e.id); render(); return; }
+        if(e.kind==="folder"){ S.openFolder = e.id; S.focus=0; S.scroll=0; S.entry=true; render(); } else SystemAdapter.launch(e); break;
+      case "B": if(S.multi){ S.multi=null; render(); return; } if(S.openFolder){ const id=S.openFolder; S.openFolder=null; S.scroll=0; S.entry=true; S.list=currentList(); S.focus=Math.max(0,S.list.findIndex(x=>x.id===id)); render(); } break;
+      case "X": if(S.multi){ const ids=[...S.multi].filter(id=>entry(id) && entry(id).kind!=="folder");
+          pushDialog(rowsDialog({title:`${ids.length} Einträge`, box:{l:440,t:150,w:400}, shade:true, rows:[A_("In Ordner verschieben…", ()=>{ popDialog(); openFolderPicker(ids); }), A_("In neuen Ordner…", ()=>{ popDialog(); createFolderFlow(ids); }),
+            A_("Aus Ordnern entfernen", ()=>{ popDialog(); ids.forEach(id=>folderOf(id)&&removeFromFolder(id)); S.multi=null; render(); }), A_("Zu Favoriten", ()=>{ popDialog(); ids.forEach(id=>{ entry(id).favorite=true; }); S.multi=null; DataStore.save(); render(); })]})); return; }
+        openContext(); break;
+      case "Y": if(e) toggleFav(e); break;
+    }
+  }catch(err){ crashHandler(err); }
+}
+const KEYMAP = {ArrowLeft:"left",ArrowRight:"right",ArrowUp:"up",ArrowDown:"down",a:"left",d:"right",w:"up",s:"down",Enter:"A",Escape:"B",Backspace:"B",x:"X",y:"Y",q:"L",e:"R",p:"LOCK"};
+document.addEventListener("keydown", ev=>{
+  const top = S.dialogs[S.dialogs.length-1];
+  if(top && top.wantsKeys && !ev.key.startsWith("Arrow") && ev.key!=="Escape"){ ev.preventDefault(); top.input(null, ev.key); return; }
+  const k = KEYMAP[ev.key] || KEYMAP[ev.key.toLowerCase()]; if(!k) return; ev.preventDefault();
+  if(ev.repeat && !["left","right","up","down"].includes(k)) return; press(k);
+});
+const GP = {1:"A",0:"B",3:"X",2:"Y",4:"L",5:"R",8:"LOCK",12:"up",13:"down",14:"left",15:"right"}; const gpPrev = {}, gpRep = {};
+function pollPads(t){
+  try{ for(const pad of (navigator.getGamepads?navigator.getGamepads():[])){ if(!pad) continue;
+    const st = {}; for(const i in GP) st[GP[i]] = !!(pad.buttons[i] && pad.buttons[i].pressed);
+    const ax = pad.axes[0]||0, ay = pad.axes[1]||0; if(ax<-.6) st.left=true; if(ax>.6) st.right=true; if(ay<-.6) st.up=true; if(ay>.6) st.down=true;
+    for(const k in st){ const id = pad.index+k; if(st[k] && !gpPrev[id]){ press(k); gpRep[id]=t+350; } else if(st[k] && ["left","right","up","down"].includes(k) && t>gpRep[id]){ press(k); gpRep[id]=t+110; } gpPrev[id]=st[k]; } } }catch(e){}
+  requestAnimationFrame(pollPads);
+}
+requestAnimationFrame(pollPads);
+let wheelT = 0; document.addEventListener("wheel", ev=>{ if(S.dialogs.length) return; const now = performance.now(); if(now-wheelT < 90) return; wheelT = now; press(ev.deltaY>0||ev.deltaX>0 ? (S.nav==="v"||vertical() ? "down" : "right") : (S.nav==="v"||vertical() ? "up" : "left")); }, {passive:true});
+
+/* ---------------- Skalierung, Touch-Gamepad, Start ---------------- */
+const isTouch = matchMedia("(pointer:coarse)").matches || "ontouchstart" in window;
+if(isTouch) document.body.classList.add("touch");
+function fit(){ const W = innerWidth, H = innerHeight, land = W > H; document.body.classList.toggle("land", land);
+  const padH = isTouch && !land ? ($("#pad").offsetHeight || 200) : 0; const s = Math.min(W/SW, (H-padH)/SH);
+  const top = isTouch && !land ? Math.max(8, (H-padH-SH*s)/3) : (H-SH*s)/2; const st = $("#stage"); st.style.top = top+"px"; st.style.transform = `translateX(-50%) scale(${s})`; }
+addEventListener("resize", fit); addEventListener("orientationchange", ()=>setTimeout(fit,200)); fit(); setTimeout(fit,100);
+document.querySelectorAll("#pad button").forEach(btn=>{ let rep; const k = btn.dataset.k; const dir = ["up","down","left","right"].includes(k);
+  btn.addEventListener("pointerdown", ev=>{ ev.preventDefault(); btn.classList.add("dn"); press(k); if(dir){ rep = setTimeout(function r(){ press(k); rep = setTimeout(r,120); }, 380); } });
+  const up = ()=>{ btn.classList.remove("dn"); clearTimeout(rep); }; ["pointerup","pointercancel","pointerleave"].forEach(ev=>btn.addEventListener(ev, up)); btn.addEventListener("contextmenu", e=>e.preventDefault()); });
+
+(function boot(){
+  const safe = BootGuard.start();
+  S.data = DataStore.load();
+  if(safe){ const keep = S.data.settings.sgdbKey; S.data.settings = defaultSettings(); S.data.settings.sgdbKey = keep; S.notice = "Abgesicherter Modus: Darstellung auf Standard gesetzt, Bibliothek und Bilder sind erhalten."; if(location.hash==="#safe") history.replaceState(null,"",location.pathname); }
+  render();
+  if(ST().lock.enabled && !safe) showLock();
+  if(S.notice) setTimeout(()=>toast(S.notice), 300);
+  setTimeout(()=>BootGuard.ok(), 2500); // erfolgreicher Start
+})();
+window.NEXUS = {S, press, SPEC, sanitizeData, sanitizeSettings, DataStore, LAYOUTS, defaultData};
+</script>
+</body>
+</html>
