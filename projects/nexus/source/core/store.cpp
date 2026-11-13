@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <ctime>
+#include <mutex>
 #include <sys/stat.h>
 
 namespace nexus {
@@ -287,8 +288,11 @@ namespace nexus {
         }
     }
 
+    static std::mutex g_LogMtx;
+
     void Log(const char *fmt, ...) {
         if(g_LogPath.empty()) return;
+        std::lock_guard<std::mutex> lk(g_LogMtx);   // mehrere Threads schreiben ins Protokoll
         FILE *f = std::fopen(g_LogPath.c_str(), "ab");
         if(!f) return;
         const std::time_t t = std::time(nullptr);

@@ -1,4 +1,5 @@
 #include "images.hpp"
+#include "../core/store.hpp"
 #include <SDL2/SDL_image.h>
 #include <algorithm>
 #include <cmath>
@@ -132,6 +133,8 @@ namespace nexus {
                 }
                 if(!s) {
                     s = IMG_Load(key.c_str());
+                    if(s && static_cast<long long>(s->w) * s->h > 2500000) Log("Großes Bild %dx%d: %s", s->w, s->h, key.c_str());
+                    if(!s) Log("Bild nicht ladbar: %s (%s)", key.c_str(), IMG_GetError());
                     // PNG/WebP und große Bilder lohnen den Cache (Dekodieren/Verkleinern ist langsam)
                     std::string low = key;
                     for(auto &ch: low) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
@@ -318,6 +321,7 @@ namespace nexus {
         if(this->diskDir.empty()) return;
         const std::string dir = this->diskDir;
         const int edge = this->maxEdge;
+        Log("Bild-Cache: Aufräumen startet (%d Bilder in Benutzung)", static_cast<int>(inUse.size()));
         std::thread([dir, edge, inUse]() {
             ImageCache probe;
             probe.diskDir = dir;
@@ -337,6 +341,7 @@ namespace nexus {
             }
             closedir(d);
             for(const auto &f: drop) std::remove(f.c_str());
+            Log("Bild-Cache: Aufräumen fertig, %d Dateien entfernt", static_cast<int>(drop.size()));
         }).detach();
     }
 

@@ -28,6 +28,8 @@ namespace nexus {
             void Clear();
             size_t UsedBytes() const { return this->used; }
             size_t Budget() const { return this->budget; }
+            size_t TextureCount() const { return this->textures.size(); }
+            size_t PendingCount() { std::lock_guard<std::mutex> lk(this->mtx); return this->queue.size() + this->decoded.size(); }
             // Budget anpassen (z. B. bei knappem Speicher) und sofort freigeben, was darüber liegt
             void SetBudget(size_t b) { this->budget = b; this->Evict(); }
 

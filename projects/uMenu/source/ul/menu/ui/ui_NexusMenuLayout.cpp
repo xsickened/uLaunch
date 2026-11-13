@@ -246,7 +246,7 @@ namespace ul::menu::ui {
     class NexusElement : public pu::ui::elm::Element {
         private:
             bool inited = false, busy = false, bootOk = false;
-            int okFrames = 0, colorTick = 0;
+            int okFrames = 0, colorTick = 0, beat = 0;
             u64 keysDown = 0, keysHeld = 0;
             pu::ui::TouchPoint touch;
             u64 lastMs = 0, startMs = 0;
@@ -355,6 +355,13 @@ namespace ul::menu::ui {
                         u64 total = 0, used = 0;
                         if(R_SUCCEEDED(svcGetInfo(&total, InfoType_TotalMemorySize, CUR_PROCESS_HANDLE, 0)) && R_SUCCEEDED(svcGetInfo(&used, InfoType_UsedMemorySize, CUR_PROCESS_HANDLE, 0)) && total > used) {
                             const u64 freeMem = total - used;
+                            // Lebenszeichen alle ~10 s (Fehlersuche: was lief zuletzt, wie viel Speicher war frei)
+                            if(++this->beat >= 20) {
+                                this->beat = 0;
+                                nexus::Log("Puls: %lu s, frei %lu MB, Texturen %lu MB (%d), wartend %d",
+                                    static_cast<unsigned long>((NowMs() - this->startMs) / 1000), static_cast<unsigned long>(freeMem >> 20),
+                                    static_cast<unsigned long>(this->images.UsedBytes() >> 20), static_cast<int>(this->images.TextureCount()), static_cast<int>(this->images.PendingCount()));
+                            }
                             if(freeMem < 40ull * 1024 * 1024 && this->images.Budget() > 12u * 1024 * 1024) {
                                 const size_t nb = std::max<size_t>(12u * 1024 * 1024, this->images.Budget() * 2 / 3);
                                 nexus::Log("Speicher knapp (%lu MB frei): Bildbudget %lu -> %lu MB", static_cast<unsigned long>(freeMem >> 20), static_cast<unsigned long>(this->images.Budget() >> 20), static_cast<unsigned long>(nb >> 20));
