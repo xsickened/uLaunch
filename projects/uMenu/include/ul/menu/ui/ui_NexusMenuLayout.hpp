@@ -14,6 +14,8 @@ namespace ul::menu::ui {
     void SetNexusClassicMode(const bool classic);
     // Sperrbildschirm nach dem Aufwachen: bei aktivem NEXUS zählt dessen Einstellung „lock.enabled“
     bool NexusLockOnWake();
+    // Farbe für uLaunchs Überblendungen, solange NEXUS aktiv ist (statt des uLaunch-Hintergrundbilds)
+    pu::ui::Color NexusFadeColor();
 
     class NexusElement;
 

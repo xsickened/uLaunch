@@ -162,7 +162,141 @@ namespace nexus {
             this->d->library.SetArtOverride(id, kind, path);
             this->ArtChanged(id);
             this->MarkDirty();
+            if(!path.empty() && kind != "logo") this->OpenCropEditor(path, kind == "grid" ? "Cover-Ausschnitt" : "Hintergrund-Ausschnitt", kind == "grid" ? this->TileAspect() : ScreenW / ScreenH);
         }, "Automatisch (grid/hero/logo-Datei im Titelordner)");
+    }
+
+    // ------------------------------------------------------------------ Bildausschnitt
+
+    double Home::TileAspect() const {
+        const auto r = this->d->settings.S("tileDefaults.ratio");
+        const auto k = r.find(':');
+        if(k == std::string::npos) return 2.0 / 3.0;
+        const double a = std::atof(r.substr(0, k).c_str()), b = std::atof(r.substr(k + 1).c_str());
+        return (a > 0 && b > 0) ? a / b : 2.0 / 3.0;
+    }
+
+    void Home::OpenCropEditor(const std::string &path, const std::string &title, double aspect, std::function<void()> done) {
+        if(path.empty() || path.rfind("sdmc:/", 0) != 0) { this->Toast("Für dieses Bild ist kein Ausschnitt möglich."); return; }
+        this->crop.active = true;
+        this->crop.path = path;
+        this->crop.title = title;
+        this->crop.aspect = std::clamp(aspect, 0.3, 4.0);
+        this->crop.backup = this->d->library.CropOf(path);
+        this->crop.c = this->crop.backup;
+        this->crop.c.set = true;
+        this->crop.done = std::move(done);
+    }
+
+    void Home::CropInput(const plat::Input &in) {
+        using namespace plat;
+        auto &c = this->crop.c;
+        const double dt = std::clamp(this->frameDt, 0.0, 0.05);
+        const double mv = 45.0 * dt, zm = 0.9 * dt;
+        if(in.held & BtnLeft) c.x -= mv;
+        if(in.held & BtnRight) c.x += mv;
+        if(in.held & BtnUp) c.y -= mv;
+        if(in.held & BtnDown) c.y += mv;
+        if(in.held & (BtnR | BtnZR)) c.zoom += zm * c.zoom;
+        if(in.held & (BtnL | BtnZL)) c.zoom -= zm * c.zoom;
+        c.x = std::clamp(c.x, 0.0, 100.0);
+        c.y = std::clamp(c.y, 0.0, 100.0);
+        c.zoom = std::clamp(c.zoom, 1.0, 4.0);
+        // Live-Vorschau: der Ausschnitt gilt sofort überall
+        this->d->library.SetCrop(this->crop.path, c);
+        if(in.down & BtnY) { c.zoom = 1; c.x = 50; c.y = 50; }
+        if(in.down & BtnA) {
+            this->crop.active = false;
+            this->MarkDirty();
+            this->Toast("Bildausschnitt gespeichert.");
+            if(this->crop.done) this->crop.done();
+        }
+        else if(in.down & BtnB) {
+            this->d->library.SetCrop(this->crop.path, this->crop.backup);
+            this->crop.active = false;
+            this->Toast("Ausschnitt verworfen.");
+        }
+    }
+
+    void Home::DrawCropEditor() {
+        const auto &cr = this->crop;
+        SDL_Texture *t = this->img->Failed(cr.path) ? nullptr : this->img->Get(cr.path, 0);
+        this->g->Rect(0, 0, ScreenW, ScreenH, Col{ 0, 0, 0, 235 });
+        // Rahmen im Zielformat, so groß wie möglich
+        double fw = ScreenW - 120, fh = fw / cr.aspect;
+        if(fh > ScreenH - 190) { fh = ScreenH - 190; fw = fh * cr.aspect; }
+        const double fx = (ScreenW - fw) / 2, fy = 70 + (ScreenH - 190 - fh) / 2;
+        if(t) {
+            // ganzes Bild blass dahinter, Ausschnitt hell im Rahmen
+            int tw = 0, th = 0;
+            SDL_QueryTexture(t, nullptr, nullptr, &tw, &th);
+            if(tw > 0 && th > 0) {
+                double sx, sy, sw, sh;
+                CoverSrc(tw, th, fw / fh, cr.c.x, cr.c.y, cr.c.zoom, sx, sy, sw, sh);
+                const double k = fw / sw;   // Bildpunkte -> Bildschirm
+                this->g->ImageEx(t, fx - sx * k, fy - sy * k, tw * k, th * k, 0.25, 1, 50, 50);
+            }
+            this->g->ImageEx(t, fx, fy, fw, fh, 1.0, cr.c.zoom, cr.c.x, cr.c.y);
+        }
+        else this->g->Text(this->img->Failed(cr.path) ? "Bild nicht lesbar" : "Bild wird geladen …", 18, ScreenW / 2, ScreenH / 2 - 12, Col{ 220, 226, 236, 255 }, 1);
+        Xf rf; rf.cx = fx + fw / 2; rf.cy = fy + fh / 2; rf.w = fw; rf.h = fh;
+        this->g->ShapeRingFn(rf, 0, false, 3, this->AccentFn(fx, fy, fw, fh), 1.0);
+        this->g->Text(cr.title, 22, ScreenW / 2, 18, Col{ 238, 242, 247, 255 }, 1, 1100, true);
+        char info[96];
+        std::snprintf(info, sizeof(info), "Zoom %d %%   ·   Position %d %% / %d %%", static_cast<int>(std::lround(cr.c.zoom * 100)), static_cast<int>(std::lround(cr.c.x)), static_cast<int>(std::lround(cr.c.y)));
+        this->g->Text(info, 15, ScreenW / 2, 48, Col{ 147, 160, 180, 255 }, 1);
+        this->g->Text("Stick/Steuerkreuz = verschieben   ·   R/ZR = näher   ·   L/ZL = weiter   ·   Y = zurücksetzen   ·   A = speichern   ·   B = abbrechen", 14, ScreenW / 2, ScreenH - 40, Col{ 200, 208, 220, 255 }, 1, 1220);
+    }
+
+    // ------------------------------------------------------------------ Eigene Themes
+
+    void Home::OpenThemes() {
+        auto dl = std::make_shared<Dialog>();
+        dl->title = "Eigene Themes";
+        dl->sub = "Gespeichert in sdmc:/nexus/themes/ – Updates löschen sie nicht. Schlüssel, RetroAchievements-Konto und Bibliothek bleiben beim Laden unverändert.";
+        dl->w = 600; dl->x = this->DialogX(600); dl->y = 74; dl->shade = true;
+        dl->h = ScreenH - dl->y - this->Env().botH - 8;
+        dl->rows = [this]() {
+            std::vector<Row> rows;
+            rows.push_back(Row{ "Aktuelle Darstellung als Theme speichern …", nullptr, nullptr, [this]() {
+                this->AskText("Name des Themes", this->d->settings.S("theme.name"), 40, [this](std::string name) {
+                    if(name.empty()) return;
+                    this->d->settings.Set("theme.name", json(name));
+                    std::string path;
+                    if(SaveUserTheme(ThemesDir, name, this->d->settings.data, &path)) this->Toast("Theme „" + name + "“ gespeichert.");
+                    else this->Toast("Speichern fehlgeschlagen (SD-Karte?).");
+                    this->MarkDirty();
+                });
+            } });
+            const auto list = ListUserThemes(ThemesDir);
+            if(list.empty()) rows.push_back(Row{ "Noch keine eigenen Themes gespeichert.", nullptr, nullptr, nullptr });
+            else rows.push_back(Row{ "Laden (A) · Löschen (X)", nullptr, nullptr, nullptr, true });
+            for(const auto &t: list) {
+                const UserTheme th = t;
+                rows.push_back(Row{ th.name, nullptr, nullptr, [this, th]() {
+                    json result;
+                    if(!ApplyUserTheme(th.path, this->d->settings.data, result)) { this->Toast("Theme-Datei ist beschädigt."); return; }
+                    this->d->settings.data = result;
+                    this->listDirty = true; this->layoutDirty = true;
+                    this->MarkDirty();
+                    this->Toast("Theme „" + th.name + "“ geladen.");
+                } });
+            }
+            return rows;
+        };
+        dl->onX = [this, dl]() {
+            const auto list = ListUserThemes(ThemesDir);
+            // Zeilen: 0 = Speichern, 1 = Überschrift, ab 2 die Themes
+            const int i = dl->sel - 2;
+            if(i < 0 || i >= static_cast<int>(list.size())) return;
+            const UserTheme th = list[i];
+            this->Confirm("Theme „" + th.name + "“ löschen?", "Die Datei wird von der SD-Karte entfernt.", "Löschen", [this, th]() {
+                std::remove(th.path.c_str());
+                this->Toast("Theme gelöscht.");
+            });
+        };
+        dl->hints = { { "A", "Laden" }, { "X", "Löschen" }, { "B", "Zurück" } };
+        this->Push(dl);
     }
 
     void Home::ArtChanged(const std::string &id) {
@@ -183,7 +317,8 @@ namespace nexus {
         if(this->img->Failed(path)) return false;
         SDL_Texture *t = this->img->Get(path, 0);
         if(!t) return false;
-        this->g->Image(t, 0, oy, ScreenW, ScreenH, alpha, true);
+        const Crop c = this->d->library.CropOf(path);
+        this->g->ImageEx(t, 0, oy, ScreenW, ScreenH, alpha, c.zoom, c.x, c.y);
         return true;
     }
 

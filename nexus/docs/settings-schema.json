@@ -11,17 +11,67 @@
    "options": [
     "white",
     "black",
-    "auto"
+    "auto",
+    "custom"
    ],
    "optionLabels": [
     "Weiß",
     "Schwarz",
-    "Automatisch"
+    "Automatisch",
+    "Eigene Farbe"
    ],
    "min": null,
    "max": null,
    "step": null,
    "default": "white",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "look",
+   "path": "theme.textCustom",
+   "label": "Eigene Schriftfarbe",
+   "type": "color",
+   "options": null,
+   "optionLabels": null,
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "#eef2f7",
+   "conditional": true,
+   "hidden": false
+  },
+  {
+   "group": "look",
+   "path": "theme.textEffect",
+   "label": "Schrift-Effekt",
+   "type": "enum",
+   "options": [
+    "solid",
+    "accent"
+   ],
+   "optionLabels": [
+    "Einfarbig",
+    "Wie Akzent (Verlauf/RGB)"
+   ],
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "solid",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "look",
+   "path": "theme.mutedOpacity",
+   "label": "Deckkraft Nebentext",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": 0.3,
+   "max": 1,
+   "step": 0.05,
+   "default": 0.62,
    "conditional": false,
    "hidden": false
   },
@@ -228,17 +278,153 @@
    "options": [
     "glass",
     "solid",
-    "outline"
+    "outline",
+    "custom"
    ],
    "optionLabels": [
     "Glas",
     "Deckend",
-    "Umrandet"
+    "Umrandet",
+    "Eigene Farbe"
    ],
    "min": null,
    "max": null,
    "step": null,
    "default": "glass",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "ui",
+   "path": "ui.fontScale",
+   "label": "Schriftgröße (alles)",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": 0.8,
+   "max": 1.3,
+   "step": 0.05,
+   "default": 1,
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "ui",
+   "path": "ui.titleSize",
+   "label": "Titelgröße in Menüs",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": 14,
+   "max": 32,
+   "step": 1,
+   "default": 20,
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "ui",
+   "path": "ui.textSize",
+   "label": "Textgröße in Menüs",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": 12,
+   "max": 22,
+   "step": 1,
+   "default": 15,
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "ui",
+   "path": "ui.rowHeight",
+   "label": "Zeilenhöhe",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": 30,
+   "max": 56,
+   "step": 2,
+   "default": 38,
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "ui",
+   "path": "ui.panelColor",
+   "label": "Farbe der Textboxen",
+   "type": "color",
+   "options": null,
+   "optionLabels": null,
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "#0e121c",
+   "conditional": true,
+   "hidden": false
+  },
+  {
+   "group": "ui",
+   "path": "ui.panelOpacity",
+   "label": "Deckkraft der Textboxen",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": 0.2,
+   "max": 1,
+   "step": 0.05,
+   "default": 0.93,
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "ui",
+   "path": "ui.panelRadius",
+   "label": "Eckenradius",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": 0,
+   "max": 30,
+   "step": 1,
+   "default": 14,
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "ui",
+   "path": "ui.panelBorder",
+   "label": "Rahmen (Akzent)",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": 0,
+   "max": 6,
+   "step": 1,
+   "default": 0,
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "ui",
+   "path": "ui.toastPos",
+   "label": "Hinweise erscheinen",
+   "type": "enum",
+   "options": [
+    "bottom",
+    "top",
+    "center"
+   ],
+   "optionLabels": [
+    "Unten",
+    "Oben",
+    "Mitte"
+   ],
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "bottom",
    "conditional": false,
    "hidden": false
   },
@@ -1092,6 +1278,32 @@
   },
   {
    "group": "hero",
+   "path": "hero.transition",
+   "label": "Übergang",
+   "type": "enum",
+   "options": [
+    "crossfade",
+    "viaHome",
+    "slide",
+    "zoom",
+    "cut"
+   ],
+   "optionLabels": [
+    "Überblenden",
+    "Über den Home-Hintergrund",
+    "Schieben",
+    "Zoom",
+    "Hart"
+   ],
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "crossfade",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "hero",
    "path": "hero.transitionMs",
    "label": "Überblenddauer",
    "type": "num",
@@ -1101,6 +1313,104 @@
    "max": 1500,
    "step": 50,
    "default": 450,
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "hero",
+   "path": "hero.opacity",
+   "label": "Deckkraft (Home scheint durch)",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": 0.1,
+   "max": 1,
+   "step": 0.05,
+   "default": 1,
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "hero",
+   "path": "hero.mask",
+   "label": "Rand weich ausblenden",
+   "type": "enum",
+   "options": [
+    "none",
+    "bottom",
+    "top",
+    "left",
+    "right",
+    "vignette"
+   ],
+   "optionLabels": [
+    "Nein",
+    "Unten",
+    "Oben",
+    "Links",
+    "Rechts",
+    "Vignette"
+   ],
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "none",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "hero",
+   "path": "hero.maskSize",
+   "label": "Breite der Ausblendung",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": 0.1,
+   "max": 0.9,
+   "step": 0.05,
+   "default": 0.45,
+   "conditional": true,
+   "hidden": false
+  },
+  {
+   "group": "hero",
+   "path": "hero.imageScale",
+   "label": "Zoom",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": 1,
+   "max": 2,
+   "step": 0.05,
+   "default": 1,
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "hero",
+   "path": "hero.posX",
+   "label": "Ausschnitt waagerecht",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": 0,
+   "max": 100,
+   "step": 5,
+   "default": 50,
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "hero",
+   "path": "hero.posY",
+   "label": "Ausschnitt senkrecht",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": 0,
+   "max": 100,
+   "step": 5,
+   "default": 50,
    "conditional": false,
    "hidden": false
   },
@@ -1636,17 +1946,33 @@
    "type": "enum",
    "options": [
     "white",
-    "black"
+    "black",
+    "custom"
    ],
    "optionLabels": [
     "Weiß",
-    "Schwarz"
+    "Schwarz",
+    "Eigene Farbe"
    ],
    "min": null,
    "max": null,
    "step": null,
    "default": "white",
    "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "lock",
+   "path": "lock.textCustom",
+   "label": "Eigene Schriftfarbe",
+   "type": "color",
+   "options": null,
+   "optionLabels": null,
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "#ffffff",
+   "conditional": true,
    "hidden": false
   },
   {

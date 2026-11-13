@@ -10,6 +10,7 @@ namespace nexus {
     constexpr const char LogFile[] = "sdmc:/nexus/log.txt";
     constexpr const char ArtDir[] = "sdmc:/nexus/art";
     constexpr const char CacheDir[] = "sdmc:/nexus/cache";
+    constexpr const char ThemesDir[] = "sdmc:/nexus/themes";
 
     // Ersetzt ungültige UTF-8-Folgen durch '?'. Wichtig: nlohmann::json bricht beim Speichern
     // ungültiger Zeichenketten sonst mit einer Ausnahme ab (ohne Ausnahmen: Programmabbruch).
@@ -35,6 +36,21 @@ namespace nexus {
     // Start-Wächter: zählt Starts; nach 2 nicht abgeschlossenen Starts -> abgesicherter Modus
     bool BootGuardStart(const std::string &path);
     void BootGuardOk(const std::string &path);
+
+    // Schlüssel (SteamGridDB, RetroAchievements) liegen zusätzlich in keys.json neben nexus.json.
+    // Sie überleben damit auch ein Löschen/Zurücksetzen von nexus.json. Updates fassen beides nie an.
+    void MergeSecrets(const std::string &dataPath, Settings &s);
+    void SaveSecrets(const std::string &dataPath, const Settings &s);
+    // Tägliche Sicherung: backup/nexus-JJJJ-MM-TT.json neben nexus.json, die neuesten 10 bleiben
+    void BackupDaily(const std::string &dataPath, const std::string &date);
+
+    // Eigene Themes: themes/<name>.json (nur Darstellung, ohne Schlüssel, RetroAchievements-Konto und Bibliothek)
+    struct UserTheme { std::string name, path; };
+    json ThemeSnapshot(const json &settings);
+    bool SaveUserTheme(const std::string &dir, const std::string &name, const json &settings, std::string *outPath);
+    std::vector<UserTheme> ListUserThemes(const std::string &dir);
+    // Wendet ein Theme an: Darstellung aus dem Theme, Schlüssel/Konto/Sortierung bleiben
+    bool ApplyUserTheme(const std::string &path, const json &current, json &result);
 
     void LogInit(const std::string &path);
     void Log(const char *fmt, ...);

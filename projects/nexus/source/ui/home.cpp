@@ -23,7 +23,7 @@ namespace nexus {
             return "?";
         }
         const std::vector<std::pair<std::string, std::string>> Groups = {
-            { "look", "Darstellung & Schrift" }, { "top", "Kopfzeile, Symbole & Hinweise" }, { "layout", "Anordnung der Kacheln" },
+            { "look", "Darstellung & Schrift" }, { "ui", "Textboxen & Schrift" }, { "top", "Kopfzeile, Symbole & Hinweise" }, { "layout", "Anordnung der Kacheln" },
             { "anim", "Animationen" }, { "tiles", "Kacheln (Standard)" }, { "hero", "Fokus: Hintergrund" }, { "logo", "Fokus: Logo" },
             { "home", "Home-Hintergrund" }, { "lock", "Sperrbildschirm" }, { "profile", "Profilauswahl" }, { "sections", "Bereiche (Reihenfolge & Sichtbarkeit)" },
             { "lib", "Bibliothek & SteamGridDB" }, { "ra", "RetroAchievements" }, { "sys", "Themes & System" }
@@ -48,6 +48,13 @@ namespace nexus {
         EnsureDir(std::string(ArtDir) + "/backgrounds");
         this->accentP = AccentFrom(this->d->settings);
         this->ImportKeys(true);
+        {
+            // tägliche Sicherung von nexus.json (backup/, die neuesten 10)
+            char date[16];
+            const std::time_t now = std::time(nullptr);
+            std::strftime(date, sizeof(date), "%Y-%m-%d", std::localtime(&now));
+            BackupDaily(DataFile, date);
+        }
         if(safeMode) this->Toast("Abgesicherter Modus: Darstellung auf Standard gesetzt. Bibliothek ist erhalten.");
         else if(isApplet) this->Toast("Applet-Modus: wenig Speicher. Besser ein Spiel mit gedrückter R-Taste starten.");
         return true;
@@ -81,11 +88,20 @@ namespace nexus {
         const auto tc = this->d->settings.S("theme.textColor");
         if(tc == "black") return true;
         if(tc == "white") return false;
+        if(tc == "custom") {
+            const Col c = ParseCol(this->d->settings.S("theme.textCustom"));
+            return (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) / 255.0 < 0.5;   // dunkle Schrift = helles Design
+        }
         const Col u = this->UiCol();
         return (0.299 * u.r + 0.587 * u.g + 0.114 * u.b) / 255.0 > 0.55;
     }
-    Col Home::TextCol() const { return this->Light() ? Col{ 18, 22, 29, 255 } : Col{ 238, 242, 247, 255 }; }
-    Col Home::MutedCol() const { return WithA(this->TextCol(), 0.62); }
+    Col Home::TextCol() const {
+        const auto &s = this->d->settings;
+        Col c = s.S("theme.textColor") == "custom" ? ParseCol(s.S("theme.textCustom")) : this->Light() ? Col{ 18, 22, 29, 255 } : Col{ 238, 242, 247, 255 };
+        if(s.S("theme.textEffect") == "accent") { c = this->Accent(); c.paint = 1; }   // Schrift im Akzent-Verlauf (Symbole: Mittelfarbe)
+        return c;
+    }
+    Col Home::MutedCol() const { return WithA(this->TextCol(), this->d->settings.N("theme.mutedOpacity")); }
     Col Home::AccentAtU(double u) const {
         const Rgb c = AccentAt(this->accentP, u, this->time);
         return Col{ static_cast<uint8_t>(c.r), static_cast<uint8_t>(c.g), static_cast<uint8_t>(c.b), 255 };
@@ -376,6 +392,7 @@ namespace nexus {
     }
 
     void Home::HandleInput(const plat::Input &in) {
+        if(this->crop.active) { this->CropInput(in); return; }
         if(in.tap) this->Tap(in.tapX, in.tapY);
         const uint32_t order[] = { plat::BtnUp, plat::BtnDown, plat::BtnLeft, plat::BtnRight, plat::BtnA, plat::BtnB, plat::BtnX, plat::BtnY, plat::BtnL, plat::BtnR, plat::BtnZL, plat::BtnZR, plat::BtnMinus, plat::BtnPlus };
         for(const uint32_t b: order) if(in.down & b) this->Press(b);
@@ -657,6 +674,8 @@ namespace nexus {
             rows.push_back(Row{ "Cover (Ebene 2, nur Kachel)", [a, name]() { return a.grid.empty() ? std::string("keins") : name(a.grid); }, nullptr, [this, id]() { this->OpenArtKind(id, "grid"); } });
             rows.push_back(Row{ "Hintergrund (Ebene 1)", [a, name]() { return a.hero.empty() ? std::string("keiner") : name(a.hero); }, nullptr, [this, id]() { this->OpenArtKind(id, "hero"); } });
             rows.push_back(Row{ "Logo (Ebene 3, transparent)", [a, name]() { return a.logo.empty() ? std::string("Schriftzug") : name(a.logo); }, nullptr, [this, id]() { this->OpenArtKind(id, "logo"); } });
+            if(!a.grid.empty()) rows.push_back(Row{ "   Cover-Ausschnitt (Zoom, Schnitt)", nullptr, nullptr, [this, a]() { this->OpenCropEditor(a.grid, "Cover-Ausschnitt", this->TileAspect()); } });
+            if(!a.hero.empty() && a.hero.rfind("mem:", 0) != 0) rows.push_back(Row{ "   Hintergrund-Ausschnitt (Zoom, Schnitt)", nullptr, nullptr, [this, a]() { this->OpenCropEditor(a.hero, "Hintergrund-Ausschnitt", ScreenW / ScreenH); } });
             rows.push_back(Row{ "Bei SteamGridDB suchen …", nullptr, nullptr, [this, id]() {
                 std::string nm = id;
                 for(const auto &e: this->list) if(e.id == id) nm = e.name;
@@ -794,6 +813,10 @@ namespace nexus {
         if(p == "profile.preset") return s.S("profile.bgType") == "gradient";
         if(p == "profile.color") return s.S("profile.bgType") == "color";
         if(p == "topbar.showUser") return this->host != nullptr;
+        if(p == "theme.textCustom") return s.S("theme.textColor") == "custom";
+        if(p == "ui.panelColor") return s.S("theme.panelStyle") == "custom";
+        if(p == "lock.textCustom") return s.S("lock.textColor") == "custom";
+        if(p == "hero.maskSize") return s.S("hero.mask") != "none";
         if(p == "home.image") return s.S("home.bgType") == "image";
         if(p == "lock.image") return s.S("lock.bgType") == "image";
         if(p == "profile.image") return s.S("profile.bgType") == "image";
@@ -905,14 +928,16 @@ namespace nexus {
             dl->rows = [this]() {
                 const char *names[] = { "Nexus Dunkel", "Aurora", "Kino", "Rad", "Hell & klar" };
                 std::vector<Row> rows;
+                rows.push_back(Row{ "Eigene Themes (speichern, laden) …", nullptr, nullptr, [this]() { this->OpenThemes(); } });
+                rows.push_back(Row{ "Vorlagen", nullptr, nullptr, nullptr, true });
                 for(int i = 0; i < 5; i++) rows.push_back(Row{ std::string("Theme: ") + names[i], nullptr, nullptr, [this, i]() { this->ApplyTheme(i); } });
                 if(this->host) {
                     rows.push_back(Row{ "Konsole", nullptr, nullptr, nullptr, true });
                     for(const auto &a: this->host->SystemActions()) {
                         const SysAction act = a;
                         rows.push_back(Row{ a.label, nullptr, nullptr, [this, act]() {
-                            if(act.confirm.empty()) { this->CloseAll(); act.act(); }
-                            else this->Confirm(act.label + "?", act.confirm, act.label, [this, act]() { this->CloseAll(); act.act(); });
+                            if(act.confirm.empty()) { this->CloseAll(); this->Save(); this->host->BeforeLeave(); act.act(); }
+                            else this->Confirm(act.label + "?", act.confirm, act.label, [this, act]() { this->CloseAll(); this->Save(); this->host->BeforeLeave(); act.act(); });
                         } });
                     }
                 }
@@ -964,8 +989,15 @@ namespace nexus {
                                         if(pick.empty()) JSet(this->d->settings.data, path, json(nullptr));
                                         else this->d->settings.Set(path, json(pick));
                                         changed();
+                                        if(!pick.empty()) this->OpenCropEditor(pick, "Bildausschnitt", ScreenW / ScreenH);
                                     }, "Kein Bild");
                             } });
+                        if(!this->d->settings.S(e.path).empty()) {
+                            rows.push_back(Row{ "   Bildausschnitt (Zoom, Schnitt)", [this, ep]() {
+                                    const Crop c = this->d->library.CropOf(this->d->settings.S(ep->path));
+                                    return c.set ? std::to_string(static_cast<int>(std::lround(c.zoom * 100))) + " %" : std::string("ganzes Bild");
+                                }, nullptr, [this, ep]() { this->OpenCropEditor(this->d->settings.S(ep->path), "Bildausschnitt", ScreenW / ScreenH); } });
+                        }
                         continue;
                     }
                     rows.push_back(Row{ e.label, [this, ep]() { return this->d->settings.Display(*ep); },
@@ -987,6 +1019,8 @@ namespace nexus {
     void Home::Update(double dt) {
         this->time += dt;
         this->accentP = AccentFrom(this->d->settings);
+        this->g->fontScale = this->d->settings.N("ui.fontScale");
+        this->g->paint = this->AccentFn(0, 0, ScreenW, ScreenH);
         this->online.Tick();
         if(!this->autoArtQueued && this->appsVersion > 0 && !this->apps->Busy()) {
             this->autoArtQueued = true;
@@ -1060,6 +1094,7 @@ namespace nexus {
         this->DrawTopbar();
         this->DrawHints();
         this->DrawDialogs();
+        if(this->crop.active) this->DrawCropEditor();
         if(this->locked) this->DrawLock();
         this->DrawToast();
     }
@@ -1101,28 +1136,57 @@ namespace nexus {
             this->heroA.alpha = 0;
             if(!n.key.empty()) this->lastHeroKey = n.key;
         }
+        const bool animOn = s.B("anim.enabled");
+        const auto tr = animOn ? s.S("hero.transition") : std::string("cut");
         const double ms = s.N("hero.transitionMs") / 1000.0;
-        const double step = ms <= 0 ? 1.0 : dt / ms;
-        this->heroA.alpha = std::min(1.0, this->heroA.alpha + step);
-        this->heroB.alpha = std::max(0.0, this->heroB.alpha - step);
+        const double step = (ms <= 0 || tr == "cut") ? 1.0 : dt / ms;
+        const bool bVisible = this->heroB.alpha > 0 && (!this->heroB.key.empty() || !this->heroB.folderAccent.empty());
+        if(tr == "viaHome" && bVisible) {
+            // erst bis zum Home-Hintergrund ausblenden, dann das neue Bild einblenden
+            this->heroB.alpha = std::max(0.0, this->heroB.alpha - step);
+        }
+        else {
+            this->heroA.alpha = std::min(1.0, this->heroA.alpha + step);
+            this->heroB.alpha = std::max(0.0, this->heroB.alpha - step);
+        }
         double px = 0;
         if(s.B("hero.parallax") && this->focus < static_cast<int>(this->lay.items.size())) {
             const auto &it = this->lay.items[this->focus];
             px = -((it.x + it.w / 2) - 640) / 40.0;
         }
         const double kb = s.B("hero.kenBurns") ? 1.0 + 0.06 * (1 + std::sin(this->time * 2 * kPi / 36.0)) : 1.0;
+        const double maxOp = s.N("hero.opacity");
+        const auto mask = s.S("hero.mask");
+        const double msz = std::max(0.05, s.N("hero.maskSize"));
+        std::function<double(double, double)> fade;
+        if(mask == "bottom") fade = [msz](double, double v) { return (1 - v) / msz; };
+        else if(mask == "top") fade = [msz](double, double v) { return v / msz; };
+        else if(mask == "left") fade = [msz](double u, double) { return u / msz; };
+        else if(mask == "right") fade = [msz](double u, double) { return (1 - u) / msz; };
+        else if(mask == "vignette") fade = [msz](double u, double v) {
+            const double r = std::sqrt((u - 0.5) * (u - 0.5) * 4 + (v - 0.5) * (v - 0.5) * 4) / std::sqrt(2.0);
+            return (1 - r) / msz;
+        };
         for(HeroSlot *slot: { &this->heroB, &this->heroA }) {
             if(slot->alpha <= 0.01) continue;
+            const double e = EaseOut(slot->alpha);
+            const bool entering = slot == &this->heroA && slot->alpha < 1;
+            const double slideX = (entering && tr == "slide") ? 80 * (1 - e) : 0;
+            const double zoomIn = (entering && tr == "zoom") ? 1 + 0.08 * (1 - e) : 1;
+            const double op = slot->alpha * maxOp;
             if(!slot->key.empty()) {
                 SDL_Texture *t = this->img->Get(slot->key, 0);
                 if(t) {
-                    const double w = (ScreenW + 60) * kb, h = (ScreenH + 60) * kb;
-                    this->g->Image(t, (ScreenW - w) / 2 + px, (ScreenH - h) / 2, w, h, slot->alpha, true);
-                    if(slot->icon) this->g->Rect(0, 0, ScreenW, ScreenH, Col{ 0, 0, 0, static_cast<uint8_t>(110 * slot->alpha) });
+                    // Ausschnitt: eigener Zuschnitt des Bildes, sonst die globalen Werte
+                    const Crop c = this->d->library.CropOf(slot->key);
+                    const double z = (c.set ? c.zoom : s.N("hero.imageScale")) * kb * zoomIn;
+                    const double cx = c.set ? c.x : s.N("hero.posX"), cy = c.set ? c.y : s.N("hero.posY");
+                    this->g->ImageEx(t, -30 + px + slideX, -30, ScreenW + 60, ScreenH + 60, op, z, cx, cy, fade);
+                    if(slot->icon) this->g->Rect(0, 0, ScreenW, ScreenH, Col{ 0, 0, 0, static_cast<uint8_t>(110 * op) });
                 }
             }
             else if(!slot->folderAccent.empty()) {
-                this->g->GradV(0, 0, ScreenW, ScreenH, WithA(ParseCol(slot->folderAccent), 0.55 * slot->alpha), WithA(this->UiCol(), slot->alpha));
+                this->g->GradV(0, 0, ScreenW, ScreenH, WithA(ParseCol(slot->folderAccent), 0.55 * op), WithA(this->UiCol(), op));
             }
         }
         // Ebene 2: Abdunkelung + Verlauf
@@ -1263,11 +1327,15 @@ namespace nexus {
                 }
                 const auto &a = this->Art(e.id);
                 const bool cover = JStr(t, "fit", "cover") == "cover";
-                const double posX = JNum(t, "posX", 50), posY = JNum(t, "posY", 50);
+                double posX = JNum(t, "posX", 50), posY = JNum(t, "posY", 50), zoom = 1;
                 SDL_Texture *tex = nullptr;
-                if(!a.grid.empty()) tex = this->img->Get(a.grid, 1);
+                if(!a.grid.empty()) {
+                    tex = this->img->Get(a.grid, 1);
+                    const Crop c = this->d->library.CropOf(a.grid);   // eigener Bildausschnitt hat Vorrang
+                    if(c.set) { posX = c.x; posY = c.y; zoom = c.zoom; }
+                }
                 else if(!e.folder && !e.iconKey.empty()) tex = this->img->Get(e.iconKey, 2);
-                if(tex) this->g->ShapeTex(tex, xf, rad, hex, op, cover, posX, posY);
+                if(tex) this->g->ShapeTex(tex, xf, rad, hex, op, cover, posX, posY, Col{}, zoom);
                 else if(e.folder) {
                     // Ordnerkachel: Akzentfläche + bis zu 4 Icons
                     this->g->Shape(xf, rad, hex, WithA(ParseCol(e.accent), op));
@@ -1488,8 +1556,12 @@ namespace nexus {
         const auto &s = this->d->settings;
         const bool light = this->Light();
         const auto ps = s.S("theme.panelStyle");
-        const Col panel = ps == "solid" ? this->UiCol() : ps == "outline" ? Col{ 0, 0, 0, 90 } : (light ? Col{ 246, 248, 251, 240 } : Col{ 14, 18, 28, 238 });
+        const double po = s.N("ui.panelOpacity");
+        const Col panel = ps == "solid" ? this->UiCol() : ps == "outline" ? Col{ 0, 0, 0, static_cast<uint8_t>(90 * po) } : ps == "custom" ? WithA(ParseCol(s.S("ui.panelColor")), po) : WithA(light ? Col{ 246, 248, 251, 255 } : Col{ 14, 18, 28, 255 }, po);
         const Col tc = this->TextCol(), mc = this->MutedCol(), acc = this->Accent();
+        const double prad = s.N("ui.panelRadius"), rowH = s.N("ui.rowHeight"), headRowH = std::max(24.0, rowH * 0.8);
+        const int titleSz = static_cast<int>(s.N("ui.titleSize")), textSz = static_cast<int>(s.N("ui.textSize")), valSz = std::max(11, textSz - 2), subSz = std::max(11, textSz - 2);
+        const double border = s.N("ui.panelBorder") + (ps == "outline" ? 2 : 0);
         for(size_t di = 0; di < this->dialogs.size(); di++) {
             auto &dl = *this->dialogs[di];
             const bool top = di + 1 == this->dialogs.size();
@@ -1497,42 +1569,44 @@ namespace nexus {
             auto rows = dl.rows();
             if(top && dl.onSelect) dl.onSelect(dl.sel);
             const double lw = dl.preview ? std::min(dl.w * 0.46, 430.0) : dl.w;
-            const double headH = 46 + (dl.sub.empty() ? 0 : 22 * (1 + static_cast<int>(this->g->TextW(dl.sub, 13) / (dl.w - 40))));
+            const double titleH = titleSz * 1.35 * this->g->fontScale + 18;
+            const double subLine = subSz * 1.5 * this->g->fontScale;
+            const double headH = titleH + (dl.sub.empty() ? 0 : subLine * (1 + static_cast<int>(this->g->TextW(dl.sub, subSz) / (dl.w - 40))));
             double contentH = 0;
-            for(const auto &rw: rows) contentH += rw.head ? 30 : 38;
+            for(const auto &rw: rows) contentH += rw.head ? headRowH : rowH;
             const double maxH = ScreenH - dl.y - this->Env().botH - 6;
             const double h = dl.h > 0 ? dl.h : std::min(maxH, headH + contentH + 14);
-            this->g->RoundRect(dl.x, dl.y, dl.w, h, 14, panel);
-            if(ps == "outline") { Xf ox; ox.cx = dl.x + dl.w / 2; ox.cy = dl.y + h / 2; ox.w = dl.w; ox.h = h; this->g->ShapeRingFn(ox, 14, false, 2, this->AccentFn(dl.x, dl.y, dl.w, h), 1.0); }
-            this->g->Text(dl.title, 20, dl.x + 20, dl.y + 14, tc, 0, static_cast<int>(dl.w - 40), true);
+            this->g->RoundRect(dl.x, dl.y, dl.w, h, prad, panel);
+            if(border > 0) { Xf ox; ox.cx = dl.x + dl.w / 2; ox.cy = dl.y + h / 2; ox.w = dl.w; ox.h = h; this->g->ShapeRingFn(ox, prad, false, border, this->AccentFn(dl.x, dl.y, dl.w, h), 1.0); }
+            this->g->Text(dl.title, titleSz, dl.x + 20, dl.y + 14, tc, 0, static_cast<int>(dl.w - 40), true);
             if(!dl.sub.empty()) {
                 // einfacher Zeilenumbruch
                 std::string line, word, rest = dl.sub + " ";
-                double yy = dl.y + 44;
+                double yy = dl.y + titleH;
                 for(char c: rest) {
                     if(c == ' ') {
                         const std::string cand = line.empty() ? word : line + " " + word;
-                        if(this->g->TextW(cand, 13) > dl.w - 40 && !line.empty()) { this->g->Text(line, 13, dl.x + 20, yy, mc); yy += 20; line = word; }
+                        if(this->g->TextW(cand, subSz) > dl.w - 40 && !line.empty()) { this->g->Text(line, subSz, dl.x + 20, yy, mc); yy += subLine; line = word; }
                         else line = cand;
                         word.clear();
                     }
                     else word += c;
                 }
-                if(!line.empty()) this->g->Text(line, 13, dl.x + 20, yy, mc);
+                if(!line.empty()) this->g->Text(line, subSz, dl.x + 20, yy, mc);
             }
             // Scrollen, damit die Auswahl sichtbar ist
             const double areaY = dl.y + headH, areaH = h - headH - 10;
             double selTop = 0, y = 0;
-            for(int i = 0; i < static_cast<int>(rows.size()); i++) { if(i == dl.sel) selTop = y; y += rows[i].head ? 30 : 38; }
+            for(int i = 0; i < static_cast<int>(rows.size()); i++) { if(i == dl.sel) selTop = y; y += rows[i].head ? headRowH : rowH; }
             if(selTop - dl.scroll < 0) dl.scroll = selTop;
-            if(selTop + 38 - dl.scroll > areaH) dl.scroll = selTop + 38 - areaH;
+            if(selTop + rowH - dl.scroll > areaH) dl.scroll = selTop + rowH - areaH;
             dl.scroll = std::clamp(dl.scroll, 0.0, std::max(0.0, contentH - areaH));
             y = areaY - dl.scroll;
             for(int i = 0; i < static_cast<int>(rows.size()); i++) {
                 const auto &rw = rows[i];
-                const double rh = rw.head ? 30 : 38;
+                const double rh = rw.head ? headRowH : rowH;
                 if(y + rh > areaY - 1 && y < areaY + areaH - 2) {
-                    if(rw.head) this->g->Text(rw.label, 12, dl.x + 22, y + 12, acc, 0, 0, true);
+                    if(rw.head) this->g->Text(rw.label, std::max(11, textSz - 3), dl.x + 22, y + rh - (textSz - 3) * 1.4 * this->g->fontScale - 2, acc, 0, 0, true);
                     else {
                         const bool sel = i == dl.sel && top;
                         if(sel) {
@@ -1540,18 +1614,19 @@ namespace nexus {
                             this->g->RectFn(dl.x + 10, y + 4, 3, rh - 10, this->AccentFn(dl.x, y, lw, rh), 1.0, 4);
                         }
                         const std::string val = rw.value ? rw.value() : std::string();
-                        const int vw = val.empty() ? 0 : std::min(this->g->TextW(val, 13), static_cast<int>(lw * 0.5));
-                        this->g->Text(rw.label, 15, dl.x + 22, y + 9, tc, 0, static_cast<int>(lw - 60 - vw));
+                        const int vw = val.empty() ? 0 : std::min(this->g->TextW(val, valSz), static_cast<int>(lw * 0.5));
+                        const double ty = y + (rh - textSz * 1.3 * this->g->fontScale) / 2, vy = y + (rh - valSz * 1.3 * this->g->fontScale) / 2;
+                        this->g->Text(rw.label, textSz, dl.x + 22, ty, tc, 0, static_cast<int>(lw - 60 - vw));
                         if(!val.empty()) {
                             const bool adj = static_cast<bool>(rw.adjust);
                             const double vx = dl.x + lw - 30 - (adj && sel ? 14 : 0);
-                            this->g->Text(val, 13, vx, y + 11, mc, 2, static_cast<int>(lw * 0.5));
+                            this->g->Text(val, valSz, vx, vy, mc, 2, static_cast<int>(lw * 0.5));
                             if(adj && sel) {
-                                this->g->Text("<", 14, vx - vw - 16, y + 10, mc, 0, 0, true);
-                                this->g->Text(">", 14, dl.x + lw - 34, y + 10, mc, 0, 0, true);
+                                this->g->Text("<", valSz + 1, vx - vw - 16, vy, mc, 0, 0, true);
+                                this->g->Text(">", valSz + 1, dl.x + lw - 34, vy, mc, 0, 0, true);
                             }
                         }
-                        else if(rw.activate) this->g->Text(">", 14, dl.x + lw - 34, y + 10, mc, 0, 0, true);
+                        else if(rw.activate) this->g->Text(">", valSz + 1, dl.x + lw - 34, vy, mc, 0, 0, true);
                         if(top) this->rowHits.push_back(Hit{ dl.x + 10, y, lw - 20, rh, "", i });
                     }
                 }
@@ -1595,7 +1670,8 @@ namespace nexus {
             this->g->GradV(0, oy + ScreenH / 2, ScreenW, ScreenH / 2, WithA(ParseCol(Presets[p][1]), alpha), WithA(ParseCol(Presets[p][2]), alpha));
         }
         this->g->Rect(0, oy, ScreenW, ScreenH, Col{ 0, 0, 0, static_cast<uint8_t>(s.N("lock.dim") * 255 * alpha) });
-        const Col col = WithA(s.S("lock.textColor") == "black" ? Col{ 17, 17, 17, 255 } : Col{ 255, 255, 255, 255 }, alpha);
+        const auto ltc = s.S("lock.textColor");
+        const Col col = WithA(ltc == "black" ? Col{ 17, 17, 17, 255 } : ltc == "custom" ? ParseCol(s.S("lock.textCustom")) : Col{ 255, 255, 255, 255 }, alpha);
         const std::time_t now = std::time(nullptr);
         const std::tm *lt = std::localtime(&now);
         char clk[16], date[64];
@@ -1643,10 +1719,14 @@ namespace nexus {
     void Home::DrawToast() {
         if(this->toastT <= 0 || this->toastText.empty()) return;
         const double a = std::min(1.0, this->toastT / 0.3);
+        const auto &s = this->d->settings;
         const int w = std::min(1100, this->g->TextW(this->toastText, 14) + 36);
-        const double x = (ScreenW - w) / 2, y = ScreenH - 92;
-        this->g->RoundRect(x, y, w, 38, 10, WithA(this->Light() ? Col{ 246, 248, 251, 245 } : Col{ 30, 38, 54, 245 }, a));
-        this->g->Text(this->toastText, 14, ScreenW / 2, y + 10, WithA(this->TextCol(), a), 1, w - 24);
+        const double th = 22 * this->g->fontScale + 16;
+        const auto pos = s.S("ui.toastPos");
+        const double x = (ScreenW - w) / 2, y = pos == "top" ? 70 : pos == "center" ? ScreenH / 2 - th / 2 : ScreenH - 92;
+        const Col base = s.S("theme.panelStyle") == "custom" ? ParseCol(s.S("ui.panelColor")) : (this->Light() ? Col{ 246, 248, 251, 245 } : Col{ 30, 38, 54, 245 });
+        this->g->RoundRect(x, y, w, th, std::min(s.N("ui.panelRadius"), th / 2), WithA(base, a));
+        this->g->Text(this->toastText, 14, ScreenW / 2, y + 8, WithA(this->TextCol(), a), 1, w - 24);
     }
 
     void Home::DrawFatal() {
@@ -1741,8 +1821,8 @@ namespace nexus {
             for(const auto &a: this->host->SystemActions()) {
                 const SysAction act = a;
                 rows.push_back(Row{ a.label, nullptr, nullptr, [this, act]() {
-                    if(act.confirm.empty()) { this->CloseAll(); this->Save(); act.act(); }
-                    else this->Confirm(act.label + "?", act.confirm, act.label, [this, act]() { this->CloseAll(); this->Save(); act.act(); });
+                    if(act.confirm.empty()) { this->CloseAll(); this->Save(); this->host->BeforeLeave(); act.act(); }
+                    else this->Confirm(act.label + "?", act.confirm, act.label, [this, act]() { this->CloseAll(); this->Save(); this->host->BeforeLeave(); act.act(); });
                 } });
             }
             return rows;

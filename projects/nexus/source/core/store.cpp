@@ -1,4 +1,7 @@
 #include "store.hpp"
+#include <algorithm>
+#include <dirent.h>
+#include <cctype>
 #include <cstdarg>
 #include <cstdlib>
 #include <cstdio>
@@ -109,12 +112,14 @@ namespace nexus {
             report.clear();
             if(TryLoad(cand, d, report)) {
                 source = cand;
+                MergeSecrets(path, d.settings);
                 return d;
             }
         }
         source = "defaults";
         report.clear();
         d.settings.data = Settings::Defaults();
+        MergeSecrets(path, d.settings);
         return d;
     }
 
@@ -122,7 +127,137 @@ namespace nexus {
         json j = d.library.ToJson();
         j["schema"] = 2;
         j["settings"] = d.settings.data;
+        SaveSecrets(path, d.settings);
         return WriteFileAtomic(path, SafeDump(j, 1));
+    }
+
+    static std::string Sibling(const std::string &path, const std::string &name) {
+        const auto k = path.find_last_of('/');
+        return (k == std::string::npos ? std::string() : path.substr(0, k + 1)) + name;
+    }
+
+    static const char *const SecretPaths[] = { "sgdbKey", "ra.user", "ra.key" };
+
+    void MergeSecrets(const std::string &dataPath, Settings &s) {
+        std::string raw;
+        if(!ReadFile(Sibling(dataPath, "keys.json"), raw, 64 * 1024)) return;
+        const json j = json::parse(raw, nullptr, false);
+        if(j.is_discarded() || !j.is_object()) return;
+        for(const char *p: SecretPaths) {
+            const json *v = JGet(j, p);
+            if(!v || !v->is_string() || v->get<std::string>().empty()) continue;
+            if(s.S(p).empty()) s.Set(p, json(SanitizeUtf8(v->get<std::string>().substr(0, 120))));
+        }
+    }
+
+    void SaveSecrets(const std::string &dataPath, const Settings &s) {
+        json j = json::object();
+        bool any = false;
+        for(const char *p: SecretPaths) {
+            const auto v = s.S(p);
+            if(!v.empty()) any = true;
+            JSet(j, p, json(v));
+        }
+        if(!any) return;   // nie mit leeren Werten überschreiben
+        const std::string file = Sibling(dataPath, "keys.json");
+        const std::string content = SafeDump(j, 1);
+        std::string old;
+        if(ReadFile(file, old, 64 * 1024) && old == content) return;
+        WriteFileAtomic(file, content);
+    }
+
+    static std::vector<std::string> ListFiles(const std::string &dir, const std::string &ext) {
+        std::vector<std::string> out;
+        DIR *d = opendir(dir.c_str());
+        if(!d) return out;
+        while(dirent *e = readdir(d)) {
+            const std::string n = e->d_name;
+            if(n.size() > ext.size() && n[0] != '.' && n.compare(n.size() - ext.size(), ext.size(), ext) == 0) out.push_back(n);
+            if(out.size() > 500) break;
+        }
+        closedir(d);
+        std::sort(out.begin(), out.end());
+        return out;
+    }
+
+    void BackupDaily(const std::string &dataPath, const std::string &date) {
+        if(!FileExists(dataPath) || date.size() != 10) return;
+        const std::string dir = Sibling(dataPath, "backup");
+        const std::string file = dir + "/nexus-" + date + ".json";
+        if(FileExists(file)) return;
+        std::string raw;
+        if(!ReadFile(dataPath, raw)) return;
+        const json j = json::parse(raw, nullptr, false);
+        if(j.is_discarded() || !j.is_object()) return;   // nur gültige Stände sichern
+        EnsureDir(dir);
+        WriteFileAtomic(file, raw);
+        std::remove((file + ".bak").c_str());
+        auto files = ListFiles(dir, ".json");
+        while(files.size() > 10) {
+            std::remove((dir + "/" + files.front()).c_str());
+            files.erase(files.begin());
+        }
+    }
+
+    json ThemeSnapshot(const json &settings) {
+        json t = settings;
+        if(t.is_object()) {
+            for(const char *k: { "ra", "sgdbKey", "sgdb", "library" }) t.erase(k);
+        }
+        return t;
+    }
+
+    static std::string Slug(const std::string &name) {
+        std::string o;
+        for(const unsigned char c: name) {
+            if(std::isalnum(c)) o += static_cast<char>(std::tolower(c));
+            else if((c == ' ' || c == '-' || c == '_') && !o.empty() && o.back() != '-') o += '-';
+            if(o.size() >= 40) break;
+        }
+        while(!o.empty() && o.back() == '-') o.pop_back();
+        return o.empty() ? "theme" : o;
+    }
+
+    bool SaveUserTheme(const std::string &dir, const std::string &name, const json &settings, std::string *outPath) {
+        if(name.empty()) return false;
+        EnsureDir(dir);
+        const std::string path = dir + "/" + Slug(name) + ".json";
+        json j = json::object();
+        j["nexusTheme"] = 1;
+        j["name"] = SanitizeUtf8(name.substr(0, 60));
+        j["settings"] = ThemeSnapshot(settings);
+        if(!WriteFileAtomic(path, SafeDump(j, 1))) return false;
+        std::remove((path + ".bak").c_str());
+        if(outPath) *outPath = path;
+        return true;
+    }
+
+    std::vector<UserTheme> ListUserThemes(const std::string &dir) {
+        std::vector<UserTheme> out;
+        for(const auto &f: ListFiles(dir, ".json")) {
+            std::string raw;
+            if(!ReadFile(dir + "/" + f, raw, 2 * 1024 * 1024)) continue;
+            const json j = json::parse(raw, nullptr, false);
+            if(j.is_discarded() || !j.is_object() || !JGet(j, "settings")) continue;
+            out.push_back(UserTheme{ SanitizeUtf8(JStr(j, "name", f.substr(0, f.size() - 5)).substr(0, 60)), dir + "/" + f });
+        }
+        return out;
+    }
+
+    bool ApplyUserTheme(const std::string &path, const json &current, json &result) {
+        std::string raw;
+        if(!ReadFile(path, raw, 2 * 1024 * 1024)) return false;
+        const json j = json::parse(raw, nullptr, false);
+        if(j.is_discarded() || !j.is_object()) return false;
+        const json *ts = JGet(j, "settings");
+        if(!ts || !ts->is_object()) return false;
+        json merged = ThemeSnapshot(*ts);
+        for(const char *k: { "ra", "sgdbKey", "sgdb", "library" }) {
+            const json *v = JGet(current, k);
+            if(v) merged[k] = *v;
+        }
+        result = Settings::Sanitize(merged, nullptr);
+        return true;
     }
 
     bool BootGuardStart(const std::string &path) {

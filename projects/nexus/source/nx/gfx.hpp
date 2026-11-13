@@ -16,7 +16,11 @@ namespace nexus {
 
     struct Col {
         uint8_t r = 255, g = 255, b = 255, a = 255;
+        uint8_t paint = 0;   // 1 = Schrift mit Gfx::paint färben (Verlauf/RGB), sonst r/g/b
     };
+
+    // Zuschnitt "cover": Zoom (>= 1) und Bildposition (0..100 %) -> Quellrechteck im Bild
+    void CoverSrc(double texW, double texH, double aspect, double posX, double posY, double zoom, double &sx, double &sy, double &sw, double &sh);
 
     Col ParseCol(const std::string &hex, uint8_t a = 255);
     Col WithA(Col c, double alpha);
@@ -48,12 +52,17 @@ namespace nexus {
 
             // Formen mit Transformation (abgerundetes Rechteck oder Sechseck)
             void Shape(const Xf &xf, double rad, bool hex, Col c);
-            void ShapeTex(SDL_Texture *tex, const Xf &xf, double rad, bool hex, double alpha, bool cover, double posX, double posY, Col tint = Col{});
+            void ShapeTex(SDL_Texture *tex, const Xf &xf, double rad, bool hex, double alpha, bool cover, double posX, double posY, Col tint = Col{}, double zoom = 1.0);
             void ShapeRing(const Xf &xf, double rad, bool hex, double t, Col c);
             // Ring/Fläche/Text mit Farbe pro Eckpunkt (alpha multipliziert)
             void ShapeRingFn(const Xf &xf, double rad, bool hex, double t, const ColFn &fn, double alpha);
             void RectFn(double x, double y, double w, double h, const ColFn &fn, double alpha, int segs = 12);
-            int TextFn(const std::string &s, int size, double x, double y, const ColFn &fn, double alpha, int align = 0, bool bold = false);
+            int TextFn(const std::string &s, int size, double x, double y, const ColFn &fn, double alpha, int align = 0, bool bold = false, int maxW = 0);
+            // Bild mit Zuschnitt (Zoom/Position) und Deckkraft pro Punkt (weiche Ränder): fade(u, v) mit u, v in 0..1
+            void ImageEx(SDL_Texture *tex, double x, double y, double w, double h, double alpha, double zoom, double posX, double posY, const std::function<double(double, double)> &fade = nullptr, Col tint = Col{});
+
+            double fontScale = 1.0;   // globale Schriftgröße
+            ColFn paint;              // Färbung für Schrift mit Col::paint
 
             // Bild in Rechteck (cover = zuschneiden, sonst einpassen)
             void Image(SDL_Texture *tex, double x, double y, double w, double h, double alpha, bool cover, Col tint = Col{});
@@ -76,6 +85,7 @@ namespace nexus {
             std::unordered_map<std::string, TextEntry> textCache;
             uint64_t frame = 0;
             std::vector<SDL_Vertex> vbuf;
+            double curZoom = 1.0;
             std::vector<int> ibuf;
 
             TTF_Font *Font(int size, bool bold);

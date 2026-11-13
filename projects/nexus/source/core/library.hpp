@@ -22,11 +22,18 @@ namespace nexus {
 
     inline bool IsFolderId(const std::string &id) { return id.rfind("fld-", 0) == 0; }
 
+    // Bildausschnitt pro Bilddatei: Zoom (1..4) und Position (0..100 %)
+    struct Crop {
+        double zoom = 1, x = 50, y = 50;
+        bool set = false;
+    };
+
     class Library {
         public:
             json apps = json::object();       // tid -> { favorite, tile, launched }
             std::vector<Folder> folders;
             std::vector<std::string> rootOrder;
+            json crops = json::object();      // Bildpfad -> { z, x, y }
 
             static Library FromJson(const json &j, std::vector<std::string> *report);
             json ToJson() const;
@@ -49,6 +56,8 @@ namespace nexus {
             // Eigene Bildauswahl (kind = grid | hero | logo). Leerer Pfad = Standard (Ordner art/<id>/)
             std::string ArtOverride(const std::string &id, const std::string &kind);
             void SetArtOverride(const std::string &id, const std::string &kind, const std::string &path);
+            Crop CropOf(const std::string &path) const;
+            void SetCrop(const std::string &path, const Crop &c);
             long long RaGameId(const std::string &tid) const;
             void SetRaGameId(const std::string &tid, long long gid);
 

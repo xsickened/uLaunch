@@ -237,6 +237,11 @@ namespace ul::menu::ui {
 
     void MenuApplication::SetBackgroundFade() {
         this->SetFadeAlphaIncrementStepCount(FastFadeAlphaIncrementSteps);
+        // NEXUS: nie über das uLaunch-Hintergrundbild blenden (das klassische Menü blitzte sonst kurz auf)
+        if(IsNexusActive()) {
+            this->SetFadeBackgroundColor(NexusFadeColor());
+            return;
+        }
         if(!this->HasFadeBackgroundImage()) {
             this->SetFadeBackgroundImage(GetBackgroundTexture());
         }

@@ -105,8 +105,32 @@ namespace nexus {
         return out;
     }
 
+    // Unbekannte Werte (z. B. von einer neueren oder älteren NEXUS-Version) bleiben erhalten,
+    // damit ein Update oder ein Zurückwechseln keine Einstellungen löscht.
+    static void KeepUnknown(const json &in, const std::string &prefix, json &out, int depth, int &count) {
+        if(!in.is_object() || depth > 5) return;
+        for(auto it = in.begin(); it != in.end(); ++it) {
+            if(count >= 300) return;
+            const std::string &k = it.key();
+            if(k.empty() || k.size() > 64 || k.find('.') != std::string::npos) continue;
+            const std::string path = prefix.empty() ? k : prefix + "." + k;
+            if(path == "sections") continue;
+            if(it->is_object()) { KeepUnknown(*it, path, out, depth + 1, count); continue; }
+            if(Settings::Find(path)) continue;
+            bool parentOfSchema = false;
+            for(const auto &e: Schema()) if(e.path.rfind(path + ".", 0) == 0) { parentOfSchema = true; break; }
+            if(parentOfSchema) continue;
+            const bool ok = it->is_boolean() || it->is_null() || (it->is_number() && std::isfinite(it->get<double>())) || (it->is_string() && it->get<std::string>().size() <= 512);
+            if(!ok) continue;
+            JSet(out, path, *it);
+            count++;
+        }
+    }
+
     json Settings::Sanitize(const json &in, std::vector<std::string> *report) {
         json out = json::object();
+        int kept = 0;
+        KeepUnknown(in, "", out, 0, kept);
         for(const auto &e: Schema()) {
             const json *p = JGet(in, e.path);
             json v = p ? *p : json();

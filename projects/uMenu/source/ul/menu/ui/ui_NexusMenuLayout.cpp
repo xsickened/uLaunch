@@ -21,6 +21,14 @@ namespace ul::menu::ui {
         constexpr char ClassicFlagPath[] = "sdmc:/nexus/classic.flag";
         constexpr char UmenuBootPath[] = "sdmc:/nexus/umenu-boot.cnt";
         bool g_FirstProfileRequest = true;
+        pu::ui::Color g_NexusFadeColor = { 11, 15, 23, 255 };
+        // Start gilt als gelungen, sobald so viele Bilder fehlerfrei gezeichnet wurden
+        constexpr int BootOkFrames = 20;
+
+        void UpdateFadeColor(const nexus::Settings &s) {
+            const auto c = nexus::ParseCol(s.S("theme.ui"));
+            g_NexusFadeColor = { c.r, c.g, c.b, 255 };
+        }
 
         std::string UidToHex(const AccountUid &uid) {
             char buf[40];
@@ -72,6 +80,7 @@ namespace ul::menu::ui {
                 }
 
                 void Resume() override {
+                    nexus::BootGuardOk(UmenuBootPath);
                     if(HasScreenCaptureBackground()) {
                         RequestResumeScreenCaptureBackground();   // blendet das Spielbild ein und setzt dann fort
                     }
@@ -187,9 +196,18 @@ namespace ul::menu::ui {
                 nexus::Log("uMenu: mehrere Fehlstarts -> klassisches Menü (ZL+ZR schaltet NEXUS wieder ein)");
             }
             g_NexusState = active ? 1 : 0;
+            if(active) {
+                std::string source;
+                std::vector<std::string> report;
+                UpdateFadeColor(nexus::LoadData(nexus::DataFile, source, report).settings);
+            }
             nexus::Log("uMenu startet, NEXUS %s", active ? "aktiv" : "aus");
         }
         return g_NexusState == 1;
+    }
+
+    pu::ui::Color NexusFadeColor() {
+        return g_NexusFadeColor;
     }
 
     bool NexusLockOnWake() {
@@ -210,6 +228,7 @@ namespace ul::menu::ui {
     class NexusElement : public pu::ui::elm::Element {
         private:
             bool inited = false, busy = false, bootOk = false;
+            int okFrames = 0, colorTick = 0;
             u64 keysDown = 0, keysHeld = 0;
             pu::ui::TouchPoint touch;
             u64 lastMs = 0, startMs = 0;
@@ -298,10 +317,11 @@ namespace ul::menu::ui {
                         touching ? static_cast<float>(this->touch.x) / k : 0, touching ? static_cast<float>(this->touch.y) / k : 0, now);
                     this->keysDown = 0;
                     this->home.Frame(this->in, dt);
-                    if(!this->bootOk && now - this->startMs > 3000) {
+                    if(!this->bootOk && ++this->okFrames >= BootOkFrames) {
                         nexus::BootGuardOk(UmenuBootPath);
                         this->bootOk = true;
                     }
+                    if(++this->colorTick >= 30) { this->colorTick = 0; UpdateFadeColor(this->data.settings); }
                     this->busy = false;
                 }
                 SDL_RenderSetScale(r, sx, sy);

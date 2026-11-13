@@ -1,6 +1,7 @@
 #include "library.hpp"
 #include "store.hpp"
 #include <algorithm>
+#include <cmath>
 #include <cctype>
 #include <random>
 #include <set>
@@ -88,6 +89,17 @@ namespace nexus {
                 lib.folders.push_back(fo);
             }
         }
+        const json *cr = JGet(j, "crops");
+        if(cr && cr->is_object()) {
+            for(auto it = cr->begin(); it != cr->end() && lib.crops.size() < 500; ++it) {
+                const std::string &k = it.key();
+                if(k.size() >= 300 || k.rfind("sdmc:/", 0) != 0 || !it.value().is_object()) continue;
+                Crop c;
+                c.zoom = JNum(it.value(), "z", 1); c.x = JNum(it.value(), "x", 50); c.y = JNum(it.value(), "y", 50);
+                if(!std::isfinite(c.zoom) || !std::isfinite(c.x) || !std::isfinite(c.y)) continue;
+                lib.crops[k] = { { "z", std::clamp(c.zoom, 1.0, 4.0) }, { "x", std::clamp(c.x, 0.0, 100.0) }, { "y", std::clamp(c.y, 0.0, 100.0) } };
+            }
+        }
         const json *ro = JGet(j, "rootOrder");
         std::set<std::string> seen;
         if(ro && ro->is_array()) {
@@ -119,6 +131,7 @@ namespace nexus {
         }
         j["folders"] = fs;
         j["rootOrder"] = this->rootOrder;
+        j["crops"] = this->crops;
         return j;
     }
 
@@ -292,6 +305,24 @@ namespace nexus {
         if(!a.is_object()) a = json::object();
         if(gid <= 0) a.erase("raGameId");
         else a["raGameId"] = gid;
+    }
+
+    Crop Library::CropOf(const std::string &path) const {
+        Crop c;
+        if(path.empty()) return c;
+        auto it = this->crops.find(path);
+        if(it == this->crops.end() || !it->is_object()) return c;
+        c.zoom = std::clamp(JNum(*it, "z", 1), 1.0, 4.0);
+        c.x = std::clamp(JNum(*it, "x", 50), 0.0, 100.0);
+        c.y = std::clamp(JNum(*it, "y", 50), 0.0, 100.0);
+        c.set = true;
+        return c;
+    }
+
+    void Library::SetCrop(const std::string &path, const Crop &c) {
+        if(path.empty() || path.size() >= 300 || path.rfind("sdmc:/", 0) != 0) return;
+        if(!c.set || (std::fabs(c.zoom - 1) < 1e-6 && std::fabs(c.x - 50) < 1e-6 && std::fabs(c.y - 50) < 1e-6)) { this->crops.erase(path); return; }
+        this->crops[path] = { { "z", std::clamp(c.zoom, 1.0, 4.0) }, { "x", std::clamp(c.x, 0.0, 100.0) }, { "y", std::clamp(c.y, 0.0, 100.0) } };
     }
 
 }

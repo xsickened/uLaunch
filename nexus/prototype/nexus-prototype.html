@@ -19,7 +19,7 @@ html,body{margin:0;height:100%;background:#05070b;color:#eef2f7;font-family:syst
 #homeBg.anim{background-size:400% 400%;animation:bgshift 24s ease infinite}
 @keyframes bgshift{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
 .hero{position:absolute;inset:-30px;background-size:cover;background-position:center;opacity:0;transition:opacity var(--heroMs,450ms) ease, transform 600ms ease}
-.hero.on{opacity:1}
+.hero.on{opacity:var(--heroOp,1)}
 .hero.kb.on{animation:kb 18s ease-in-out infinite alternate}
 @keyframes kb{from{scale:1}to{scale:1.12}}
 /* Ebene 2 */
@@ -107,10 +107,14 @@ html,body{margin:0;height:100%;background:#05070b;color:#eef2f7;font-family:syst
 .panel{position:absolute;background:var(--panel);color:var(--text);border:1px solid rgba(127,127,127,.25);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.5);backdrop-filter:blur(8px);display:flex;flex-direction:column}
 #stage.ps-solid .panel{backdrop-filter:none;background:var(--ui)}
 #stage.ps-outline .panel{background:rgba(0,0,0,.25);border:2px solid var(--accent)}
-.panel h2{margin:0;padding:16px 20px 6px;font-size:18px;font-weight:600}
+.panel h2{margin:0;padding:16px 20px 6px;font-size:calc(var(--titleSize,20px)*.9*var(--fs,1));font-weight:600}
+.panel{border-radius:var(--panelRadius,14px)!important}
+#stage.pborder .panel{border:var(--panelBorderW) solid transparent!important;background-clip:padding-box;box-shadow:0 0 0 var(--panelBorderW) var(--accent),0 20px 60px rgba(0,0,0,.5)}
+#stage.gtext .panel h2,#stage.gtext .row>span:first-child,#stage.gtext .lock .dt,#stage.gtext #clockTop{background:var(--accentGrad);-webkit-background-clip:text;background-clip:text;color:transparent}
+#stage.toast-top #toast{bottom:auto;top:70px}#stage.toast-center #toast{bottom:auto;top:46%}
 .panel .sub{padding:0 20px 8px;font-size:12px;color:var(--muted)}
 .rows{overflow:auto;padding:4px 10px 10px;flex:1}
-.row{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-radius:8px;font-size:14px;cursor:pointer;gap:10px;min-height:38px}
+.row{display:flex;align-items:center;justify-content:space-between;padding:6px 12px;border-radius:8px;font-size:calc(var(--textSize,15px)*.93*var(--fs,1));cursor:pointer;gap:10px;min-height:var(--rowH,38px)}
 .row.head{color:var(--accent);font-size:12px;text-transform:uppercase;letter-spacing:.08em;cursor:default;padding-top:14px;min-height:0}
 .row.cur{background:var(--rowcur);position:relative}
 .row.cur::before{content:"";position:absolute;left:0;top:4px;bottom:4px;width:3px;border-radius:2px;background:var(--accentGrad)}
@@ -231,7 +235,10 @@ const isMode = (...m) => () => m.includes(S.data.settings.layout.mode);
 const pct = v=>Math.round(v*100)+" %", px = v=>v+" px", ms = v=>v+" ms", deg = v=>v+"°";
 const SPEC = [
   // Darstellung
-  {g:"look", p:"theme.textColor", l:"Schriftfarbe", t:"enum", o:["white","black","auto"], ol:["Weiß","Schwarz","Automatisch"], d:"white"},
+  {g:"look", p:"theme.textColor", l:"Schriftfarbe", t:"enum", o:["white","black","auto","custom"], ol:["Weiß","Schwarz","Automatisch","Eigene Farbe"], d:"white"},
+  {g:"look", p:"theme.textCustom", l:"Eigene Schriftfarbe", t:"color", d:"#eef2f7", w:()=>ST().theme.textColor==="custom"},
+  {g:"look", p:"theme.textEffect", l:"Schrift-Effekt", t:"enum", o:["solid","accent"], ol:["Einfarbig","Wie Akzent (Verlauf/RGB)"], d:"solid"},
+  {g:"look", p:"theme.mutedOpacity", l:"Deckkraft Nebentext", t:"num", min:.3, max:1, step:.05, f:pct, d:.62},
   {g:"look", p:"theme.accent", l:"Akzentfarbe", t:"color", d:"#3ee0c8"},
   {g:"look", p:"theme.accentMode", l:"Akzent-Art", t:"enum", o:["solid","gradient","gradient3","rainbow"], ol:["Einfarbig","Verlauf (2 Farben)","Verlauf (3 Farben)","RGB-Regenbogen"], d:"solid"},
   {g:"look", p:"theme.accent2", l:"Akzent: 2. Farbe", t:"color", d:"#e86cff", w:()=>["gradient","gradient3"].includes(ST().theme.accentMode)},
@@ -243,7 +250,17 @@ const SPEC = [
   {g:"look", p:"theme.accentCycle", l:"Dauer pro Runde", t:"num", min:1, max:30, step:1, f:v=>v+" s", d:6, w:()=>ST().theme.accentAnim!=="none"},
   {g:"look", p:"theme.ui", l:"UI-Grundfarbe", t:"enum", o:["#0b0f17","#000000","#120a1f","#0f1a14","#1a1a1a","#e9edf2"], ol:["Nachtblau","Schwarz","Violett","Waldgrün","Anthrazit","Hell"], d:"#0b0f17"},
   {g:"look", p:"theme.font", l:"Schriftart", t:"enum", o:FONTS, d:"Segoe UI"},
-  {g:"look", p:"theme.panelStyle", l:"Menü-Stil", t:"enum", o:["glass","solid","outline"], ol:["Glas","Deckend","Umrandet"], d:"glass"},
+  {g:"look", p:"theme.panelStyle", l:"Menü-Stil", t:"enum", o:["glass","solid","outline","custom"], ol:["Glas","Deckend","Umrandet","Eigene Farbe"], d:"glass"},
+  // Textboxen & Schrift
+  {g:"ui", p:"ui.fontScale", l:"Schriftgröße (alles)", t:"num", min:.8, max:1.3, step:.05, f:pct, d:1},
+  {g:"ui", p:"ui.titleSize", l:"Titelgröße in Menüs", t:"num", min:14, max:32, step:1, f:px, d:20},
+  {g:"ui", p:"ui.textSize", l:"Textgröße in Menüs", t:"num", min:12, max:22, step:1, f:px, d:15},
+  {g:"ui", p:"ui.rowHeight", l:"Zeilenhöhe", t:"num", min:30, max:56, step:2, f:px, d:38},
+  {g:"ui", p:"ui.panelColor", l:"Farbe der Textboxen", t:"color", d:"#0e121c", w:()=>ST().theme.panelStyle==="custom"},
+  {g:"ui", p:"ui.panelOpacity", l:"Deckkraft der Textboxen", t:"num", min:.2, max:1, step:.05, f:pct, d:.93},
+  {g:"ui", p:"ui.panelRadius", l:"Eckenradius", t:"num", min:0, max:30, step:1, f:px, d:14},
+  {g:"ui", p:"ui.panelBorder", l:"Rahmen (Akzent)", t:"num", min:0, max:6, step:1, f:px, d:0},
+  {g:"ui", p:"ui.toastPos", l:"Hinweise erscheinen", t:"enum", o:["bottom","top","center"], ol:["Unten","Oben","Mitte"], d:"bottom"},
   // Kopfzeile & Symbole
   {g:"top", p:"topbar.visible", l:"Kopfzeile anzeigen", t:"bool", d:true},
   {g:"top", p:"topbar.tabStyle", l:"Bereiche als", t:"enum", o:["text","icons","both"], ol:["Nur Text","Nur Symbole","Symbol + Text"], d:"text"},
@@ -297,7 +314,14 @@ const SPEC = [
   {g:"anim", p:"anim.idleFocusOnly", l:"Leerlauf nur für Fokus-Kachel", t:"bool", d:true},
   // Fokus-Hintergrund
   {g:"hero", p:"hero.enabled", l:"Hero beim Fokussieren", t:"bool", d:true},
+  {g:"hero", p:"hero.transition", l:"Übergang", t:"enum", o:["crossfade","viaHome","slide","zoom","cut"], ol:["Überblenden","Über den Home-Hintergrund","Schieben","Zoom","Hart"], d:"crossfade"},
   {g:"hero", p:"hero.transitionMs", l:"Überblenddauer", t:"num", min:0, max:1500, step:50, f:ms, d:450},
+  {g:"hero", p:"hero.opacity", l:"Deckkraft (Home scheint durch)", t:"num", min:.1, max:1, step:.05, f:pct, d:1},
+  {g:"hero", p:"hero.mask", l:"Rand weich ausblenden", t:"enum", o:["none","bottom","top","left","right","vignette"], ol:["Nein","Unten","Oben","Links","Rechts","Vignette"], d:"none"},
+  {g:"hero", p:"hero.maskSize", l:"Breite der Ausblendung", t:"num", min:.1, max:.9, step:.05, f:pct, d:.45, w:()=>ST().hero.mask!=="none"},
+  {g:"hero", p:"hero.imageScale", l:"Zoom", t:"num", min:1, max:2, step:.05, f:pct, d:1},
+  {g:"hero", p:"hero.posX", l:"Ausschnitt waagerecht", t:"num", min:0, max:100, step:5, f:v=>v+" %", d:50},
+  {g:"hero", p:"hero.posY", l:"Ausschnitt senkrecht", t:"num", min:0, max:100, step:5, f:v=>v+" %", d:50},
   {g:"hero", p:"hero.debounce", l:"Verzögerung bei schnellem Scrollen", t:"num", min:0, max:400, step:10, f:ms, d:110},
   {g:"hero", p:"hero.dim", l:"Abdunkelung", t:"num", min:0, max:.9, step:.05, f:pct, d:.35},
   {g:"hero", p:"hero.blur", l:"Unschärfe", t:"num", min:0, max:16, step:1, f:px, d:0},
@@ -334,7 +358,8 @@ const SPEC = [
   {g:"lock", p:"lock.clockSize", l:"Uhr-Größe", t:"num", min:60, max:240, step:10, f:px, d:140},
   {g:"lock", p:"lock.clockFont", l:"Uhr-Schrift", t:"enum", o:FONTS, d:"Segoe UI"},
   {g:"lock", p:"lock.clockAccent", l:"Uhr im Akzent (Verlauf/RGB)", t:"bool", d:false},
-  {g:"lock", p:"lock.textColor", l:"Schriftfarbe", t:"enum", o:["white","black"], ol:["Weiß","Schwarz"], d:"white"},
+  {g:"lock", p:"lock.textColor", l:"Schriftfarbe", t:"enum", o:["white","black","custom"], ol:["Weiß","Schwarz","Eigene Farbe"], d:"white"},
+  {g:"lock", p:"lock.textCustom", l:"Eigene Schriftfarbe", t:"color", d:"#ffffff", w:()=>ST().lock.textColor==="custom"},
   {g:"lock", p:"lock.clock24", l:"24-Stunden-Format", t:"bool", d:true},
   {g:"lock", p:"lock.showDate", l:"Datum", t:"bool", d:true},
   {g:"lock", p:"lock.showBattery", l:"Akku", t:"bool", d:true},
@@ -389,7 +414,7 @@ const SPEC = [
   {g:"lib", p:"sgdb.autoMissing", l:"Fehlende Bilder automatisch laden", t:"bool", d:false},
   {g:"lib", p:"sgdbKey", l:"", t:"str", d:"", hidden:true},
 ];
-const GROUPS = [["look","Darstellung & Schrift"],["top","Kopfzeile, Symbole & Hinweise"],["layout","Anordnung der Kacheln"],["anim","Animationen"],["tiles","Kacheln (Standard)"],["hero","Fokus: Hintergrund"],["logo","Fokus: Logo"],["home","Home-Hintergrund"],["lock","Sperrbildschirm"],["profile","Profilauswahl"],["sections","Bereiche (Reihenfolge & Sichtbarkeit)"],["lib","Bibliothek & SteamGridDB"],["ra","RetroAchievements"],["sys","Themes, Backup & System"]];
+const GROUPS = [["look","Darstellung & Schrift"],["ui","Textboxen & Schrift"],["top","Kopfzeile, Symbole & Hinweise"],["layout","Anordnung der Kacheln"],["anim","Animationen"],["tiles","Kacheln (Standard)"],["hero","Fokus: Hintergrund"],["logo","Fokus: Logo"],["home","Home-Hintergrund"],["lock","Sperrbildschirm"],["profile","Profilauswahl"],["sections","Bereiche (Reihenfolge & Sichtbarkeit)"],["lib","Bibliothek & SteamGridDB"],["ra","RetroAchievements"],["sys","Themes, Backup & System"]];
 const TILE_SPEC = SPEC.filter(s=>s.g==="tiles").map(s=>({...s, p:s.p.replace("tileDefaults.","")}));
 const SECTION_IDS = Object.keys(SECTION_NAMES);
 function defaultSettings(){ const s = {}; SPEC.forEach(x=>setP(s, x.p, clone(x.d))); s.sections = SECTION_IDS.map(id=>({id, visible:true})); return s; }
@@ -769,8 +794,19 @@ const EASE = {smooth:"cubic-bezier(.2,.8,.2,1)", spring:"cubic-bezier(.34,1.56,.
 function animOn(){ return ST().anim.enabled; }
 function applyTheme(){
   const s = ST(), t = s.theme, st = $("#stage");
-  const light = t.textColor==="black" || (t.textColor==="auto" && lum(t.ui) > .55);
+  const light = t.textColor==="black" || (t.textColor==="auto" && lum(t.ui) > .55) || (t.textColor==="custom" && lum(t.textCustom) < .5);
   st.classList.toggle("light", light);
+  // Schrift: eigene Farbe, Nebentext-Deckkraft, Verlauf
+  const tc = t.textColor==="custom" ? t.textCustom : light ? "#12161d" : "#eef2f7"; const [tr,tg,tb] = hexRgb(tc);
+  st.style.setProperty("--text", tc); st.style.setProperty("--muted", `rgba(${tr},${tg},${tb},${t.mutedOpacity??.62})`);
+  st.classList.toggle("gtext", t.textEffect==="accent");
+  // Textboxen
+  const u = s.ui || {}; const [pr,pg,pb] = hexRgb(t.panelStyle==="custom" ? u.panelColor : light ? "#f6f8fb" : "#0e121c");
+  st.style.setProperty("--panel", `rgba(${pr},${pg},${pb},${u.panelOpacity??.93})`);
+  st.style.setProperty("--panelRadius", (u.panelRadius??14)+"px"); st.style.setProperty("--rowH", (u.rowHeight??38)+"px");
+  st.style.setProperty("--titleSize", (u.titleSize??20)+"px"); st.style.setProperty("--textSize", (u.textSize??15)+"px"); st.style.setProperty("--fs", u.fontScale??1);
+  st.style.setProperty("--panelBorderW", (u.panelBorder||0)+"px"); st.classList.toggle("pborder", (u.panelBorder||0) > 0);
+  st.classList.remove("toast-top","toast-center"); if(u.toastPos && u.toastPos!=="bottom") st.classList.add("toast-"+u.toastPos);
   st.classList.remove("ps-glass","ps-solid","ps-outline"); st.classList.add("ps-"+t.panelStyle);
   st.style.setProperty("--accent", t.accent); updateAccent(); st.style.setProperty("--ui", t.ui); st.style.setProperty("--font", `"${t.font}", system-ui, sans-serif`);
   st.style.setProperty("--heroMs", s.hero.transitionMs+"ms"); st.style.setProperty("--iconScale", s.icons.size);
@@ -905,7 +941,12 @@ const FocusPresentationManager = {
     const h = ST().hero; $("#dim").style.opacity = h.enabled ? h.dim : 0; $("#grad").style.display = h.gradient ? "block" : "none";
     const blur = h.blur ? `blur(${h.blur}px)` : "none"; $("#heroA").style.filter = $("#heroB").style.filter = blur;
     const it = S.items[S.focus]; const px = h.parallax && it && animOn() ? -((it.x+it.w/2) - 640)/40 : 0;
-    $("#heroA").style.transform = $("#heroB").style.transform = `translateX(${px}px)`;
+    this.baseTf = `translateX(${px}px) scale(${h.imageScale||1})`;
+    $("#heroA").style.transform = $("#heroB").style.transform = this.baseTf;
+    $("#stage").style.setProperty("--heroOp", h.opacity ?? 1);
+    const ms = Math.round((h.maskSize??.45)*100), m = h.mask||"none";
+    const mask = m==="none" ? "none" : m==="vignette" ? `radial-gradient(ellipse at center, #000 ${100-ms}%, transparent 100%)` : `linear-gradient(to ${({bottom:"top",top:"bottom",left:"right",right:"left"})[m]}, transparent 0%, #000 ${ms}%)`;
+    [$("#heroA"),$("#heroB")].forEach(x=>{ x.style.webkitMaskImage = x.style.maskImage = mask; x.style.backgroundPosition = `${h.posX??50}% ${h.posY??50}%`; });
     [$("#heroA"),$("#heroB")].forEach(x=>x.classList.toggle("kb", h.kenBurns && animOn()));
     this.placeLogo();
   },
@@ -913,7 +954,12 @@ const FocusPresentationManager = {
     const hs = ST().hero; const heroUrl = hs.enabled ? this.heroFor(e) : null; if(heroUrl) S.lastHero = heroUrl;
     const key = heroUrl || "none";
     if(key !== this.curKey){ const back = this.front==="A" ? $("#heroB") : $("#heroA"), front = this.front==="A" ? $("#heroA") : $("#heroB");
-      back.style.backgroundImage = heroUrl ? `url("${heroUrl}")` : "none"; if(heroUrl) back.classList.add("on"); else back.classList.remove("on"); front.classList.remove("on");
+      const tr = animOn() ? (hs.transition||"crossfade") : "cut";
+      [back, front].forEach(x=>{ x.style.transition = tr==="cut" ? "none" : ""; x.style.transitionDelay = "0ms"; });
+      if(tr==="viaHome") back.style.transitionDelay = "var(--heroMs,450ms)";   // erst ausblenden bis zum Home-Hintergrund, dann einblenden
+      back.style.backgroundImage = heroUrl ? `url("${heroUrl}")` : "none";
+      if(tr==="slide" || tr==="zoom"){ back.style.transition = "none"; back.style.transform = (this.baseTf||"") + (tr==="slide" ? " translateX(80px)" : " scale(1.08)"); void back.offsetWidth; back.style.transition = ""; back.style.transform = this.baseTf||""; }
+      if(heroUrl) back.classList.add("on"); else back.classList.remove("on"); front.classList.remove("on");
       this.front = this.front==="A"?"B":"A"; this.curKey = key; }
     const logo = $("#logo"), ls = ST().logo, img = logo.querySelector("img"); const url = this.logoFor(e);
     const ri = $("#raInfo"); const rp = ST().ra.showUnderLogo ? RetroAchievements.progress(e) : null;
@@ -1232,7 +1278,7 @@ function showLock(){
   const d = {kind:"lock", hints:[["A","Entsperren"]], unlocking:false,
     draw(){ const l = ST().lock; const el = document.createElement("div"); el.className = "lock";
       el.style.background = l.bgType==="home" ? bgCSS(ST().home.bgType, ST().home.preset, ST().home.color, ST().home.image) : bgCSS(l.bgType, l.preset, l.color, l.image);
-      const col = l.textColor==="black" ? "#111" : "#fff"; const now = new Date();
+      const col = l.textColor==="black" ? "#111" : l.textColor==="custom" ? l.textCustom : "#fff"; const now = new Date();
       const pos = {center:"left:0;right:0;top:34%;text-align:center", topLeft:"left:70px;top:80px", bottomLeft:"left:70px;bottom:110px", bottomRight:"right:70px;bottom:110px;text-align:right"}[l.clockPos];
       el.innerHTML = `<div class="ld" style="opacity:${l.dim};backdrop-filter:blur(${l.blur}px);-webkit-backdrop-filter:blur(${l.blur}px)"></div>
         <div class="clk${l.clockAccent?" acc":""}" style="${pos};font-size:${l.clockSize}px;font-family:'${l.clockFont}',system-ui;color:${col}">${fmtTime(now, l.clock24)}${l.showDate?`<div class="dt">${now.toLocaleDateString("de-DE",{weekday:"long",day:"numeric",month:"long"})}</div>`:""}</div>

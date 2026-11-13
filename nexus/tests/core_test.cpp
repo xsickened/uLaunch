@@ -9,6 +9,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <random>
 
 using namespace nexus;
@@ -275,6 +276,75 @@ int main() {
         CHECK(e.library.ArtOverride("0100000000010000", "hero").empty());
         e.settings.Set("home.image", json("sdmc:/Nintendo/Album/2026/11/13/x.jpg"));
         CHECK(e.settings.S("home.image") == "sdmc:/Nintendo/Album/2026/11/13/x.jpg");
+    }
+
+    // 10. Update-Sicherheit: unbekannte Werte bleiben, Schlüssel überleben, Themes, Sicherungen, Bildausschnitte
+    {
+        if(std::system("rm -rf /tmp/nexus_test/u && mkdir -p /tmp/nexus_test/u") != 0) std::printf("Hinweis: Testordner nicht neu angelegt\n");
+        json in = Settings::Defaults();
+        JSet(in, "zukunft.option", json(42));
+        JSet(in, "theme.neuerWert", json("x"));
+        JSet(in, "theme.accentMode", json("disco"));
+        JSet(in, "theme", *JGet(in, "theme"));
+        json out = Settings::Sanitize(in, nullptr);
+        CHECK(JNum(*JGet(out, "zukunft"), "option", 0) == 42);
+        CHECK(*JGet(out, "theme.neuerWert") == "x");
+        CHECK(*JGet(out, "theme.accentMode") == "solid");
+        // Wert anstelle eines Schema-Objekts wird nicht übernommen
+        json in2 = Settings::Defaults(); in2["hero"] = 5;
+        CHECK(JGet(Settings::Sanitize(in2, nullptr), "hero.enabled") != nullptr);
+
+        NexusData d; d.settings.data = Settings::Defaults();
+        d.settings.Set("sgdbKey", json("abcdefgh12345"));
+        d.settings.Set("ra.user", json("Kevin"));
+        d.settings.Set("ra.key", json("rakey1234567"));
+        CHECK(SaveData("/tmp/nexus_test/u/nexus.json", d));
+        std::remove("/tmp/nexus_test/u/nexus.json"); std::remove("/tmp/nexus_test/u/nexus.json.bak");
+        std::string src; std::vector<std::string> rep;
+        NexusData e = LoadData("/tmp/nexus_test/u/nexus.json", src, rep);
+        CHECK(src == "defaults" && e.settings.S("sgdbKey") == "abcdefgh12345" && e.settings.S("ra.key") == "rakey1234567" && e.settings.S("ra.user") == "Kevin");
+        // Leere Schlüssel überschreiben keys.json nie
+        NexusData empty; empty.settings.data = Settings::Defaults();
+        CHECK(SaveData("/tmp/nexus_test/u/nexus.json", empty));
+        NexusData f = LoadData("/tmp/nexus_test/u/nexus.json", src, rep);
+        CHECK(f.settings.S("sgdbKey") == "abcdefgh12345");
+
+        // Themes: speichern, auflisten, laden ohne Schlüssel zu verlieren
+        e.settings.Set("theme.accent", json("#ff0000"));
+        e.settings.Set("layout.mode", json("ring"));
+        std::string tp;
+        CHECK(SaveUserTheme("/tmp/nexus_test/u/themes", "Mein Rot!", e.settings.data, &tp));
+        std::string raw; ReadFile(tp, raw);
+        CHECK(raw.find("abcdefgh12345") == std::string::npos && raw.find("rakey") == std::string::npos);
+        const auto themes = ListUserThemes("/tmp/nexus_test/u/themes");
+        CHECK(themes.size() == 1 && themes[0].name == "Mein Rot!");
+        json cur = Settings::Defaults(); JSet(cur, "sgdbKey", json("anderer-key-123"));
+        json res;
+        CHECK(ApplyUserTheme(themes[0].path, cur, res));
+        CHECK(*JGet(res, "theme.accent") == "#ff0000" && *JGet(res, "layout.mode") == "ring" && *JGet(res, "sgdbKey") == "anderer-key-123");
+        CHECK(!ApplyUserTheme("/tmp/nexus_test/u/fehlt.json", cur, res));
+
+        // Tägliche Sicherung, höchstens 10
+        CHECK(SaveData("/tmp/nexus_test/u/nexus.json", e));
+        for(int i = 1; i <= 13; i++) { char dt[16]; std::snprintf(dt, sizeof(dt), "2026-01-%02d", i); BackupDaily("/tmp/nexus_test/u/nexus.json", dt); }
+        int n = 0; for(int i = 1; i <= 13; i++) { char fp[80]; std::snprintf(fp, sizeof(fp), "/tmp/nexus_test/u/backup/nexus-2026-01-%02d.json", i); if(FileExists(fp)) n++; }
+        CHECK(n == 10 && FileExists("/tmp/nexus_test/u/backup/nexus-2026-01-13.json") && !FileExists("/tmp/nexus_test/u/backup/nexus-2026-01-01.json"));
+
+        // Bildausschnitt
+        Crop c; c.zoom = 1.8; c.x = 20; c.y = 90; c.set = true;
+        e.library.SetCrop("sdmc:/nexus/art/backgrounds/a.jpg", c);
+        Crop bad; bad.zoom = 99; bad.x = -5; bad.y = 500; bad.set = true;
+        e.library.SetCrop("sdmc:/nexus/art/b.jpg", bad);
+        e.library.SetCrop("/etc/x.jpg", c);
+        CHECK(SaveData("/tmp/nexus_test/u/nexus.json", e));
+        NexusData g = LoadData("/tmp/nexus_test/u/nexus.json", src, rep);
+        const Crop c2 = g.library.CropOf("sdmc:/nexus/art/backgrounds/a.jpg");
+        CHECK(c2.set && std::fabs(c2.zoom - 1.8) < 1e-9 && c2.x == 20 && c2.y == 90);
+        const Crop c3 = g.library.CropOf("sdmc:/nexus/art/b.jpg");
+        CHECK(c3.zoom == 4 && c3.x == 0 && c3.y == 100);
+        CHECK(!g.library.CropOf("/etc/x.jpg").set);
+        Crop reset; reset.set = true; g.library.SetCrop("sdmc:/nexus/art/b.jpg", reset);
+        CHECK(!g.library.CropOf("sdmc:/nexus/art/b.jpg").set);
     }
 
     std::printf(g_Fail ? "%d Fehler\n" : "Alle Kern-Tests bestanden.\n", g_Fail);

@@ -69,7 +69,19 @@ namespace nexus {
         }
     }
 
+    void CoverSrc(double texW, double texH, double at, double posX, double posY, double zoom, double &sx, double &sy, double &sw, double &sh) {
+        sx = 0; sy = 0; sw = texW; sh = texH;
+        if(texW <= 0 || texH <= 0) return;
+        const double as = texW / texH;
+        if(as > at) sw = texH * at; else sh = texW / at;
+        zoom = std::clamp(std::isfinite(zoom) ? zoom : 1.0, 1.0, 4.0);
+        sw /= zoom; sh /= zoom;
+        sx = (texW - sw) * std::clamp(posX, 0.0, 100.0) / 100.0;
+        sy = (texH - sh) * std::clamp(posY, 0.0, 100.0) / 100.0;
+    }
+
     TTF_Font *Gfx::Font(int size, bool bold) {
+        size = static_cast<int>(std::lround(size * std::clamp(this->fontScale, 0.5, 2.0)));
         size = std::clamp(size, 6, 300);
         const int key = size * 2 + (bold ? 1 : 0);
         auto it = this->fonts.find(key);
@@ -157,11 +169,7 @@ namespace nexus {
         }
         // UV (Zuschnitt "cover" mit Bildposition)
         double srcX = 0, srcY = 0, srcW = texW, srcH = texH;
-        if(uv && texW > 0 && texH > 0 && cover) {
-            const double at = xf.w / std::max(1.0, xf.h), as = texW / texH;
-            if(as > at) { srcW = texH * at; srcX = (texW - srcW) * posX / 100.0; }
-            else { srcH = texW / at; srcY = (texH - srcH) * posY / 100.0; }
-        }
+        if(uv && texW > 0 && texH > 0 && cover) CoverSrc(texW, texH, xf.w / std::max(1.0, xf.h), posX, posY, this->curZoom, srcX, srcY, srcW, srcH);
         const double cs = std::cos(xf.rot * kPi / 180.0), sn = std::sin(xf.rot * kPi / 180.0);
         for(const auto &[lx, ly]: local) {
             const double x = lx * xf.sc * xf.squash, y = ly * xf.sc;
@@ -180,7 +188,7 @@ namespace nexus {
         this->Fan(nullptr, pts, nullptr, SDL_FPoint{ static_cast<float>(xf.cx), static_cast<float>(xf.cy) }, SDL_FPoint{ 0, 0 }, c);
     }
 
-    void Gfx::ShapeTex(SDL_Texture *tex, const Xf &xf, double rad, bool hex, double alpha, bool cover, double posX, double posY, Col tint) {
+    void Gfx::ShapeTex(SDL_Texture *tex, const Xf &xf, double rad, bool hex, double alpha, bool cover, double posX, double posY, Col tint, double zoom) {
         if(!tex) return;
         int tw = 0, th = 0;
         SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
@@ -196,11 +204,11 @@ namespace nexus {
             return;
         }
         std::vector<SDL_FPoint> pts, uv;
+        this->curZoom = zoom;
         this->ShapePoints(xf, rad, hex, 0, pts, &uv, true, tw, th, posX, posY);
+        this->curZoom = 1.0;
         double srcX = 0, srcY = 0, srcW = tw, srcH = th;
-        const double at = xf.w / std::max(1.0, xf.h), as = static_cast<double>(tw) / th;
-        if(as > at) { srcW = th * at; srcX = (tw - srcW) * posX / 100.0; }
-        else { srcH = tw / at; srcY = (th - srcH) * posY / 100.0; }
+        CoverSrc(tw, th, xf.w / std::max(1.0, xf.h), posX, posY, zoom, srcX, srcY, srcW, srcH);
         const SDL_FPoint cuv{ static_cast<float>((srcX + srcW / 2) / tw), static_cast<float>((srcY + srcH / 2) / th) };
         this->Fan(tex, pts, &uv, SDL_FPoint{ static_cast<float>(xf.cx), static_cast<float>(xf.cy) }, cuv, Col{ tint.r, tint.g, tint.b, static_cast<uint8_t>(std::clamp(alpha, 0.0, 1.0) * tint.a) });
     }
@@ -266,11 +274,14 @@ namespace nexus {
         SDL_RenderGeometry(this->r, nullptr, this->vbuf.data(), static_cast<int>(this->vbuf.size()), this->ibuf.data(), static_cast<int>(this->ibuf.size()));
     }
 
-    int Gfx::TextFn(const std::string &s, int size, double x, double y, const ColFn &fn, double alpha, int align, bool bold) {
+    int Gfx::TextFn(const std::string &s, int size, double x, double y, const ColFn &fn, double alpha, int align, bool bold, int maxW) {
         int w, h;
         // weiße Schrift, eingefärbt über die Eckpunkt-Farben
         SDL_Texture *t = this->TextTex(s, size, Col{ 255, 255, 255, 255 }, 0, Col{}, w, h, bold);
         if(!t || w <= 0) return 0;
+        const int fullW = w;
+        if(maxW > 0 && w > maxW) w = maxW;
+        const double umax = static_cast<double>(w) / fullW;
         double dx = x;
         if(align == 1) dx = x - w / 2.0;
         else if(align == 2) dx = x - w;
@@ -282,8 +293,8 @@ namespace nexus {
             const double f = static_cast<double>(i) / segs;
             const float px = static_cast<float>(dx + w * f);
             const float top = static_cast<float>(y), bot = static_cast<float>(y + h);
-            this->vbuf.push_back(SDL_Vertex{ { px, top }, SC(WithA(fn(px, top), alpha)), { static_cast<float>(f), 0 } });
-            this->vbuf.push_back(SDL_Vertex{ { px, bot }, SC(WithA(fn(px, bot), alpha)), { static_cast<float>(f), 1 } });
+            this->vbuf.push_back(SDL_Vertex{ { px, top }, SC(WithA(fn(px, top), alpha)), { static_cast<float>(f * umax), 0 } });
+            this->vbuf.push_back(SDL_Vertex{ { px, bot }, SC(WithA(fn(px, bot), alpha)), { static_cast<float>(f * umax), 1 } });
         }
         for(int i = 0; i < segs; i++) {
             const int a = 2 * i;
@@ -291,6 +302,35 @@ namespace nexus {
         }
         SDL_RenderGeometry(this->r, t, this->vbuf.data(), static_cast<int>(this->vbuf.size()), this->ibuf.data(), static_cast<int>(this->ibuf.size()));
         return w;
+    }
+
+    void Gfx::ImageEx(SDL_Texture *tex, double x, double y, double w, double h, double alpha, double zoom, double posX, double posY, const std::function<double(double, double)> &fade, Col tint) {
+        if(!tex || w <= 0 || h <= 0) return;
+        int tw = 0, th = 0;
+        SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+        if(tw <= 0 || th <= 0) return;
+        double sx, sy, sw, sh;
+        CoverSrc(tw, th, w / h, posX, posY, zoom, sx, sy, sw, sh);
+        const int nx = fade ? 16 : 1, ny = fade ? 10 : 1;
+        this->vbuf.clear();
+        this->ibuf.clear();
+        alpha = std::clamp(alpha, 0.0, 1.0);
+        for(int j = 0; j <= ny; j++) {
+            for(int i = 0; i <= nx; i++) {
+                const double u = static_cast<double>(i) / nx, v = static_cast<double>(j) / ny;
+                const double a = alpha * (fade ? std::clamp(fade(u, v), 0.0, 1.0) : 1.0);
+                const SDL_Color col{ tint.r, tint.g, tint.b, static_cast<uint8_t>(a * tint.a) };
+                this->vbuf.push_back(SDL_Vertex{ { static_cast<float>(x + u * w), static_cast<float>(y + v * h) }, col,
+                    { static_cast<float>((sx + u * sw) / tw), static_cast<float>((sy + v * sh) / th) } });
+            }
+        }
+        for(int j = 0; j < ny; j++) {
+            for(int i = 0; i < nx; i++) {
+                const int a = j * (nx + 1) + i, b = a + 1, c2 = a + nx + 1, d = c2 + 1;
+                this->ibuf.insert(this->ibuf.end(), { a, b, c2, b, d, c2 });
+            }
+        }
+        SDL_RenderGeometry(this->r, tex, this->vbuf.data(), static_cast<int>(this->vbuf.size()), this->ibuf.data(), static_cast<int>(this->ibuf.size()));
     }
 
     void Gfx::RoundRect(double x, double y, double w, double h, double rad, Col c) {
@@ -343,7 +383,7 @@ namespace nexus {
         w = h = 0;
         if(s.empty()) return nullptr;
         char key[96];
-        std::snprintf(key, sizeof(key), "%d|%d|%d|%02x%02x%02x%02x|%02x%02x%02x|", size, bold ? 1 : 0, outline, c.r, c.g, c.b, c.a, oc.r, oc.g, oc.b);
+        std::snprintf(key, sizeof(key), "%d@%d|%d|%d|%02x%02x%02x%02x|%02x%02x%02x|", size, static_cast<int>(this->fontScale * 100), bold ? 1 : 0, outline, c.r, c.g, c.b, c.a, oc.r, oc.g, oc.b);
         const std::string k = std::string(key) + s;
         auto it = this->textCache.find(k);
         if(it != this->textCache.end()) {
@@ -385,6 +425,7 @@ namespace nexus {
     }
 
     int Gfx::Text(const std::string &s, int size, double x, double y, Col c, int align, int maxW, bool bold) {
+        if(c.paint && this->paint) return this->TextFn(s, size, x, y, this->paint, c.a / 255.0, align, bold, maxW);
         int w, h;
         SDL_Texture *t = this->TextTex(s, size, Col{ c.r, c.g, c.b, 255 }, 0, Col{}, w, h, bold);
         if(!t) return 0;

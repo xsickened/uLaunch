@@ -96,6 +96,8 @@ namespace nexus {
             Online online;
             bool autoArtQueued = false;
             AccentParams accentP;
+            // Bildausschnitt-Editor (Zoom, Schnitt)
+            struct CropEdit { bool active = false; std::string path, title; double aspect = 16.0 / 9.0; Crop c, backup; std::function<void()> done; } crop;
 
             // Zustand
             std::string section = "start";
@@ -197,6 +199,11 @@ namespace nexus {
             void OpenRaDialog(const std::string &id, const std::string &name);
             void OpenRaAssign(const std::string &id);
             void ImportKeys(bool quiet);
+            void OpenCropEditor(const std::string &path, const std::string &title, double aspect, std::function<void()> done = nullptr);
+            void CropInput(const plat::Input &in);
+            void DrawCropEditor();
+            double TileAspect() const;
+            void OpenThemes();
             void QueueMissingArt(bool force);
             void ArtChanged(const std::string &id);
             std::vector<Row> SgdbRows();
