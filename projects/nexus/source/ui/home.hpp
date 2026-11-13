@@ -223,6 +223,7 @@ namespace nexus {
             void UpdateIdle(double dt, bool input);
             void ApplyStartSection();
             void SetArt(const std::string &id, const std::string &kind, const std::string &path);
+            std::string DisplayName(const std::string &id);
             void ForgetFile(const std::string &path);
             void PrefetchAround();
             bool gcDone = false;

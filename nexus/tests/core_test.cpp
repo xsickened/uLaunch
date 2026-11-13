@@ -399,6 +399,21 @@ int main() {
         CHECK(lib.ArtInUse(a) && lib.AllArtOverrides().size() == 2);
     }
 
+    // 13. Eigene Anzeigenamen
+    {
+        NexusData d; d.settings.data = Settings::Defaults();
+        d.library.SetCustomName("0100000000010000", "  Mein Lieblingsspiel  ");
+        d.library.SetCustomName("fld-12345678", "x");
+        d.library.SetCustomName("0100000000020000", std::string("Kaputt \xFF") + std::string(200, 'a'));
+        CHECK(SaveData("/tmp/nexus_test/name.json", d));
+        std::string src; std::vector<std::string> rep;
+        NexusData e = LoadData("/tmp/nexus_test/name.json", src, rep);
+        CHECK(e.library.CustomName("0100000000010000") == "Mein Lieblingsspiel");
+        CHECK(e.library.CustomName("0100000000020000").size() <= 80 && !e.library.CustomName("0100000000020000").empty());
+        e.library.SetCustomName("0100000000010000", "   ");
+        CHECK(e.library.CustomName("0100000000010000").empty());
+    }
+
     std::printf(g_Fail ? "%d Fehler\n" : "Alle Kern-Tests bestanden.\n", g_Fail);
     return g_Fail ? 1 : 0;
 }

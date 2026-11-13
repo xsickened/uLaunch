@@ -124,6 +124,13 @@ namespace nexus {
     }
     Col Home::UiCol() const { return ParseCol(this->d->settings.S("theme.ui")); }
 
+    std::string Home::DisplayName(const std::string &id) {
+        const auto custom = this->d->library.CustomName(id);
+        if(!custom.empty()) return custom;
+        auto it = this->appMap.find(id);
+        return (it == this->appMap.end() || it->second.name.empty()) ? id : it->second.name;
+    }
+
     // ------------------------------------------------------------------ Daten
 
     void Home::SyncApps() {
@@ -187,7 +194,8 @@ namespace nexus {
             if(it == this->appMap.end()) return false;
             Entry e;
             e.id = id;
-            e.name = it->second.name.empty() ? id : it->second.name;
+            const auto custom = lib.CustomName(id);
+            e.name = !custom.empty() ? custom : it->second.name.empty() ? id : it->second.name;
             e.iconKey = it->second.iconKey;
             out.push_back(e);
             return true;
@@ -204,7 +212,7 @@ namespace nexus {
             out.push_back(e);
         };
         auto byName = [&](std::vector<std::string> ids) {
-            std::sort(ids.begin(), ids.end(), [&](const std::string &a, const std::string &b) { return Lower(this->appMap[a].name) < Lower(this->appMap[b].name); });
+            std::sort(ids.begin(), ids.end(), [&](const std::string &a, const std::string &b) { return Lower(this->DisplayName(a)) < Lower(this->DisplayName(b)); });
             return ids;
         };
         if(!this->openFolder.empty()) {
@@ -740,6 +748,21 @@ namespace nexus {
                 } });
             }
             else {
+                rows.push_back(Row{ "Anzeigenamen ändern …", nullptr, nullptr, [this, e]() {
+                    this->Pop();
+                    this->AskText("Anzeigename für diesen Titel", e.name, 80, [this, e](std::string name) {
+                        if(name.empty()) return;
+                        this->d->library.SetCustomName(e.id, name);
+                        this->listDirty = true; this->logoId.clear(); this->MarkDirty();
+                        this->Toast("Angezeigt als „" + name + "“.");
+                    });
+                } });
+                if(!this->d->library.CustomName(e.id).empty()) rows.push_back(Row{ "Originalnamen wiederherstellen", nullptr, nullptr, [this, e]() {
+                    this->Pop();
+                    this->d->library.SetCustomName(e.id, "");
+                    this->listDirty = true; this->logoId.clear(); this->MarkDirty();
+                    this->Toast("Originalname wiederhergestellt.");
+                } });
                 rows.push_back(Row{ "Zu Ordner hinzufügen …", nullptr, nullptr, [this, e]() { this->Pop(); this->OpenFolderPicker({ e.id }); } });
                 if(!this->openFolder.empty()) rows.push_back(Row{ "Aus Ordner entfernen", nullptr, nullptr, [this, e]() {
                     this->Pop(); this->d->library.RemoveFromFolder(e.id); this->listDirty = true; this->MarkDirty();

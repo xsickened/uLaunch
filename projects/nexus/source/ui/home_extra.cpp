@@ -578,7 +578,7 @@ namespace nexus {
             auto it = this->appMap.find(id);
             if(it == this->appMap.end() || it->second.name.empty()) continue;
             const int before = this->online.AutoRemaining();
-            this->online.QueueAutoArt(id, it->second.name, a.grid.empty(), a.hero.empty(), a.logo.empty());
+            this->online.QueueAutoArt(id, this->DisplayName(id), a.grid.empty(), a.hero.empty(), a.logo.empty());
             if(this->online.AutoRemaining() > before) n++;
         }
         if(force) this->Toast(n > 0 ? std::to_string(n) + " Titel werden im Hintergrund ergänzt." : "Nichts zu tun: alle Titel haben Bilder (oder wurden schon versucht).");

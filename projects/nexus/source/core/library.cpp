@@ -52,6 +52,8 @@ namespace nexus {
                 if(ra >= 1 && ra < 1e7 && ra == static_cast<double>(static_cast<long long>(ra))) a["raGameId"] = static_cast<long long>(ra);
                 const json *t = JGet(it.value(), "tile");
                 a["tile"] = t ? SanitizeTile(*t) : json::object();
+                const std::string cn = SanitizeUtf8(JStr(it.value(), "name", "").substr(0, 80));
+                if(!cn.empty()) a["name"] = cn;
                 const json *art = JGet(it.value(), "art");
                 if(art) { json sa = SanitizeArt(*art); if(!sa.empty()) a["art"] = sa; }
                 lib.apps[it.key()] = a;
@@ -351,6 +353,22 @@ namespace nexus {
         if(this->ArtInUse(old)) return "";
         this->crops.erase(old);
         return old;
+    }
+
+    std::string Library::CustomName(const std::string &tid) const {
+        const json *a = JGet(this->apps, tid);
+        return a ? JStr(*a, "name", "") : std::string();
+    }
+
+    void Library::SetCustomName(const std::string &tid, const std::string &name) {
+        if(!IsTid(tid)) return;
+        auto &a = this->apps[tid];
+        if(!a.is_object()) a = json::object();
+        std::string n = SanitizeUtf8(name.substr(0, 80));
+        while(!n.empty() && (n.back() == ' ')) n.pop_back();
+        while(!n.empty() && (n.front() == ' ')) n.erase(n.begin());
+        if(n.empty()) a.erase("name");
+        else a["name"] = n;
     }
 
 }

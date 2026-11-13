@@ -64,6 +64,9 @@ namespace nexus {
             std::vector<std::string> AllArtOverrides() const;
             Crop CropOf(const std::string &path) const;
             void SetCrop(const std::string &path, const Crop &c);
+            // Eigener Anzeigename eines Titels (leer = Name aus dem System)
+            std::string CustomName(const std::string &tid) const;
+            void SetCustomName(const std::string &tid, const std::string &name);
             long long RaGameId(const std::string &tid) const;
             void SetRaGameId(const std::string &tid, long long gid);
 

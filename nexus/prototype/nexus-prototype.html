@@ -507,7 +507,7 @@ function sanitizeData(d){
   const report = [];
   if(!d || typeof d!=="object") return {data:defaultData(), report:["komplette Datei"]};
   const apps = (Array.isArray(d.apps)?d.apps:[]).filter(a=>a && typeof a.id==="string" && typeof a.name==="string").map(a=>({
-    id:a.id, name:a.name.slice(0,120), kind:["game","forwarder","homebrew"].includes(a.kind)?a.kind:"game", titleId:a.titleId, nroPath:a.nroPath, platform:a.platform,
+    id:a.id, name:a.name.slice(0,120), origName:typeof a.origName==="string"?a.origName.slice(0,120):undefined, kind:["game","forwarder","homebrew"].includes(a.kind)?a.kind:"game", titleId:a.titleId, nroPath:a.nroPath, platform:a.platform,
     hue:Number.isFinite(a.hue)?a.hue:hash(a.id)%360, favorite:a.favorite===true, lastPlayed:Number.isFinite(a.lastPlayed)?a.lastPlayed:0, tile:sanitizeTile(a.tile), art:sanitizeArt(a.art), raGameId:(Number.isInteger(a.raGameId)&&a.raGameId>0&&a.raGameId<1e7)?a.raGameId:0}));
   const ids = new Set(apps.map(a=>a.id)); const owned = new Set();
   const folders = (Array.isArray(d.folders)?d.folders:[]).filter(f=>f && typeof f.id==="string" && typeof f.name==="string").map(f=>({
@@ -1231,7 +1231,9 @@ function openContext(){
     ...(isF ? [] : [A_("RetroAchievements…", ()=>{ popDialog(); openRA(e); })]), A_("Größe ändern", ()=>{ popDialog(); openEditor(e,1); }), A_("Format ändern", ()=>{ popDialog(); openEditor(e,3); }),
     A_("Position ändern", ()=>{ popDialog(); startMove(); }), A_("Anordnung ändern…", ()=>{ popDialog(); openSettings("layout"); })];
   if(isF){ rows.push(A_("Ordner umbenennen", ()=>{ popDialog(); openOSK("Ordnername", e.name, v=>{ if(v.trim()){ e.name=v.trim().slice(0,60); DataStore.save(); render(); } }); }), A_("Ordner löschen (Inhalt bleibt)", ()=>{ popDialog(); deleteFolder(e); })); }
-  else { rows.push(A_("Zu Ordner hinzufügen…", ()=>{ popDialog(); openFolderPicker([e.id]); })); if(S.openFolder) rows.push(A_("Aus Ordner entfernen", ()=>{ popDialog(); removeFromFolder(e.id); }));
+  else { rows.push(A_("Anzeigenamen ändern…", ()=>{ popDialog(); openOSK("Anzeigename", e.name, v=>{ v=v.trim().slice(0,80); if(!v) return; if(!e.origName) e.origName=e.name; e.name=v; DataStore.save(); render(); toast(`Angezeigt als „${v}“.`); }); }));
+    if(e.origName) rows.push(A_("Originalnamen wiederherstellen", ()=>{ popDialog(); e.name=e.origName; delete e.origName; DataStore.save(); render(); toast("Originalname wiederhergestellt."); }));
+    rows.push(A_("Zu Ordner hinzufügen…", ()=>{ popDialog(); openFolderPicker([e.id]); })); if(S.openFolder) rows.push(A_("Aus Ordner entfernen", ()=>{ popDialog(); removeFromFolder(e.id); }));
     rows.push(A_(e.favorite?"Aus Favoriten entfernen":"Zu Favoriten hinzufügen", ()=>{ popDialog(); toggleFav(e); })); }
   rows.push(A_("Mehrfachauswahl starten", ()=>{ popDialog(); S.multi = new Set([e.id]); render(); }), A_("Neuer Ordner…", ()=>{ popDialog(); createFolderFlow([]); }),
     A_("Darstellung zurücksetzen", ()=>{ popDialog(); e.tile = {}; e.art = {cover:{v:0},hero:{v:0},logo:{v:0}}; DataStore.save(); FocusPresentationManager.curKey=null; render(); toast("Darstellung zurückgesetzt."); }));
