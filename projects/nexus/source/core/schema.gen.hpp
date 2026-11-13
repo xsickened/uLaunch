@@ -225,6 +225,7 @@ inline const std::vector<SchemaEntry> &Schema() {
         {"tiles", "tileDefaults.posY", "Bildposition Y", SType::Num, {}, {}, 0.0, 100.0, 5.0, json(50.0), false, "%raw"},
         {"tiles", "tileDefaults.caseStyle", "Hülle (3D)", SType::Enum, {"none", "jewel", "dvd", "red", "bluray", "steel", "cartridge"}, {"Keine (nur Cover)", "CD-Hülle (Jewel Case)", "DVD-Hülle (schwarz)", "Spielhülle (rot)", "Blu-ray-Hülle (blau)", "Steelbook (Metall)", "Modul (Cartridge)"}, 0.0, 0.0, 0.0, json(std::string("none")), false, ""},
         {"tiles", "tileDefaults.caseAngle", "Hülle: Drehung", SType::Num, {}, {}, 0.0, 40.0, 5.0, json(18.0), false, "deg"},
+        {"tiles", "tileDefaults.caseArrange", "Hülle: Anordnung", SType::Enum, {"left", "right", "focus", "center", "awayFocus", "awayCenter", "alternate", "wave"}, {"Alle nach links gedreht", "Alle nach rechts gedreht", "Zur gewählten Kachel hin", "Zur Bildschirmmitte hin", "Von der gewählten Kachel weg", "Von der Mitte weg", "Abwechselnd", "Welle"}, 0.0, 0.0, 0.0, json(std::string("left")), false, ""},
         {"tiles", "tileDefaults.caseDepth", "Hülle: Dicke", SType::Num, {}, {}, 0.0, 30.0, 2.0, json(12.0), false, ""},
         {"tiles", "tileDefaults.caseShine", "Hülle: Glanz", SType::Bool, {}, {}, 0.0, 0.0, 0.0, json(true), false, ""},
         {"tiles", "tileDefaults.caseReflect", "Hülle: Spiegelung am Boden", SType::Bool, {}, {}, 0.0, 0.0, 0.0, json(false), false, ""},

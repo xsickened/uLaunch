@@ -341,4 +341,16 @@ namespace nexus {
         return best >= 0 ? best : focus;
     }
 
+    double CaseAngle(const std::string &mode, double base, double cx, double focusCx, double screenCx, int index) {
+        const double ref = (mode == "focus" || mode == "awayFocus") ? focusCx : screenCx;
+        const double d = cx - ref;
+        const double k = std::min(1.0, std::fabs(d) / 260.0) * (d < 0 ? -1.0 : 1.0);
+        if(mode == "right") return -base;
+        if(mode == "focus" || mode == "center") return -base * k;
+        if(mode == "awayFocus" || mode == "awayCenter") return base * k;
+        if(mode == "alternate") return (index % 2) ? -base : base;
+        if(mode == "wave") return base * std::sin(index * 0.9);
+        return base;
+    }
+
 }

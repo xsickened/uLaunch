@@ -3725,6 +3725,38 @@
   },
   {
    "group": "tiles",
+   "path": "tileDefaults.caseArrange",
+   "label": "Hülle: Anordnung",
+   "type": "enum",
+   "options": [
+    "left",
+    "right",
+    "focus",
+    "center",
+    "awayFocus",
+    "awayCenter",
+    "alternate",
+    "wave"
+   ],
+   "optionLabels": [
+    "Alle nach links gedreht",
+    "Alle nach rechts gedreht",
+    "Zur gewählten Kachel hin",
+    "Zur Bildschirmmitte hin",
+    "Von der gewählten Kachel weg",
+    "Von der Mitte weg",
+    "Abwechselnd",
+    "Welle"
+   ],
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "left",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "tiles",
    "path": "tileDefaults.caseDepth",
    "label": "Hülle: Dicke",
    "type": "num",

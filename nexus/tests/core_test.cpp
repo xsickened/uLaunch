@@ -486,6 +486,16 @@ int main() {
         CHECK(HomebrewId("a") != HomebrewId("b") && HomebrewId("a") == HomebrewId("a"));
     }
 
+    // 16. Anordnung der 3D-Hüllen
+    {
+        CHECK(CaseAngle("left", 20, 100, 640, 640, 0) == 20 && CaseAngle("right", 20, 100, 640, 640, 0) == -20);
+        CHECK(CaseAngle("focus", 20, 100, 640, 640, 0) == 20 && CaseAngle("focus", 20, 1200, 640, 640, 0) == -20);
+        CHECK(CaseAngle("awayFocus", 20, 100, 640, 640, 0) == -20);
+        CHECK(std::fabs(CaseAngle("center", 20, 640 + 130, 0, 640, 0) + 10) < 1e-9);
+        CHECK(CaseAngle("alternate", 20, 0, 0, 0, 1) == -20 && CaseAngle("alternate", 20, 0, 0, 0, 2) == 20);
+        CHECK(std::isfinite(CaseAngle("wave", 20, 0, 0, 0, 7)) && CaseAngle("unbekannt", 20, 0, 0, 0, 0) == 20);
+    }
+
     std::printf(g_Fail ? "%d Fehler\n" : "Alle Kern-Tests bestanden.\n", g_Fail);
     return g_Fail ? 1 : 0;
 }

@@ -26,13 +26,15 @@ namespace nexus {
 
     void Home::DrawCase(const std::string &style, const json &t, SDL_Texture *tex, Xf &xf, const Disp &ds, double op, double rad, bool cover, double posX, double posY, double zoom) {
         const bool flat = std::abs(xf.rot) > 0.5;   // gedrehte Anordnungen (Halbkreis): ohne Seitenfläche
-        const double ang = std::clamp(ds.caseA < 0 ? JNum(t, "caseAngle", 18) : ds.caseA, 0.0, 60.0) * kPi / 180.0;
+        const double signedA = std::clamp(ds.caseInit ? ds.caseA : JNum(t, "caseAngle", 18), -60.0, 60.0);
+        const double dir = signedA < 0 ? -1.0 : 1.0;   // +1: Rücken links, -1: Rücken rechts
+        const double ang = std::fabs(signedA) * kPi / 180.0;
         const double depth = JNum(t, "caseDepth", 12) * xf.sc;
         const double H = xf.h * xf.sc;
         const double side = flat ? 0 : depth * std::sin(ang) + (depth > 0 ? depth * 0.18 : 0);
         Xf f = xf;
         f.squash = xf.squash * std::cos(ang);
-        f.cx = xf.cx + side / 2;
+        f.cx = xf.cx + dir * side / 2;
         const double fw = xf.w * xf.sc * f.squash;
         const double fl = f.cx - fw / 2, fr = f.cx + fw / 2, ft = xf.cy - H / 2, fb = xf.cy + H / 2;
         // Material je Hülle
@@ -48,8 +50,9 @@ namespace nexus {
         // Seitenfläche (Rücken) mit Perspektive: hintere Kante etwas kürzer
         if(side > 0.5) {
             const double persp = H * 0.035 * std::sin(ang) * 2;
-            const SDL_FPoint p[4] = { { static_cast<float>(fl - side), static_cast<float>(ft + persp) }, { static_cast<float>(fl + 1), static_cast<float>(ft) },
-                                      { static_cast<float>(fl + 1), static_cast<float>(fb) }, { static_cast<float>(fl - side), static_cast<float>(fb - persp) } };
+            const double edge = dir > 0 ? fl + 1 : fr - 1, outer = dir > 0 ? fl - side : fr + side;
+            const SDL_FPoint p[4] = { { static_cast<float>(outer), static_cast<float>(ft + persp) }, { static_cast<float>(edge), static_cast<float>(ft) },
+                                      { static_cast<float>(edge), static_cast<float>(fb) }, { static_cast<float>(outer), static_cast<float>(fb - persp) } };
             const Col cs[4] = { Shade(spine, 0.65, op), Shade(spine, 1.0, op), Shade(spine, 1.0, op), Shade(spine, 0.65, op) };
             this->g->Quad(p, cs);
         }
@@ -74,7 +77,7 @@ namespace nexus {
             // Scharnier links auf der Vorderseite
             Xf hinge = f;
             hinge.w = xf.w * 0.06;
-            hinge.cx = fl + xf.w * 0.06 * xf.sc * f.squash / 2;
+            hinge.cx = dir > 0 ? fl + xf.w * 0.06 * xf.sc * f.squash / 2 : fr - xf.w * 0.06 * xf.sc * f.squash / 2;
             this->g->Shape(hinge, 0, false, Col{ 20, 22, 26, static_cast<uint8_t>(170 * op) });
         }
         if(style == "cartridge") {

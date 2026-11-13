@@ -49,6 +49,8 @@ namespace nexus {
 
     bool IsVertical(const Settings &s);
     LArea ComputeArea(const Settings &s, const LayoutEnv &env);
+    // Drehung einer 3D-Hülle (Grad; positiv = Rücken links sichtbar, negativ = rechts) je nach Anordnung
+    double CaseAngle(const std::string &mode, double base, double cx, double focusCx, double screenCx, int index);
     void TileUnits(const Settings &s, const LItem &it, double maxH, double &w, double &h, double &ratio);
     // scroll wird gelesen und aktualisiert (Bildlauf für Raster/Reihen/Wabe/Vertikal/Liste)
     LResult ComputeLayout(const Settings &s, const LayoutEnv &env, const std::vector<LItem> &items, int focus, double &scroll);

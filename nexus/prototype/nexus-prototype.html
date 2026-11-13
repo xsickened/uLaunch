@@ -90,7 +90,7 @@ html,body{margin:0;height:100%;background:#05070b;color:#eef2f7;font-family:syst
 #ring{position:absolute;left:0;top:0;transition:transform var(--tileMs) var(--ease), width var(--tileMs) var(--ease), height var(--tileMs) var(--ease), opacity .2s;transform-origin:center;display:none}
 #ring.box{box-shadow:0 0 0 6px rgba(0,0,0,.45),0 0 24px var(--accent)}
 #ring.glow.box{box-shadow:0 0 46px 8px var(--accent)}
-.tile .in.case{overflow:visible;border-radius:4px!important;background:var(--body,#c8d2e1);transform:perspective(900px) rotateY(var(--ca,18deg));transition:transform .35s var(--ease);box-shadow:calc(-1*var(--cd,12px)) 0 0 0 var(--spine,#23262e),0 12px 26px rgba(0,0,0,.55)!important}
+.tile .in.case{overflow:visible;border-radius:4px!important;background:var(--body,#c8d2e1);transform:perspective(900px) rotateY(var(--ca,18deg));transition:transform .35s var(--ease);box-shadow:calc(-1*var(--cs,1)*var(--cd,12px)) 0 0 0 var(--spine,#23262e),0 12px 26px rgba(0,0,0,.55)!important}
 .tile .in.case img.cover{position:absolute;left:var(--ci,3%);top:calc(var(--ci,3%) + var(--band,0%));width:calc(100% - 2*var(--ci,3%));height:calc(100% - 2*var(--ci,3%) - var(--band,0%));border-radius:2px}
 .tile .in.case::after{content:"";position:absolute;left:0;right:0;top:0;height:var(--band,0%);background:var(--bandc,transparent);border-radius:4px 4px 0 0}
 .tile .in.case.shine::before{content:"";position:absolute;inset:0;z-index:3;pointer-events:none;background:linear-gradient(120deg,rgba(255,255,255,.28),rgba(255,255,255,.06) 40%,transparent 60%);border-radius:4px}
@@ -490,6 +490,7 @@ const SPEC = [
   {g:"tiles", p:"tileDefaults.posY", l:"Bildposition Y", t:"num", min:0, max:100, step:5, f:v=>v+" %", d:50},
   {g:"tiles", p:"tileDefaults.caseStyle", l:"Hülle (3D)", t:"enum", o:["none","jewel","dvd","red","bluray","steel","cartridge"], ol:["Keine (nur Cover)","CD-Hülle (Jewel Case)","DVD-Hülle (schwarz)","Spielhülle (rot)","Blu-ray-Hülle (blau)","Steelbook (Metall)","Modul (Cartridge)"], d:"none"},
   {g:"tiles", p:"tileDefaults.caseAngle", l:"Hülle: Drehung", t:"num", min:0, max:40, step:5, f:deg, d:18},
+  {g:"tiles", p:"tileDefaults.caseArrange", l:"Hülle: Anordnung", t:"enum", o:["left","right","focus","center","awayFocus","awayCenter","alternate","wave"], ol:["Alle nach links gedreht","Alle nach rechts gedreht","Zur gewählten Kachel hin","Zur Bildschirmmitte hin","Von der gewählten Kachel weg","Von der Mitte weg","Abwechselnd","Welle"], d:"left"},
   {g:"tiles", p:"tileDefaults.caseDepth", l:"Hülle: Dicke", t:"num", min:0, max:30, step:2, f:px, d:12},
   {g:"tiles", p:"tileDefaults.caseShine", l:"Hülle: Glanz", t:"bool", d:true},
   {g:"tiles", p:"tileDefaults.caseReflect", l:"Hülle: Spiegelung am Boden", t:"bool", d:false},
@@ -1092,7 +1093,7 @@ function place(phase){
   const els = $("#tiles").querySelectorAll(".tile"); const s = ST().anim; const idle = animOn() && !s.reduce ? s.idle : "none";
   els.forEach((el,i)=>{ const it = S.items[i]; if(!it) return; const foc = i===S.focus; const t = tileCfg(S.list[i]);
     el.style.width = it.w+"px"; el.style.height = it.h+"px"; el.style.zIndex = foc ? 1000 : it.z;
-    { const inn = el.querySelector(".in.case"); if(inn) inn.style.setProperty("--ca", ((foc && t.caseFocusTurn) ? 0 : t.caseAngle)+"deg"); }
+    { const inn = el.querySelector(".in.case"); if(inn){ const a = caseAngleFor(t, i, foc); inn.style.setProperty("--ca", a+"deg"); inn.style.setProperty("--cs", a<0?-1:1); } }
     el.style.pointerEvents = it.op < .05 ? "none" : "";
     let tr = tileTransform(it, i, foc), op = it.op * (S.list[i].kind ? t.opacity : 1);
     if(phase==="from"){ const e = s.entry; op = 0;
@@ -1578,6 +1579,15 @@ function cycleSection(d){ const vis = ST().sections.filter(s=>s.visible).map(s=>
 
 /* ---------------- Eingabe ---------------- */
 let lastInput = 0;
+// Drehung einer Hülle (positiv = Rücken links sichtbar, negativ = rechts); gleiche Rechnung wie core/layout.cpp CaseAngle
+function caseAngleFor(t, i, foc){
+  if(foc && t.caseFocusTurn) return 0;
+  const base = t.caseAngle, m = t.caseArrange||"left", it = S.items[i], f = S.items[S.focus];
+  if(!it) return base;
+  const cx = it.x+it.w/2, ref = (m==="focus"||m==="awayFocus") ? (f ? f.x+f.w/2 : 640) : 640;
+  const k = Math.min(1, Math.abs(cx-ref)/260) * Math.sign(cx-ref || 1);
+  switch(m){ case "right": return -base; case "focus": case "center": return -base*k; case "awayFocus": case "awayCenter": return base*k;
+    case "alternate": return i%2 ? -base : base; case "wave": return base*Math.sin(i*0.9); default: return base; } }
 function zoomKey(k){ const b=ST().zoom.button; return ({rstick:"RS",lstick:"LS",zr:"ZR",zl:"ZL",y:"Y",minus:"LOCK"})[b]===k; }
 function cycleZoom(){ const z=ST().zoom, mn=z.minScale, mx=Math.max(z.maxScale,mn+.05), n=Math.max(1,z.steps); let next=mn;
   for(let k=0;k<=n;k++){ const lv=mn+(mx-mn)*k/n; if(lv>z.levelScale+.01){ next=lv; break; } }

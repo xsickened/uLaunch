@@ -63,7 +63,8 @@ namespace nexus {
         double x = 0, y = 0, w = 0, h = 0, rot = 0, squash = 1, sc = 1, op = 0;
         double vx = 0, vy = 0, vw = 0, vh = 0, vrot = 0, vsq = 0, vsc = 0, vop = 0;
         double delay = 0;
-        double caseA = -1;   // aktuelle Drehung der 3D-Hülle (Grad)
+        double caseA = 0;    // aktuelle Drehung der 3D-Hülle (Grad, mit Vorzeichen)
+        bool caseInit = false;
         bool init = false;
     };
 

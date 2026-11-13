@@ -1282,8 +1282,9 @@ namespace nexus {
             }
             const double tsq = std::max(0.12, std::cos(it.ry * kPi / 180.0));
             {
-                const double ta = (foc && JBool(t, "caseFocusTurn", true)) ? 0.0 : JNum(t, "caseAngle", 18);
-                if(ds.caseA < 0 || speed <= 0) ds.caseA = ta;
+                const double fcx = (this->focus >= 0 && this->focus < static_cast<int>(this->lay.items.size())) ? this->lay.items[this->focus].x + this->lay.items[this->focus].w / 2 : ScreenW / 2;
+                const double ta = (foc && JBool(t, "caseFocusTurn", true)) ? 0.0 : CaseAngle(JStr(t, "caseArrange", "left"), JNum(t, "caseAngle", 18), it.x + it.w / 2, fcx, ScreenW / 2, static_cast<int>(i));
+                if(!ds.caseInit || speed <= 0) { ds.caseA = ta; ds.caseInit = true; }
                 else ds.caseA += (ta - ds.caseA) * std::min(1.0, dt * 9);
             }
             if(ds.delay > 0) { ds.delay -= dt; continue; }
