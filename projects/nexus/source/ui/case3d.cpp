@@ -97,7 +97,7 @@ namespace nexus {
 
     }
 
-    void RenderCase(Gfx &gfx, SDL_Texture *tex, Xf &xf, const CaseInput &in) {
+    void RenderCase(Gfx &gfx, SDL_Texture *tex, Xf &xf, const CaseInput &in, SDL_FPoint *outQuad) {
         const std::string &style = in.style, &title = in.title;
         const double op = in.op, posX = in.posX, posY = in.posY, zoom = in.zoom;
         const bool focused = in.focused;
@@ -112,26 +112,32 @@ namespace nexus {
         const double D = H * m.depth * std::clamp(in.depth / 12.0, 0.0, 2.5);
         // Drehung: Anordnung + Schwung + (gewählte Hülle) leichtes Wiegen in der Hand
         double yawDeg = std::clamp(in.angle + in.lean, -75.0, 75.0);
-        double pitchDeg = 0;
+        double pitchDeg = std::clamp(in.tilt, -30.0, 30.0);
         if(focused && live) {
             yawDeg += 2.2 * std::sin(in.time * 1.25);
             pitchDeg += 1.4 * std::sin(in.time * 0.9 + 1.0);
         }
         // Kamera etwas über der Bildmitte (wie beim Blick auf ein Regal): Oberkanten werden sichtbar
-        const double F = 1050, cx0 = ScreenW / 2.0, cy0 = ScreenH / 2.0, camUp = 240;
-        const V3 pos{ xf.cx - cx0, xf.cy - cy0, D / 2 + in.lift };
+        const double F = 1050 / std::clamp(in.persp, 0.2, 3.0), cx0 = ScreenW / 2.0, cy0 = ScreenH / 2.0, camUp = std::clamp(in.camUp, -600.0, 900.0);
+        // Ausrichtung in der Kachel (Hülle kleiner als die Kachel: unten auf einer Linie, Mitte oder oben)
+        const double offY = (boxH - H) / 2 * std::clamp(in.align, -1, 1);
+        const V3 pos{ xf.cx - cx0, xf.cy + offY - cy0, D / 2 + in.lift };
+        const double mir = in.spineRight ? -1.0 : 1.0;   // Rücken rechts: Modell spiegeln (Bilder bleiben richtig herum)
         // Drehung relativ zur Blickrichtung: 0° = Vorderseite schaut zur Kamera, egal wo die Hülle steht
-        const double yaw = -yawDeg * kPi / 180.0 + std::atan2(pos.x, F + pos.z);
+        // Rücken rechts: Drehrichtung mitspiegeln, damit „Drehung“ weiterhin den Rücken zeigt
+        const double yaw = -yawDeg * mir * kPi / 180.0 + std::atan2(pos.x, F + pos.z);
         const double pitch = pitchDeg * kPi / 180.0 - 0.35 * std::atan2(pos.y + camUp, F + pos.z);
         const double cyw = std::cos(yaw), syw = std::sin(yaw), cp = std::cos(pitch), sp = std::sin(pitch);
         const double rot = xf.rot * kPi / 180.0, cr = std::cos(rot), sr = std::sin(rot);
         const double sq = std::clamp(xf.squash, 0.05, 1.0);
         auto world = [&](V3 p) {
+            p.x *= mir;
             const double x = p.x * cyw + p.z * syw, z = -p.x * syw + p.z * cyw;
             const double y = p.y * cp - z * sp, z2 = p.y * sp + z * cp;
             return V3{ x + pos.x, y + pos.y, z2 + pos.z };
         };
         auto dirW = [&](V3 n) {
+            n.x *= mir;
             const double x = n.x * cyw + n.z * syw, z = -n.x * syw + n.z * cyw;
             return V3{ x, n.y * cp - z * sp, n.y * sp + z * cp };
         };
@@ -241,7 +247,7 @@ namespace nexus {
                     const double uMax = std::min(1.0, tL / (tH * tw / th));
                     const Col tc = m.spineText;
                     grid(tt, 1, 8, [&](double u, double v) { return V3{ -hw - 0.2, y0 + tL * v, -(D * 0.62) / 2 + D * 0.62 * u }; },
-                         [&](double u, double v) { return SDL_FPoint{ static_cast<float>(v * uMax), static_cast<float>(u) }; },
+                         [&](double u, double v) { return SDL_FPoint{ static_cast<float>(v * uMax), static_cast<float>(mir < 0 ? 1 - u : u) }; },
                          [&](double, double) { return Lit(tc, std::min(1.0, k + 0.15), opA); });
                     SDL_SetTextureColorMod(tt, 255, 255, 255);
                 }
@@ -278,7 +284,7 @@ namespace nexus {
                 CoverSrc(tw, th, (ix1 - ix0) / std::max(1.0, iy1 - artY0), posX, posY, zoom, sx, sy, sw, sh);
                 const double artR = m.metal ? R : m.cart ? W * 0.03 : 0;
                 frontRect(tex, ix0, artY0, ix1, iy1, artR, zf - 0.1,
-                          [&](double u, double v) { return SDL_FPoint{ static_cast<float>((sx + u * sw) / tw), static_cast<float>((sy + v * sh) / th) }; },
+                          [&](double u, double v) { if(mir < 0) u = 1 - u; return SDL_FPoint{ static_cast<float>((sx + u * sw) / tw), static_cast<float>((sy + v * sh) / th) }; },
                           [&](double, double) { return Lit(Col{ 255, 255, 255, 255 }, std::min(1.0, 0.3 + kFront), opA); }, artU, artV);
             }
             if(m.band.a && m.bandLine.a) {
@@ -357,12 +363,14 @@ namespace nexus {
                 CoverSrc(tw, th, (ix1 - ix0) / std::max(1.0, iy1 - artY0), posX, posY, zoom, sx, sy, sw, sh);
                 const double gap = 4;
                 grid(tex, 8, 8, [&](double u, double v) { return V3{ ix0 + (ix1 - ix0) * u, hh + gap + (iy1 - artY0) * 0.45 * v, zf }; },
-                     [&](double u, double v) { return SDL_FPoint{ static_cast<float>((sx + u * sw) / tw), static_cast<float>((sy + (1 - v * 0.45) * sh) / th) }; },
+                     [&](double u, double v) { if(mir < 0) u = 1 - u; return SDL_FPoint{ static_cast<float>((sx + u * sw) / tw), static_cast<float>((sy + (1 - v * 0.45) * sh) / th) }; },
                      [&](double, double v) { return Col{ 255, 255, 255, static_cast<uint8_t>(opA * 90 * (1 - v) * (1 - v)) }; });
             }
         }
         // Fokusrahmen und Abzeichen folgen der projizierten Vorderseite
-        const SDL_FPoint a = proj({ -hw, -hh, zf }), b = proj({ hw, -hh, zf }), c = proj({ hw, hh, zf }), d2 = proj({ -hw, hh, zf });
+        SDL_FPoint a = proj({ -hw, -hh, zf }), b = proj({ hw, -hh, zf }), c = proj({ hw, hh, zf }), d2 = proj({ -hw, hh, zf });
+        if(mir < 0) { std::swap(a, b); std::swap(c, d2); }   // Reihenfolge: oben links, oben rechts, unten rechts, unten links
+        if(outQuad) { outQuad[0] = a; outQuad[1] = b; outQuad[2] = c; outQuad[3] = d2; }
         const double minX = std::min({ a.x, b.x, c.x, d2.x }), maxX = std::max({ a.x, b.x, c.x, d2.x });
         const double minY = std::min({ a.y, b.y, c.y, d2.y }), maxY = std::max({ a.y, b.y, c.y, d2.y });
         if(std::fabs(xf.rot) < 0.5) {

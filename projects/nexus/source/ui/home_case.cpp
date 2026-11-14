@@ -42,7 +42,15 @@ namespace nexus {
         in.op = op;
         in.posX = posX; in.posY = posY; in.zoom = zoom;
         in.title = title;
-        RenderCase(*this->g, tex, xf, in);
+        const std::string sp = JStr(t, "caseSpine", "left"), al = JStr(t, "caseAlign", "bottom");
+        in.spineRight = sp == "right";
+        in.align = al == "top" ? -1 : al == "center" ? 0 : 1;
+        in.tilt = JNum(t, "caseTilt", 0);
+        in.camUp = JNum(t, "caseView", 240);
+        in.persp = JNum(t, "casePerspective", 1);
+        SDL_FPoint q[4];
+        RenderCase(*this->g, tex, xf, in, q);
+        if(focused) { for(int i = 0; i < 4; i++) this->caseQuad[i] = q[i]; this->caseQuadTime = this->time; }
     }
 
     // ------------------------------------------------------------------ Startanimation

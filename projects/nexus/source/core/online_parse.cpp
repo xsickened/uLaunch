@@ -240,7 +240,7 @@ namespace nexus {
         return true;
     }
 
-    std::string NormalizeTitle(const std::string &in) {
+    static std::string NormalizeImpl(const std::string &in, bool spaced) {
         // Latin-1-Akzente (UTF-8 C3 xx) auf Grundbuchstaben abbilden
         static const char *const map = "aaaaaaaceeeeiiiidnooooo/ouuuuypy";   // C3 A0..BF (Kleinbuchstaben)
         std::string s;
@@ -268,15 +268,85 @@ namespace nexus {
         // in Wörter zerlegen, „the“ auslassen, & -> and
         std::string out, word;
         auto flush = [&]() {
-            if(!word.empty() && word != "the") out += word;
+            if(!word.empty() && word != "the") { if(spaced && !out.empty()) out += ' '; out += word; }
             word.clear();
         };
         for(const char c: t) {
             if(std::isalnum(static_cast<unsigned char>(c))) word += c;
-            else if(c == '&') { flush(); out += "and"; }
+            else if(c == '&') { flush(); word = "and"; flush(); }
             else flush();
         }
         flush();
+        return out;
+    }
+
+    std::string NormalizeTitle(const std::string &in) { return NormalizeImpl(in, false); }
+    std::string SearchKey(const std::string &in) { return NormalizeImpl(in, true); }
+
+    bool ParseRaConsoles(const std::string &body, std::vector<RaConsole> &out) {
+        out.clear();
+        const json j = Parse(body);
+        if(!j.is_array()) return false;
+        for(const auto &c: j) {
+            if(!c.is_object() || out.size() >= 200) continue;
+            const json *gs = JGetCI(c, "IsGameSystem");
+            if(gs && gs->is_boolean() && !gs->get<bool>()) continue;   // Hubs, Events usw.
+            RaConsole r;
+            r.id = static_cast<int>(NumOf(JGetCI(c, "ID")));
+            r.name = StrOf(JGetCI(c, "Name"), 60);
+            if(r.id > 0 && !r.name.empty()) out.push_back(r);
+        }
+        return !out.empty();
+    }
+
+    bool ParseRaGameList(const std::string &body, int consoleId, std::vector<RaIndexEntry> &out) {
+        const json j = Parse(body);
+        if(!j.is_array()) return false;
+        for(const auto &g: j) {
+            if(!g.is_object() || out.size() >= 200000) continue;
+            RaIndexEntry e;
+            e.id = static_cast<long long>(NumOf(JGetCI(g, "ID")));
+            e.title = StrOf(JGetCI(g, "Title"), 160);
+            e.console = consoleId;
+            e.achievements = static_cast<int>(NumOf(JGetCI(g, "NumAchievements")));
+            if(e.id <= 0 || e.title.empty()) continue;
+            e.norm = SearchKey(e.title);
+            out.push_back(std::move(e));
+        }
+        return true;
+    }
+
+    std::vector<size_t> SearchRaIndex(const std::vector<RaIndexEntry> &index, const std::string &term, size_t limit) {
+        const std::string q = SearchKey(term);
+        std::vector<std::string> words;
+        {
+            std::string w;
+            for(char c: q + " ") {
+                if(c == ' ') { if(!w.empty()) words.push_back(w); w.clear(); }
+                else w += c;
+            }
+        }
+        std::vector<std::pair<int, size_t>> hits;
+        if(words.empty()) return {};
+        for(size_t i = 0; i < index.size(); i++) {
+            const std::string &t = index[i].norm;
+            bool all = true;
+            int score = 0;
+            for(const auto &w: words) {
+                const size_t p = t.find(w);
+                if(p == std::string::npos) { all = false; break; }
+                score += (p == 0 || t[p - 1] == ' ') ? 2 : 1;   // Wortanfang zählt mehr
+            }
+            if(!all) continue;
+            if(t == q) score += 100;
+            else if(t.rfind(q, 0) == 0) score += 40;
+            score -= static_cast<int>(std::min<size_t>(t.size(), 60) / 6);   // kürzere Titel zuerst
+            if(index[i].achievements <= 0) score -= 20;
+            hits.emplace_back(-score, i);
+        }
+        std::stable_sort(hits.begin(), hits.end(), [](const auto &a, const auto &b) { return a.first < b.first; });
+        std::vector<size_t> out;
+        for(const auto &h: hits) { if(out.size() >= limit) break; out.push_back(h.second); }
         return out;
     }
 

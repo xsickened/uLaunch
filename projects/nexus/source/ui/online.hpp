@@ -58,6 +58,11 @@ namespace nexus {
             void RaLoadGame(long long gameId, std::function<void(RaGame, std::vector<RaAchievement>, std::string)> done);
             long long RaPoints() const;
             long long RaTrophies() const;
+            // Datenbank aller RA-Spiele (für die Suche). Wird einmal geladen und 14 Tage zwischengespeichert.
+            struct RaIndexState { bool loading = false, ready = false; int done = 0, total = 0; std::string error; } raIndex;
+            std::vector<RaIndexEntry> raIndexList;
+            std::map<int, std::string> raConsoleNames;
+            void RaEnsureIndex(bool refresh = false);
 
         private:
             Net net;
@@ -81,6 +86,10 @@ namespace nexus {
             std::vector<std::string> SgdbHeaders() const;
             std::string RaUrl(const std::string &endpoint, const std::string &extra) const;
             void RaFinishPart();
+            std::vector<RaConsole> raIndexTodo;
+            bool raIndexStep = false, raIndexRefresh = false;
+            void RaIndexNext();
+            void RaIndexFail(const std::string &err);
             void RaLoadCache();
             void RaSaveCache();
             void RunAuto();

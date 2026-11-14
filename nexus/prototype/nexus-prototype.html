@@ -337,7 +337,11 @@ const SPEC = [
   {g:"anim", p:"anim.stagger", l:"Versatz zwischen Kacheln", t:"num", min:0, max:120, step:10, f:ms, d:30},
   {g:"anim", p:"anim.idle", l:"Leerlauf-Animation", t:"enum", o:["none","float","breathe","sway"], ol:["Keine","Schweben","Atmen","Wiegen"], d:"none"},
   {g:"anim", p:"anim.idleFocusOnly", l:"Leerlauf nur für Fokus-Kachel", t:"bool", d:true},
-  {g:"anim", p:"anim.ringWidth", l:"Breite des Fokusrahmens (0 = aus)", t:"num", min:0, max:10, step:.5, f:px, d:3.5},
+  {g:"anim", p:"anim.ringWidth", l:"Breite der Hervorhebung (0 = aus)", t:"num", min:0, max:10, step:.5, f:px, d:3.5},
+  {g:"anim", p:"anim.highlight", l:"Auswahlhervorhebung", t:"enum", o:["ring", "glow", "brackets", "underline", "spotlight", "outline", "none"], ol:["Rahmen", "Leuchten (Aura)", "Ecken", "Balken darunter", "Lichtkegel", "Rahmen + Leuchten", "Keine"], d:"ring"},
+  {g:"anim", p:"anim.highlightColor", l:"Farbe der Hervorhebung", t:"enum", o:["accent", "white", "gold", "custom"], ol:["Akzentfarbe", "Weiß", "Gold", "Eigene Farbe"], d:"accent"},
+  {g:"anim", p:"anim.highlightCustom", l:"Eigene Farbe der Hervorhebung", t:"color", d:"#33c6ff"},
+  {g:"anim", p:"anim.highlightPulse", l:"Hervorhebung pulsiert", t:"bool", d:false},
   {g:"anim", p:"anim.dimOthers", l:"Andere Kacheln abdunkeln", t:"num", min:0, max:.8, step:.05, f:pct, d:0},
   {g:"anim", p:"anim.titleOnFocus", l:"Titel der fokussierten Kachel einblenden", t:"bool", d:false},
   // Fokus-Hintergrund
@@ -501,6 +505,11 @@ const SPEC = [
   {g:"tiles", p:"tileDefaults.caseFit", l:"Hülle: echte Maße der Originalhülle", t:"bool", d:true},
   {g:"tiles", p:"tileDefaults.caseSpineText", l:"Hülle: Titel auf dem Rücken", t:"bool", d:true},
   {g:"tiles", p:"tileDefaults.caseSway", l:"Hülle: neigt sich beim Scrollen", t:"bool", d:true},
+  {g:"tiles", p:"tileDefaults.caseSpine", l:"Hülle: Rücken auf welcher Seite", t:"enum", o:["left", "right"], ol:["Links (wie im Regal)", "Rechts"], d:"left"},
+  {g:"tiles", p:"tileDefaults.caseAlign", l:"Hülle: Ausrichtung in der Kachel", t:"enum", o:["bottom", "center", "top"], ol:["Unten (stehen auf einer Linie)", "Mitte", "Oben"], d:"bottom"},
+  {g:"tiles", p:"tileDefaults.caseTilt", l:"Hülle: Neigung vor/zurück", t:"num", min:-25, max:25, step:1, f:deg, d:0},
+  {g:"tiles", p:"tileDefaults.caseView", l:"Hülle: Blickhöhe der Kamera", t:"num", min:-300, max:600, step:20, f:px, d:240},
+  {g:"tiles", p:"tileDefaults.casePerspective", l:"Hülle: Stärke der Perspektive", t:"num", min:0.3, max:2.5, step:0.1, f:v=>"×"+(+v).toFixed(1), d:1},
   // Bibliothek
   // RetroAchievements (nur Anzeige; Freischalten passiert weiterhin im Emulator/TICO)
   {g:"ra", p:"ra.enabled", l:"RetroAchievements anzeigen", t:"bool", d:false},

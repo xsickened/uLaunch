@@ -38,6 +38,7 @@ namespace nexus {
             std::vector<Folder> folders;
             std::vector<std::string> rootOrder;
             json crops = json::object();      // Bildpfad -> { z, x, y }
+            json avatars = json::object();    // Benutzer-UID (hex) -> eigenes Profilbild (sdmc:/…)
 
             static Library FromJson(const json &j, std::vector<std::string> *report);
             json ToJson() const;
@@ -76,6 +77,9 @@ namespace nexus {
             void ToggleSticker(const std::string &tid, const std::string &sticker);
             long long RaGameId(const std::string &tid) const;
             void SetRaGameId(const std::string &tid, long long gid);
+            // Eigenes Profilbild (nur in NEXUS angezeigt; leer = Bild der Konsole)
+            std::string Avatar(const std::string &uid) const;
+            void SetAvatar(const std::string &uid, const std::string &path);
 
         private:
             std::vector<std::string> installedCache;

@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <dirent.h>
+#include <sys/stat.h>
 
 namespace nexus {
 
@@ -11,6 +12,16 @@ namespace nexus {
         constexpr char RaBase[] = "https://retroachievements.org/API/";
         constexpr char RaCacheFile[] = "sdmc:/nexus/cache/ra.json";
         constexpr char ThumbDir[] = "sdmc:/nexus/cache/sgdb";
+        constexpr char RaIndexDir[] = "sdmc:/nexus/cache/ra";
+        constexpr long RaIndexMaxAge = 14L * 24 * 3600;
+
+        // Cache-Datei vorhanden und jünger als maxAge?
+        bool Fresh(const std::string &path, long maxAge) {
+            struct stat st;
+            if(stat(path.c_str(), &st) != 0 || st.st_size <= 2) return false;
+            const std::time_t now = std::time(nullptr);
+            return now < 1000000000 || now - st.st_mtime < maxAge;   // ohne gültige Uhr: Cache behalten
+        }
 
         void ClearDir(const std::string &dir) {
             DIR *d = opendir(dir.c_str());
@@ -58,6 +69,7 @@ namespace nexus {
             this->cbs.erase(it);
             if(cb) cb(r);
         }
+        if(this->raIndexStep) { this->raIndexStep = false; this->RaIndexNext(); }
         // RetroAchievements regelmäßig aktualisieren
         if(this->RaReady() && !this->ra.loading) {
             const std::time_t now = std::time(nullptr);
@@ -232,6 +244,77 @@ namespace nexus {
             }
             this->RaSaveCache();
         }
+    }
+
+    void Online::RaIndexFail(const std::string &err) {
+        this->raIndex.loading = false;
+        this->raIndex.error = err;
+        this->raIndexTodo.clear();
+        Log("RA-Datenbank: %s", err.c_str());
+    }
+
+    void Online::RaEnsureIndex(bool refresh) {
+        if(this->raIndex.loading || (this->raIndex.ready && !refresh)) return;
+        if(!this->RaReady()) { this->raIndex.error = "Benutzername und Web-API-Key fehlen."; return; }
+        this->raIndex = RaIndexState{};
+        this->raIndex.loading = true;
+        this->raIndexRefresh = refresh;
+        this->raIndexList.clear();
+        this->raConsoleNames.clear();
+        EnsureDir(CacheDir);
+        EnsureDir(RaIndexDir);
+        const std::string file = std::string(RaIndexDir) + "/consoles.json";
+        auto useConsoles = [this, file]() {
+            std::string body;
+            std::vector<RaConsole> cons;
+            if(!ReadFile(file, body, 1024 * 1024) || !ParseRaConsoles(body, cons)) {
+                std::remove(file.c_str());
+                this->RaIndexFail("Systemliste von RetroAchievements nicht lesbar.");
+                return;
+            }
+            for(const auto &c: cons) this->raConsoleNames[c.id] = c.name;
+            this->raIndexTodo = cons;
+            this->raIndex.total = static_cast<int>(cons.size());
+            this->raIndexStep = true;
+        };
+        if(!refresh && Fresh(file, RaIndexMaxAge)) { useConsoles(); return; }
+        this->Request(std::string(RaBase) + "API_GetConsoleIDs.php?y=" + UrlEncode(this->d->settings.S("ra.key")) + "&a=1&g=1", {}, "RA Systeme", file, [this, useConsoles](const NetResult &r) {
+            if(!r.ok) { this->RaIndexFail(r.status == 401 ? "Web-API-Key falsch." : (r.error.empty() ? "Keine Verbindung zu RetroAchievements." : r.error)); return; }
+            useConsoles();
+        }, 1024 * 1024);
+    }
+
+    void Online::RaIndexNext() {
+        if(!this->raIndex.loading) return;
+        if(this->raIndexTodo.empty()) {
+            this->raIndex.loading = false;
+            this->raIndex.ready = true;
+            Log("RA-Datenbank: %d Spiele aus %d Systemen", static_cast<int>(this->raIndexList.size()), this->raIndex.total);
+            return;
+        }
+        const RaConsole c = this->raIndexTodo.front();
+        this->raIndexTodo.erase(this->raIndexTodo.begin());
+        const std::string file = std::string(RaIndexDir) + "/games-" + std::to_string(c.id) + ".json";
+        auto use = [this, file, c]() {
+            std::string body;
+            if(!ReadFile(file, body, 16 * 1024 * 1024) || !ParseRaGameList(body, c.id, this->raIndexList)) {
+                std::remove(file.c_str());
+                Log("RA-Datenbank: Liste für %s nicht lesbar", c.name.c_str());
+            }
+            this->raIndex.done++;
+            this->raIndexStep = true;   // nächstes System im nächsten Bild (kein langes Stocken)
+        };
+        if(!this->raIndexRefresh && Fresh(file, RaIndexMaxAge)) { use(); return; }
+        this->Request(std::string(RaBase) + "API_GetGameList.php?y=" + UrlEncode(this->d->settings.S("ra.key")) + "&i=" + std::to_string(c.id) + "&f=1&h=0", {}, "RA Spieleliste", file, [this, use, c](const NetResult &r) {
+            if(!r.ok) {
+                if(r.status == 401) { this->RaIndexFail("Web-API-Key falsch."); return; }
+                Log("RA-Datenbank: %s übersprungen (%s)", c.name.c_str(), r.error.c_str());
+                this->raIndex.done++;
+                this->raIndexStep = true;
+                return;
+            }
+            use();
+        }, 16 * 1024 * 1024);
     }
 
     long long Online::RaPoints() const {

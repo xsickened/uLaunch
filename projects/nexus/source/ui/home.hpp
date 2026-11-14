@@ -220,6 +220,15 @@ namespace nexus {
             void OpenSgdbKeyMissing();
             void OpenRaDialog(const std::string &id, const std::string &name);
             void OpenRaAssign(const std::string &id);
+            void OpenRaSearch(const std::string &id, const std::string &term);
+            // Profilbild: eigenes Bild (mit Ausschnitt) vor dem Bild der Konsole
+            SDL_Texture *UserTex(const UserInfo &u, Crop &crop);
+            void DrawUserPic(const UserInfo &u, const Xf &xf, double rad, double alpha);
+            void OpenAvatarPicker(const std::string &uid, const std::string &name);
+            // Vorderseite der gewählten 3D-Hülle (für die Hervorhebung), gültig wenn caseQuadTime == time
+            SDL_FPoint caseQuad[4] {};
+            double caseQuadTime = -1;
+            void DrawHighlight(const Xf &fx, double rad, bool hex);
             void ImportKeys(bool quiet);
             void OpenCropEditor(const std::string &path, const std::string &title, double aspect, std::function<void()> done = nullptr);
             void CropInput(const plat::Input &in);

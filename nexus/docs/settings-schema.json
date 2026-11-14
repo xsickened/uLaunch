@@ -1313,7 +1313,7 @@
   {
    "group": "anim",
    "path": "anim.ringWidth",
-   "label": "Breite des Fokusrahmens (0 = aus)",
+   "label": "Breite der Hervorhebung (0 = aus)",
    "type": "num",
    "options": null,
    "optionLabels": null,
@@ -1321,6 +1321,88 @@
    "max": 10,
    "step": 0.5,
    "default": 3.5,
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "anim",
+   "path": "anim.highlight",
+   "label": "Auswahlhervorhebung",
+   "type": "enum",
+   "options": [
+    "ring",
+    "glow",
+    "brackets",
+    "underline",
+    "spotlight",
+    "outline",
+    "none"
+   ],
+   "optionLabels": [
+    "Rahmen",
+    "Leuchten (Aura)",
+    "Ecken",
+    "Balken darunter",
+    "Lichtkegel",
+    "Rahmen + Leuchten",
+    "Keine"
+   ],
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "ring",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "anim",
+   "path": "anim.highlightColor",
+   "label": "Farbe der Hervorhebung",
+   "type": "enum",
+   "options": [
+    "accent",
+    "white",
+    "gold",
+    "custom"
+   ],
+   "optionLabels": [
+    "Akzentfarbe",
+    "Weiß",
+    "Gold",
+    "Eigene Farbe"
+   ],
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "accent",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "anim",
+   "path": "anim.highlightCustom",
+   "label": "Eigene Farbe der Hervorhebung",
+   "type": "color",
+   "options": null,
+   "optionLabels": null,
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "#33c6ff",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "anim",
+   "path": "anim.highlightPulse",
+   "label": "Hervorhebung pulsiert",
+   "type": "bool",
+   "options": null,
+   "optionLabels": null,
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": false,
    "conditional": false,
    "hidden": false
   },
@@ -3856,6 +3938,90 @@
    "max": null,
    "step": null,
    "default": true,
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "tiles",
+   "path": "tileDefaults.caseSpine",
+   "label": "Hülle: Rücken auf welcher Seite",
+   "type": "enum",
+   "options": [
+    "left",
+    "right"
+   ],
+   "optionLabels": [
+    "Links (wie im Regal)",
+    "Rechts"
+   ],
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "left",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "tiles",
+   "path": "tileDefaults.caseAlign",
+   "label": "Hülle: Ausrichtung in der Kachel",
+   "type": "enum",
+   "options": [
+    "bottom",
+    "center",
+    "top"
+   ],
+   "optionLabels": [
+    "Unten (stehen auf einer Linie)",
+    "Mitte",
+    "Oben"
+   ],
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "bottom",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "tiles",
+   "path": "tileDefaults.caseTilt",
+   "label": "Hülle: Neigung vor/zurück",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": -25,
+   "max": 25,
+   "step": 1,
+   "default": 0,
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "tiles",
+   "path": "tileDefaults.caseView",
+   "label": "Hülle: Blickhöhe der Kamera",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": -300,
+   "max": 600,
+   "step": 20,
+   "default": 240,
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "tiles",
+   "path": "tileDefaults.casePerspective",
+   "label": "Hülle: Stärke der Perspektive",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": 0.3,
+   "max": 2.5,
+   "step": 0.1,
+   "default": 1,
    "conditional": false,
    "hidden": false
   },

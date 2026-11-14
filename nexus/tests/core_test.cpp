@@ -249,6 +249,25 @@ int main() {
         CHECK(MatchRaGame("Super Mario Odyssey", rg) == 0);
         CHECK(MatchRaGame("Po", rg) == 0);
         CHECK(NormalizeTitle("Ñoño & Friends [Hack] (EU)") == "nonoandfriends");
+        CHECK(SearchKey("The Legend of Zelda: Link's Awakening (USA)") == "legend of zelda link s awakening");
+        std::vector<RaConsole> rc;
+        CHECK(ParseRaConsoles(R"([{"ID":7,"Name":"NES/Famicom","IsGameSystem":true},{"ID":100,"Name":"Hubs","IsGameSystem":false},{"ID":"5","Name":"Game Boy Advance"}])", rc));
+        CHECK(rc.size() == 2 && rc[1].id == 5);
+        CHECK(!ParseRaConsoles(R"({"message":"Unauthorized"})", rc));
+        std::vector<RaIndexEntry> ix;
+        CHECK(ParseRaGameList(R"([{"Title":"Super Mario Bros.","ID":1446,"NumAchievements":30},{"Title":"Super Mario Bros. 3","ID":1447,"NumAchievements":"40"},{"Title":"Mario Paint","ID":9,"NumAchievements":0},{"Title":"","ID":5}])", 7, ix));
+        CHECK(ix.size() == 3 && ix[1].achievements == 40 && ix[0].console == 7);
+        CHECK(ParseRaGameList(R"([{"Title":"Pokémon Emerald Version","ID":515,"NumAchievements":80}])", 5, ix) && ix.size() == 4);
+        {
+            auto h = SearchRaIndex(ix, "super mario bros");
+            CHECK(h.size() == 2 && ix[h[0]].id == 1446);
+            h = SearchRaIndex(ix, "Mario");
+            CHECK(h.size() == 3);
+            h = SearchRaIndex(ix, "pokemon emer");
+            CHECK(h.size() == 1 && ix[h[0]].id == 515);
+            CHECK(SearchRaIndex(ix, "zelda").empty());
+            CHECK(SearchRaIndex(ix, "  ").empty());
+        }
         std::vector<RaRecent> rr;
         CHECK(ParseRaRecent(R"([{"Date":"2026-01-01 10:00:00","HardcoreMode":1,"Title":"Alt","GameTitle":"G","GameID":1,"Points":5},{"Date":"2026-02-01 10:00:00","HardcoreMode":0,"Title":"Neu","GameTitle":"G","GameID":1,"Points":10}])", rr));
         CHECK(rr.size() == 2 && rr[0].title == "Neu" && rr[1].hardcore);
@@ -415,6 +434,22 @@ int main() {
         CHECK(e.library.CustomName("0100000000020000").size() <= 80 && !e.library.CustomName("0100000000020000").empty());
         e.library.SetCustomName("0100000000010000", "   ");
         CHECK(e.library.CustomName("0100000000010000").empty());
+    }
+
+    // 13b. Eigene Profilbilder
+    {
+        NexusData d; d.settings.data = Settings::Defaults();
+        d.library.SetAvatar("00112233445566778899aabbccddeeff", "sdmc:/nexus/avatars/ich.png");
+        d.library.SetAvatar("deadbeef", "/etc/passwd");
+        CHECK(SaveData("/tmp/nexus_test/av.json", d));
+        std::string src; std::vector<std::string> rep;
+        NexusData e = LoadData("/tmp/nexus_test/av.json", src, rep);
+        CHECK(e.library.Avatar("00112233445566778899aabbccddeeff") == "sdmc:/nexus/avatars/ich.png");
+        CHECK(e.library.Avatar("deadbeef").empty());
+        e.library.SetAvatar("00112233445566778899aabbccddeeff", "");
+        CHECK(e.library.Avatar("00112233445566778899aabbccddeeff").empty());
+        // Profilbilder gehören nicht ins Theme
+        CHECK(ThemeSnapshot(d.settings.data).dump().find("avatars") == std::string::npos);
     }
 
     // 14. Theme-Pakete (.nxtheme) mit Bildern, Aufkleber, neue Bereiche

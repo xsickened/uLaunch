@@ -68,6 +68,7 @@ namespace nexus {
         this->snd.Init(h == nullptr);
         this->img->SetDiskCache(std::string(CacheDir) + "/img");
         EnsureDir(std::string(ArtDir) + "/backgrounds");
+        EnsureDir("sdmc:/nexus/avatars");
         this->accentP = AccentFrom(this->d->settings);
         this->ImportKeys(true);
         {
@@ -1187,6 +1188,13 @@ namespace nexus {
                 if(gid == "ra") for(auto &rw: this->RaRows()) rows.push_back(rw);
                 if(gid == "lock") rows.push_back(Row{ "Sperrbildschirm jetzt anzeigen (−)", nullptr, nullptr, [this]() { this->CloseAll(); this->locked = true; this->unlocking = false; } });
                 if(gid == "profile" && this->host) rows.push_back(Row{ "Profil wechseln (zur Profilauswahl)", nullptr, nullptr, [this]() { this->CloseAll(); this->Save(); this->host->Logoff(); } });
+                if(gid == "profile" && !this->users.empty()) {
+                    rows.push_back(Row{ "Eigene Profilbilder", nullptr, nullptr, nullptr, true });
+                    for(const auto &u: this->users) {
+                        const std::string uid = u.id, uname = u.name;
+                        rows.push_back(Row{ "Profilbild: " + u.name, [this, uid]() { return this->d->library.Avatar(uid).empty() ? std::string("Konsole") : std::string("eigenes Bild"); }, nullptr, [this, uid, uname]() { this->OpenAvatarPicker(uid, uname); } });
+                    }
+                }
                 if(gid == "lib") rows.push_back(Row{ "Bilder neu einlesen", nullptr, nullptr, [this]() { this->art.clear(); this->img->Clear(); this->heroA.key.clear(); this->heroFor.clear(); this->logoId.clear(); this->Toast("Bilder werden neu geladen."); } });
                 return rows;
             };
@@ -1683,21 +1691,8 @@ namespace nexus {
             }
             if(foc) { focusXf = xf; focusRad = rad; focusHex = hex; haveFocus = true; this->lastFocusXf = xf; this->haveLastFocus = true; }
         }
-        // Ebene 5: Fokusmarkierung (eigene Ebene, nicht Teil der Kachel)
-        if(haveFocus) {
-            const double fw = focusXf.w * focusXf.sc * focusXf.squash, fh = focusXf.h * focusXf.sc;
-            const double pad = 30;
-            ColFn fn = this->AccentFn(focusXf.cx - fw / 2 - pad, focusXf.cy - fh / 2 - pad, fw + 2 * pad, fh + 2 * pad);
-            if(this->moving) fn = [](float, float) { return Col{ 255, 212, 71, 255 }; };
-            double pulse = 1.0;
-            if(fx == "pulse" && s.B("anim.enabled")) pulse = 0.55 + 0.45 * std::sin(this->time * 4.5);
-            const double rw = s.N("anim.ringWidth");
-            if(rw > 0 || this->moving) {
-                const int layers = fx == "glow" ? 5 : 3;
-                for(int k = layers; k >= 1; k--) this->g->ShapeRingFn(focusXf, focusRad, focusHex, rw + k * (fx == "glow" ? 5 : 3), fn, 0.12 * pulse / k * (fx == "glow" ? 1.6 : 1));
-                this->g->ShapeRingFn(focusXf, focusRad, focusHex, std::max(rw, 2.0), fn, pulse);
-            }
-        }
+        // Ebene 5: Auswahlhervorhebung (eigene Ebene, nicht Teil der Kachel)
+        if(haveFocus) this->DrawHighlight(focusXf, focusRad, focusHex);
         this->DrawParticles(1);
         if(!this->searchQuery.empty() && this->openFolder.empty()) {
             this->g->Text("Suche: „" + this->searchQuery + "“ · " + std::to_string(this->list.size()) + " Treffer   ·   B = Suche beenden   ·   ZR = neu suchen", 14, 60, this->Env().topH, this->MutedCol());
@@ -1713,6 +1708,106 @@ namespace nexus {
         if(this->moving) {
             this->g->RoundRect(490, 70, 300, 30, 15, Col{ 255, 212, 71, 255 });
             this->g->Text("Positionsmodus – A übernehmen, B verwerfen", 13, 640, 76, Col{ 0, 0, 0, 255 }, 1, 0, true);
+        }
+    }
+
+    void Home::DrawHighlight(const Xf &focusXf, double focusRad, bool focusHex) {
+        const auto &s = this->d->settings;
+        std::string style = s.S("anim.highlight");
+        if(this->moving && style == "none") style = "ring";
+        if(style == "none") return;
+        const std::string fx = s.S("anim.focus");
+        const bool live = s.B("anim.enabled") && !s.B("anim.reduce");
+        double pulse = 1.0;
+        if(live && (s.B("anim.highlightPulse") || fx == "pulse")) pulse = 0.55 + 0.45 * std::sin(this->time * 4.5);
+        const double rw = std::max(0.0, s.N("anim.ringWidth"));
+        const double fw = focusXf.w * focusXf.sc * focusXf.squash, fh = focusXf.h * focusXf.sc;
+        const double pad = 30;
+        // Farbe
+        ColFn fn;
+        const std::string hc = s.S("anim.highlightColor");
+        if(this->moving) fn = [](float, float) { return Col{ 255, 212, 71, 255 }; };
+        else if(hc == "white") fn = [](float, float) { return Col{ 255, 255, 255, 255 }; };
+        else if(hc == "gold") fn = [](float, float) { return Col{ 255, 212, 71, 255 }; };
+        else if(hc == "custom") { const Col c = ParseCol(s.S("anim.highlightCustom")); fn = [c](float, float) { return c; }; }
+        else fn = this->AccentFn(focusXf.cx - fw / 2 - pad, focusXf.cy - fh / 2 - pad, fw + 2 * pad, fh + 2 * pad);
+        auto colAt = [&](double x, double y, double a) { return WithA(fn(static_cast<float>(x), static_cast<float>(y)), std::clamp(a, 0.0, 1.0)); };
+
+        // Umriss: bei 3D-Hüllen die echte Vorderseite, sonst die Kachel
+        const bool quad = this->caseQuadTime == this->time;
+        SDL_FPoint P[4];
+        if(quad) for(int i = 0; i < 4; i++) P[i] = this->caseQuad[i];
+        else {
+            P[0] = { static_cast<float>(focusXf.cx - fw / 2), static_cast<float>(focusXf.cy - fh / 2) };
+            P[1] = { static_cast<float>(focusXf.cx + fw / 2), static_cast<float>(focusXf.cy - fh / 2) };
+            P[2] = { static_cast<float>(focusXf.cx + fw / 2), static_cast<float>(focusXf.cy + fh / 2) };
+            P[3] = { static_cast<float>(focusXf.cx - fw / 2), static_cast<float>(focusXf.cy + fh / 2) };
+        }
+        // Viereck nach außen versetzt (Gehrung), Ring zwischen d0 und d1
+        auto offsetPt = [&](int k, double d) {
+            const SDL_FPoint &pp = P[(k + 3) % 4], &pc = P[k], &pn = P[(k + 1) % 4];
+            auto nrm = [](SDL_FPoint a, SDL_FPoint b) {
+                const double dx = b.x - a.x, dy = b.y - a.y, l = std::max(1e-6, std::hypot(dx, dy));
+                return std::pair<double, double>{ dy / l, -dx / l };   // im Uhrzeigersinn: nach außen
+            };
+            const auto n1 = nrm(pp, pc), n2 = nrm(pc, pn);
+            const double mx = n1.first + n2.first, my = n1.second + n2.second;
+            const double den = std::max(0.2, 1 + n1.first * n2.first + n1.second * n2.second);
+            return SDL_FPoint{ static_cast<float>(pc.x + mx * d / den), static_cast<float>(pc.y + my * d / den) };
+        };
+        auto ringPoly = [&](double d0, double d1, double a) {
+            for(int k = 0; k < 4; k++) {
+                const int j = (k + 1) % 4;
+                const SDL_FPoint q[4] = { offsetPt(k, d0), offsetPt(j, d0), offsetPt(j, d1), offsetPt(k, d1) };
+                const Col c[4] = { colAt(q[0].x, q[0].y, a), colAt(q[1].x, q[1].y, a), colAt(q[2].x, q[2].y, a), colAt(q[3].x, q[3].y, a) };
+                this->g->Quad(q, c);
+            }
+        };
+        auto ring = [&](double t, double a) {
+            if(quad) ringPoly(2, 2 + t, a);
+            else this->g->ShapeRingFn(focusXf, focusRad, focusHex, t, fn, a);
+        };
+        const bool doRing = style == "ring" || style == "outline";
+        const bool doGlow = style == "glow" || style == "outline" || (style == "ring" && fx == "glow");
+        if(doGlow) for(int k = 6; k >= 1; k--) ring(std::max(rw, 2.0) + k * 6, 0.10 * pulse / k * 1.6);
+        if(doRing && (rw > 0 || this->moving)) {
+            for(int k = 3; k >= 1; k--) ring(rw + k * 3, 0.12 * pulse / k);
+            ring(std::max(rw, 2.0), pulse);
+        }
+        if(style == "brackets") {
+            const double t = std::max(rw, 3.0);
+            for(int k = 0; k < 4; k++) {
+                const SDL_FPoint c = offsetPt(k, 8), pn = offsetPt((k + 1) % 4, 8), pp = offsetPt((k + 3) % 4, 8);
+                const double len = 0.2 * std::min(std::hypot(pn.x - c.x, pn.y - c.y), std::hypot(pp.x - c.x, pp.y - c.y));
+                auto toward = [&](SDL_FPoint o) { const double l = std::max(1e-6, static_cast<double>(std::hypot(o.x - c.x, o.y - c.y))); return SDL_FPoint{ static_cast<float>(c.x + (o.x - c.x) / l * len), static_cast<float>(c.y + (o.y - c.y) / l * len) }; };
+                const SDL_FPoint a1 = toward(pn), a2 = toward(pp);
+                for(int g2 = 2; g2 >= 0; g2--) {
+                    const double tt = t + g2 * 4, aa = g2 == 0 ? pulse : 0.12 * pulse / g2;
+                    this->g->Line(c.x, c.y, a1.x, a1.y, tt, colAt(c.x, c.y, aa));
+                    this->g->Line(c.x, c.y, a2.x, a2.y, tt, colAt(c.x, c.y, aa));
+                    this->g->Circle(c.x, c.y, tt / 2, colAt(c.x, c.y, aa));
+                }
+            }
+        }
+        if(style == "underline") {
+            const double bx = (P[2].x + P[3].x) / 2, by = std::max(P[2].y, P[3].y) + 12;
+            const double bw = std::max(30.0, 0.6 * std::hypot(P[2].x - P[3].x, P[2].y - P[3].y)), bh = std::max(rw, 3.0) + 1;
+            for(int k = 3; k >= 1; k--) this->g->RoundRect(bx - bw / 2 - k * 4, by - k * 3, bw + k * 8, bh + k * 6, (bh + k * 6) / 2, colAt(bx, by, 0.10 * pulse / k));
+            this->g->RoundRect(bx - bw / 2, by, bw, bh, bh / 2, colAt(bx, by, pulse));
+        }
+        if(style == "spotlight") {
+            const double minY = std::min({ P[0].y, P[1].y, P[2].y, P[3].y }), maxY = std::max({ P[0].y, P[1].y, P[2].y, P[3].y });
+            const double minX = std::min({ P[0].x, P[1].x, P[2].x, P[3].x }), maxX = std::max({ P[0].x, P[1].x, P[2].x, P[3].x });
+            const double cx = (minX + maxX) / 2, w = maxX - minX, h = maxY - minY;
+            const double topY = std::max(0.0, minY - h * 0.9);
+            // Lichtkegel von oben auf die Auswahl
+            const SDL_FPoint q[4] = { { static_cast<float>(cx - w * 0.12), static_cast<float>(topY) }, { static_cast<float>(cx + w * 0.12), static_cast<float>(topY) },
+                                      { static_cast<float>(cx + w * 0.75), static_cast<float>(maxY) }, { static_cast<float>(cx - w * 0.75), static_cast<float>(maxY) } };
+            const Col c[4] = { colAt(cx, topY, 0.30 * pulse), colAt(cx, topY, 0.30 * pulse), colAt(cx, maxY, 0.04 * pulse), colAt(cx, maxY, 0.04 * pulse) };
+            this->g->Quad(q, c);
+            // Lichtfleck am Boden
+            for(int k = 4; k >= 1; k--) this->g->RoundRect(cx - w * (0.45 + k * 0.08), maxY + 2 - k * 3, w * (0.9 + k * 0.16), 8 + k * 6, (8 + k * 6) / 2.0, colAt(cx, maxY, 0.09 * pulse / k * 2));
+            if(rw > 0) ring(std::max(1.5, rw * 0.5), 0.6 * pulse);
         }
     }
 
@@ -1788,10 +1883,8 @@ namespace nexus {
         double userW = 0;
         if(this->host && s.B("topbar.showUser") && !this->currentUser.name.empty()) {
             const double us = 28 * s.N("icons.size");
-            SDL_Texture *ut = this->currentUser.iconKey.empty() ? nullptr : this->img->Get(this->currentUser.iconKey, 0);
             Xf ux; ux.cx = 40 + us / 2; ux.cy = 29; ux.w = ux.h = us;
-            if(ut) this->g->ShapeTex(ut, ux, us / 2, false, 1.0, true, 50, 50);
-            else this->g->Circle(ux.cx, ux.cy, us / 2, this->Accent());
+            this->DrawUserPic(this->currentUser, ux, us / 2, 1.0);
             const int nw = this->g->Text(this->currentUser.name, 15, 40 + us + 8, 19, tc);
             userW = us + 8 + nw + 18;
         }
@@ -2140,6 +2233,10 @@ namespace nexus {
                 if(this->host->HasSuspended()) this->Confirm("Profil wechseln?", "Das laufende Spiel wird dabei geschlossen.", "Spiel schließen und wechseln", [this, go]() { this->host->CloseSuspended(); go(); });
                 else go();
             } });
+            if(!this->currentUser.id.empty()) {
+                const std::string uid = this->currentUser.id, uname = this->currentUser.name;
+                rows.push_back(Row{ "Mein Profilbild ändern …", nullptr, nullptr, [this, uid, uname]() { this->OpenAvatarPicker(uid, uname); } });
+            }
             rows.push_back(Row{ "NEXUS-Einstellungen", nullptr, nullptr, [this]() { this->CloseAll(); this->OpenSettings(); } });
             rows.push_back(Row{ "System", nullptr, nullptr, nullptr, true });
             for(const auto &a: this->host->SystemActions()) {
@@ -2152,6 +2249,34 @@ namespace nexus {
             return rows;
         };
         this->Push(dl);
+    }
+
+    SDL_Texture *Home::UserTex(const UserInfo &u, Crop &crop) {
+        crop = Crop{};
+        const std::string own = u.id.empty() ? std::string() : this->d->library.Avatar(u.id);
+        if(!own.empty()) {
+            if(SDL_Texture *t = this->img->Get(own, 0)) { crop = this->d->library.CropOf(own); return t; }
+            if(!this->img->Failed(own)) return nullptr;   // lädt noch: kein kurzes Aufblitzen des Konsolenbilds
+        }
+        return u.iconKey.empty() ? nullptr : this->img->Get(u.iconKey, 0);
+    }
+
+    void Home::DrawUserPic(const UserInfo &u, const Xf &xf, double rad, double alpha) {
+        Crop c;
+        if(SDL_Texture *t = this->UserTex(u, c)) this->g->ShapeTex(t, xf, rad, false, alpha, true, c.x, c.y, Col{}, c.zoom);
+        else this->g->Circle(xf.cx, xf.cy, xf.w * xf.sc / 2, WithA(this->Accent(), alpha));
+    }
+
+    void Home::OpenAvatarPicker(const std::string &uid, const std::string &name) {
+        this->OpenImagePicker("Profilbild · " + name, { { "Profilbilder (sdmc:/nexus/avatars)", "sdmc:/nexus/avatars" }, { "Eigene Hintergründe", std::string(ArtDir) + "/backgrounds" }, { "NEXUS-Bilder", ArtDir } }, true, false,
+            [this, uid](const std::string &path) {
+                this->d->library.SetAvatar(uid, path);
+                this->MarkDirty();
+                this->Save();
+                if(path.empty()) { this->Toast("Profilbild der Konsole wird wieder verwendet."); return; }
+                // gleich den runden Ausschnitt festlegen
+                this->OpenCropEditor(path, "Profilbild-Ausschnitt", 1.0, [this]() { this->Toast("Profilbild gespeichert."); });
+            }, "Profilbild der Konsole verwenden");
     }
 
     std::vector<UserInfo> Home::ProfileItems() const {
@@ -2240,13 +2365,14 @@ namespace nexus {
             if(list) { cx = x0 + iw / 2; cy = y0 + i * (ih + gap) + ih / 2 + dy; }
             else { cx = x0 + i * (iw + gap) + iw / 2; cy = y0 + ih / 2 + dy; }
             Xf xf; xf.cx = cx; xf.cy = cy; xf.sc = sc;
-            SDL_Texture *tex = u.iconKey.empty() ? nullptr : this->img->Get(u.iconKey, 0);
+            Crop ucrop;
+            SDL_Texture *tex = this->UserTex(u, ucrop);
             if(list) {
                 xf.w = iw; xf.h = ih;
                 this->g->Shape(xf, 14, false, WithA(Col{ 127, 127, 127, 255 }, (foc ? 0.32 : 0.16) * a));
                 if(foc) this->g->ShapeRingFn(xf, 14, false, 3.5, this->AccentFn(cx - iw / 2, cy - ih / 2, iw, ih), a);
                 Xf ic; ic.cx = cx - iw / 2 * sc + 14 * sc + 28 * sc; ic.cy = cy; ic.w = ic.h = 56; ic.sc = sc;
-                if(tex) this->g->ShapeTex(tex, ic, 28, false, a, true, 50, 50);
+                if(tex) this->g->ShapeTex(tex, ic, 28, false, a, true, ucrop.x, ucrop.y, Col{}, ucrop.zoom);
                 else { this->g->Shape(ic, 28, false, WithA(Col{ 127, 127, 127, 255 }, 0.35 * a)); this->g->Text("+", 26, ic.cx, ic.cy - 18, WithA(tc, a), 1); }
                 this->g->Text(u.name, 20, cx - iw / 2 * sc + 90 * sc, cy - 13, WithA(tc, a));
             }
@@ -2255,7 +2381,7 @@ namespace nexus {
                 const double rad = cards ? 16 : iw / 2;
                 const ColFn afn = this->AccentFn(cx - iw / 2 - 20, cy - ih / 2 - 20, iw + 40, ih + 40);
                 if(foc) for(int k = 3; k >= 1; k--) this->g->ShapeRingFn(xf, rad, false, 4 + k * 5, afn, 0.13 / k * a);
-                if(tex) this->g->ShapeTex(tex, xf, rad, false, a, true, 50, 50);
+                if(tex) this->g->ShapeTex(tex, xf, rad, false, a, true, ucrop.x, ucrop.y, Col{}, ucrop.zoom);
                 else { this->g->Shape(xf, rad, false, WithA(Col{ 127, 127, 127, 255 }, 0.3 * a)); this->g->Text("+", static_cast<int>(sz * 0.4), cx, cy - sz * 0.27, WithA(tc, a), 1); }
                 if(foc) this->g->ShapeRingFn(xf, rad, false, 4, afn, a);
                 if(nameH > 0) this->g->Text(u.name, 18, cx, cy + ih / 2 * sc + 10, WithA(tc, (foc ? 1.0 : 0.75) * a), 1, static_cast<int>(iw + gap - 6));

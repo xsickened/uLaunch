@@ -64,8 +64,24 @@ namespace nexus {
 
     // Titelvergleich: Kleinbuchstaben, Akzente entfernt, Klammerzusätze wie „(USA)“ und „the“ ignoriert
     std::string NormalizeTitle(const std::string &s);
+    // wie NormalizeTitle, aber Wörter durch Leerzeichen getrennt (für die Suche)
+    std::string SearchKey(const std::string &s);
     // Liefert die RA-Spiel-ID bei eindeutigem Treffer, sonst 0
     long long MatchRaGame(const std::string &name, const std::vector<RaGame> &games);
+
+    // ---------------- RetroAchievements-Datenbank (Suche über alle Systeme)
+    struct RaConsole { int id = 0; std::string name; };
+    struct RaIndexEntry {
+        long long id = 0;
+        int console = 0, achievements = 0;
+        std::string title, norm;   // norm = SearchKey(title)
+    };
+    // API_GetConsoleIDs: nur echte Spielsysteme
+    bool ParseRaConsoles(const std::string &body, std::vector<RaConsole> &out);
+    // API_GetGameList (f=1): hängt die Spiele eines Systems an out an
+    bool ParseRaGameList(const std::string &body, int consoleId, std::vector<RaIndexEntry> &out);
+    // Suche: exakter Titel vor Wortanfang vor Teilwort; alle Suchwörter müssen vorkommen
+    std::vector<size_t> SearchRaIndex(const std::vector<RaIndexEntry> &index, const std::string &term, size_t limit = 80);
 
     // JSON-Helfer: Feld ohne Beachtung der Groß-/Kleinschreibung (die RA-Doku zeigt camelCase, die API liefert PascalCase)
     const json *JGetCI(const json &obj, const char *key);

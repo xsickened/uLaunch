@@ -862,13 +862,19 @@ namespace nexus {
     void Home::OpenRaAssign(const std::string &id) {
         auto dl = std::make_shared<Dialog>();
         dl->title = "RetroAchievements-Spiel zuordnen";
-        dl->sub = "Deine gespielten Spiele, zuletzt gespielte zuerst. Nicht dabei? Spiel-ID eingeben (Zahl in der Spiel-URL).";
+        dl->sub = "Suche in der ganzen RetroAchievements-Datenbank oder wähle aus deinen gespielten Spielen. Hinweis: RetroAchievements hat keine Switch-Spiele – nur ältere Systeme (z. B. für Emulator-Forwarder).";
         dl->w = 640; dl->x = 320; dl->y = 74; dl->shade = true;
         dl->h = ScreenH - dl->y - this->Env().botH - 8;
         auto games = std::make_shared<std::vector<RaGame>>(this->online.ra.games);
         std::stable_sort(games->begin(), games->end(), [](const RaGame &a, const RaGame &b) { return a.lastDate > b.lastDate; });
         dl->rows = [this, id, games]() {
             std::vector<Row> rows;
+            rows.push_back(Row{ "In RetroAchievements suchen …", nullptr, nullptr, [this, id]() {
+                this->AskText("Spieltitel suchen", SearchTerm(this->DisplayName(id)), 80, [this, id](std::string v) {
+                    if(v.empty()) return;
+                    this->OpenRaSearch(id, v);
+                });
+            } });
             rows.push_back(Row{ "Spiel-ID eingeben …", nullptr, nullptr, [this, id]() {
                 this->AskText("RetroAchievements-Spiel-ID", "", 8, [this, id](std::string v) {
                     const long long gid = std::atoll(v.c_str());
@@ -879,7 +885,8 @@ namespace nexus {
                     this->Toast("Zugeordnet (ID " + std::to_string(gid) + ").");
                 });
             } });
-            if(games->empty()) rows.push_back(Row{ "Noch keine Spiele geladen – erst aktualisieren.", nullptr, nullptr, nullptr });
+            rows.push_back(Row{ "Deine gespielten Spiele", nullptr, nullptr, nullptr, true });
+            if(games->empty()) rows.push_back(Row{ "Noch keine gespielten Spiele geladen.", nullptr, nullptr, nullptr });
             for(const auto &g: *games) {
                 const long long gid = g.id;
                 const std::string title = g.title;
@@ -890,6 +897,63 @@ namespace nexus {
                     this->Toast("Zugeordnet: " + title);
                 } });
             }
+            return rows;
+        };
+        this->Push(dl);
+    }
+
+    void Home::OpenRaSearch(const std::string &id, const std::string &term) {
+        this->online.RaEnsureIndex();
+        struct St { std::vector<size_t> hits; bool searched = false; size_t indexSize = 0; };
+        auto st = std::make_shared<St>();
+        auto dl = std::make_shared<Dialog>();
+        dl->title = "RetroAchievements durchsuchen";
+        dl->sub = "Suche nach „" + term + "“";
+        dl->w = 640; dl->x = 320; dl->y = 74; dl->shade = true;
+        dl->h = ScreenH - dl->y - this->Env().botH - 8;
+        dl->rows = [this, st, id, term]() {
+            std::vector<Row> rows;
+            const auto &ix = this->online.raIndex;
+            if(ix.loading) {
+                const std::string p = ix.total > 0 ? std::to_string(ix.done) + " / " + std::to_string(ix.total) + " Systeme" : "Systemliste";
+                rows.push_back(Row{ "Lade Spieleliste von RetroAchievements … " + p, nullptr, nullptr, nullptr });
+                rows.push_back(Row{ "Nur beim ersten Mal (danach 14 Tage gespeichert).", nullptr, nullptr, nullptr });
+                return rows;
+            }
+            if(!ix.ready) {
+                rows.push_back(Row{ ix.error.empty() ? "Spieleliste nicht verfügbar." : ix.error, nullptr, nullptr, nullptr });
+                rows.push_back(Row{ "Erneut versuchen", nullptr, nullptr, [this]() { this->online.RaEnsureIndex(true); } });
+                return rows;
+            }
+            // Suche einmal ausführen, sobald die Liste da ist
+            if(!st->searched || st->indexSize != this->online.raIndexList.size()) {
+                st->hits = SearchRaIndex(this->online.raIndexList, term);
+                st->searched = true;
+                st->indexSize = this->online.raIndexList.size();
+            }
+            if(st->hits.empty()) {
+                rows.push_back(Row{ "Keine Treffer in " + std::to_string(this->online.raIndexList.size()) + " Spielen.", nullptr, nullptr, nullptr });
+                rows.push_back(Row{ "Tipp: kürzer suchen (z. B. nur „zelda“) – Switch-Spiele gibt es bei RetroAchievements nicht.", nullptr, nullptr, nullptr });
+            }
+            for(const size_t i: st->hits) {
+                const RaIndexEntry e = this->online.raIndexList[i];
+                auto cn = this->online.raConsoleNames.find(e.console);
+                const std::string console = cn != this->online.raConsoleNames.end() ? cn->second : "";
+                rows.push_back(Row{ e.title, [console, e]() { return console + (e.achievements > 0 ? " · " + std::to_string(e.achievements) + " Erfolge" : " · keine Erfolge"); }, nullptr, [this, id, e]() {
+                    this->d->library.SetRaGameId(id, e.id);
+                    this->MarkDirty();
+                    this->CloseAll();
+                    this->Toast("Zugeordnet: " + e.title);
+                } });
+            }
+            rows.push_back(Row{ "Anderen Suchbegriff …", nullptr, nullptr, [this, id, term]() {
+                this->AskText("Spieltitel suchen", term, 80, [this, id](std::string v) {
+                    if(v.empty()) return;
+                    this->Pop();
+                    this->OpenRaSearch(id, v);
+                });
+            } });
+            rows.push_back(Row{ "Spieleliste neu laden", nullptr, nullptr, [this, st]() { st->searched = false; this->online.RaEnsureIndex(true); } });
             return rows;
         };
         this->Push(dl);

@@ -59,7 +59,7 @@ jobs:
 
     - name: SD-Paket zusammenstellen
       run: |
-        mkdir -p out/switch/nexus out/nexus/art/backgrounds out/nexus/sounds out/nexus/themes out/ulaunch/bin/uMenu
+        mkdir -p out/switch/nexus out/nexus/art/backgrounds out/nexus/sounds out/nexus/themes out/nexus/avatars out/ulaunch/bin/uMenu
         cat > out/nexus/sounds/LIESMICH.txt << 'EOF'
         Eigene Sounds (ersetzen die eingebauten Klänge), Formate: .wav, .ogg oder .mp3
           move, select, back, open, launch, lock, unlock, error, toggle   (z. B. select.wav)
@@ -72,6 +72,11 @@ jobs:
         Eigene Themes (.json) und Theme-Pakete (.nxtheme, mit Bildern) liegen hier.
         Ein Paket von jemand anderem einfach in diesen Ordner kopieren, dann in NEXUS:
         Einstellungen > Themes & System > Eigene Themes > Paket auswählen.
+        EOF
+        cat > out/nexus/avatars/LIESMICH.txt << 'EOF'
+        Eigene Profilbilder (.jpg oder .png, am besten quadratisch) hier ablegen.
+        In NEXUS: Menü (+) > Mein Profilbild ändern … oder Einstellungen > Profilauswahl > Eigene Profilbilder.
+        Danach den runden Ausschnitt festlegen. Das Bild der Konsole selbst bleibt unverändert.
         EOF
         cp projects/nexus/nexus.nro out/switch/nexus/nexus.nro
         cp SdOut/ulaunch/bin/uMenu/main SdOut/ulaunch/bin/uMenu/main.npdm SdOut/ulaunch/bin/uMenu/romfs.bin out/ulaunch/bin/uMenu/

@@ -114,6 +114,14 @@ namespace nexus {
                 lib.crops[k] = { { "z", std::clamp(c.zoom, 1.0, 4.0) }, { "x", std::clamp(c.x, 0.0, 100.0) }, { "y", std::clamp(c.y, 0.0, 100.0) } };
             }
         }
+        const json *av = JGet(j, "avatars");
+        if(av && av->is_object()) {
+            for(auto it = av->begin(); it != av->end() && lib.avatars.size() < 16; ++it) {
+                if(it.key().size() > 40 || !it.value().is_string()) continue;
+                const std::string p = it.value().get<std::string>();
+                if(p.size() < 300 && p.rfind("sdmc:/", 0) == 0) lib.avatars[it.key()] = p;
+            }
+        }
         const json *ro = JGet(j, "rootOrder");
         std::set<std::string> seen;
         if(ro && ro->is_array()) {
@@ -146,6 +154,7 @@ namespace nexus {
         j["folders"] = fs;
         j["rootOrder"] = this->rootOrder;
         j["crops"] = this->crops;
+        j["avatars"] = this->avatars;
         return j;
     }
 
@@ -339,6 +348,17 @@ namespace nexus {
         this->crops[path] = { { "z", std::clamp(c.zoom, 1.0, 4.0) }, { "x", std::clamp(c.x, 0.0, 100.0) }, { "y", std::clamp(c.y, 0.0, 100.0) } };
     }
 
+    std::string Library::Avatar(const std::string &uid) const {
+        auto it = this->avatars.find(uid);
+        return it != this->avatars.end() && it->is_string() ? it->get<std::string>() : std::string();
+    }
+
+    void Library::SetAvatar(const std::string &uid, const std::string &path) {
+        if(uid.empty() || uid.size() > 40) return;
+        if(path.empty() || path.rfind("sdmc:/", 0) != 0 || path.size() >= 300) this->avatars.erase(uid);
+        else this->avatars[uid] = path;
+    }
+
     std::vector<std::string> Library::AllArtOverrides() const {
         std::vector<std::string> out;
         auto add = [&out](const json &art) {
@@ -347,6 +367,7 @@ namespace nexus {
         };
         for(auto it = this->apps.begin(); it != this->apps.end(); ++it) { const json *a = JGet(it.value(), "art"); if(a) add(*a); }
         for(const auto &f: this->folders) add(f.art);
+        add(this->avatars);
         return out;
     }
 
