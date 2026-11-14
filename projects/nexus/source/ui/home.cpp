@@ -36,7 +36,7 @@ namespace nexus {
             return "?";
         }
         const std::vector<std::pair<std::string, std::string>> Groups = {
-            { "look", "Darstellung & Schrift" }, { "ui", "Textboxen & Schrift" }, { "aura", "Kachel-Aura (Partikel)" }, { "bgfx", "Hintergrund-Effekte" }, { "idle", "Bildschirmschoner" }, { "top", "Kopfzeile, Symbole & Hinweise" }, { "layout", "Anordnung der Kacheln" },
+            { "look", "Darstellung & Schrift" }, { "ui", "Textboxen & Schrift" }, { "aura", "Kachel-Aura (Partikel)" }, { "bgfx", "Hintergrund-Effekte" }, { "idle", "Bildschirmschoner" }, { "top", "Kopfzeile, Symbole & Hinweise" }, { "dock", "Systemleiste (Album, Controller …)" }, { "layout", "Anordnung der Kacheln" },
             { "anim", "Animationen" }, { "tiles", "Kacheln (Standard)" }, { "hero", "Fokus: Hintergrund" }, { "logo", "Fokus: Logo" },
             { "home", "Home-Hintergrund" }, { "lock", "Sperrbildschirm" }, { "profile", "Profilauswahl" }, { "sections", "Bereiche (Reihenfolge & Sichtbarkeit)" },
             { "lib", "Bibliothek & SteamGridDB" }, { "ra", "RetroAchievements" }, { "sys", "Themes & System" }
@@ -104,6 +104,14 @@ namespace nexus {
         e.topH = this->d->settings.B("topbar.visible") ? 60 : 14;
         e.botH = this->d->settings.B("hints.visible") ? 46 : 14;
         e.crumb = !this->openFolder.empty();
+        if(this->d->settings.B("dock.visible") && this->d->settings.B("dock.reserve") && this->DockBand() > 0) {
+            const auto side = this->DockSide();
+            const double band = this->DockBand();
+            if(side == "bottom") e.botH += band;
+            else if(side == "top") e.topH += band;
+            else if(side == "left") e.leftW = band;
+            else e.rightW = band;
+        }
         return e;
     }
 
@@ -573,11 +581,18 @@ namespace nexus {
             else if(b == BtnB) { *order = this->moveBackup; this->moving = false; this->listDirty = true; this->Toast("Änderung verworfen."); }
             return;
         }
+        if(this->inDock && this->DockPress(b)) return;
+        // Am Rand der Kacheln weiter in Richtung Systemleiste: in die Leiste wechseln
+        auto nav = [this](int dx, int dy) {
+            const int nf = Navigate(this->lay, this->d->settings, this->focus, dx, dy);
+            if((nf == this->focus || this->list.empty()) && this->DockEnter(dx, dy)) return;
+            this->SetFocus(nf);
+        };
         switch(b) {
-            case BtnLeft: this->SetFocus(Navigate(this->lay, this->d->settings, this->focus, -1, 0)); break;
-            case BtnRight: this->SetFocus(Navigate(this->lay, this->d->settings, this->focus, 1, 0)); break;
-            case BtnUp: this->SetFocus(Navigate(this->lay, this->d->settings, this->focus, 0, -1)); break;
-            case BtnDown: this->SetFocus(Navigate(this->lay, this->d->settings, this->focus, 0, 1)); break;
+            case BtnLeft: nav(-1, 0); break;
+            case BtnRight: nav(1, 0); break;
+            case BtnUp: nav(0, -1); break;
+            case BtnDown: nav(0, 1); break;
             case BtnL: this->CycleSection(-1); this->Sfx("move"); break;
             case BtnR: this->CycleSection(1); this->Sfx("move"); break;
             case BtnZL: break;   // Modifikator (ZL + A = Schnellstart)
@@ -699,6 +714,10 @@ namespace nexus {
         }
         for(const auto &h: this->tabHits) {
             if(x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) { this->SwitchSection(h.id); return; }
+        }
+        for(size_t i = 0; i < this->dockBtns.size(); i++) {
+            const auto &db = this->dockBtns[i];
+            if(std::hypot(x - db.x, y - db.y) <= db.r * 1.1) { this->inDock = true; this->dockSel = static_cast<int>(i); this->DockActivate(db.id); return; }
         }
         // Kacheln von oben nach unten prüfen (gedrehte Rechtecke)
         int best = -1, bestZ = -100000;
@@ -954,6 +973,11 @@ namespace nexus {
         if(p == "profile.color") return s.S("profile.bgType") == "color";
         if(p == "topbar.showUser") return this->host != nullptr;
         if(p == "theme.textCustom") return s.S("theme.textColor") == "custom";
+        if(p.rfind("dock.", 0) == 0 && p != "dock.visible" && !s.B("dock.visible")) return false;
+        if(p == "dock.iconColor") return s.S("dock.iconColors") == "custom";
+        if(p == "dock.barColor" || p == "dock.barOpacity") return s.B("dock.bar");
+        if(p == "dock.labelColor") return s.S("dock.labels") != "none";
+        if(p == "dock.btnColor" || p == "dock.btnOpacity" || p == "dock.style") return s.S("dock.shape") != "none";
         if(p == "ui.panelColor") return s.S("theme.panelStyle") == "custom";
         if(p == "lock.textCustom") return s.S("lock.textColor") == "custom";
         if(p == "hero.maskSize") return s.S("hero.mask") != "none";
@@ -1344,6 +1368,7 @@ namespace nexus {
         this->DrawParticles(2);
         this->DrawLogo(dt);
         this->DrawTiles();
+        this->DrawDock();
         this->DrawTopbar();
         this->DrawHints();
         this->DrawParticles(3);
@@ -1692,7 +1717,7 @@ namespace nexus {
             if(foc) { focusXf = xf; focusRad = rad; focusHex = hex; haveFocus = true; this->lastFocusXf = xf; this->haveLastFocus = true; }
         }
         // Ebene 5: Auswahlhervorhebung (eigene Ebene, nicht Teil der Kachel)
-        if(haveFocus) this->DrawHighlight(focusXf, focusRad, focusHex);
+        if(haveFocus && !this->inDock) this->DrawHighlight(focusXf, focusRad, focusHex);
         this->DrawParticles(1);
         if(!this->searchQuery.empty() && this->openFolder.empty()) {
             this->g->Text("Suche: „" + this->searchQuery + "“ · " + std::to_string(this->list.size()) + " Treffer   ·   B = Suche beenden   ·   ZR = neu suchen", 14, 60, this->Env().topH, this->MutedCol());
@@ -1934,6 +1959,7 @@ namespace nexus {
         if(this->locked) h = { { "A", "Entsperren" } };
         else if(!this->dialogs.empty()) h = this->dialogs.back()->hints.empty() ? std::vector<std::pair<std::string, std::string>>{ { "A", "Auswählen" }, { "←→", "Wert" }, { "B", "Zurück" } } : this->dialogs.back()->hints;
         else if(this->moving) h = { { "←→", "Verschieben" }, { "A", "Übernehmen" }, { "B", "Verwerfen" } };
+        else if(this->inDock) h = { { "A", "Öffnen" }, { "B", "Zurück zu den Spielen" } };
         else {
             const bool folder = !this->list.empty() && this->list[this->focus].folder;
             const bool susp = !folder && !this->list.empty() && this->host && this->appMap.count(this->list[this->focus].id) && this->host->SuspendedTid() == this->appMap[this->list[this->focus].id].tid;

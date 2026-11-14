@@ -59,7 +59,7 @@ jobs:
 
     - name: SD-Paket zusammenstellen
       run: |
-        mkdir -p out/switch/nexus out/nexus/art/backgrounds out/nexus/sounds out/nexus/themes out/nexus/avatars out/ulaunch/bin/uMenu
+        mkdir -p out/switch/nexus out/nexus/art/backgrounds out/nexus/sounds out/nexus/themes out/nexus/avatars out/nexus/dock out/ulaunch/bin/uMenu
         cat > out/nexus/sounds/LIESMICH.txt << 'EOF'
         Eigene Sounds (ersetzen die eingebauten Klänge), Formate: .wav, .ogg oder .mp3
           move, select, back, open, launch, lock, unlock, error, toggle   (z. B. select.wav)
@@ -72,6 +72,12 @@ jobs:
         Eigene Themes (.json) und Theme-Pakete (.nxtheme, mit Bildern) liegen hier.
         Ein Paket von jemand anderem einfach in diesen Ordner kopieren, dann in NEXUS:
         Einstellungen > Themes & System > Eigene Themes > Paket auswählen.
+        EOF
+        cat > out/nexus/dock/LIESMICH.txt << 'EOF'
+        Eigene Symbole für die Systemleiste (.png mit Transparenz oder .jpg), Dateiname = Knopf:
+          album.png  controller.png  settings.png  nexus.png  user.png
+          mii.png    web.png         homebrew.png  search.png power.png
+        Ohne Datei wird das eingebaute Symbol gezeigt. Einstellungen > Systemleiste.
         EOF
         cat > out/nexus/avatars/LIESMICH.txt << 'EOF'
         Eigene Profilbilder (.jpg oder .png, am besten quadratisch) hier ablegen.

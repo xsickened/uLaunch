@@ -13,6 +13,7 @@
 #include "host.hpp"
 #include "online.hpp"
 #include <array>
+#include <map>
 #include <functional>
 #include <memory>
 #include <set>
@@ -229,6 +230,20 @@ namespace nexus {
             SDL_FPoint caseQuad[4] {};
             double caseQuadTime = -1;
             void DrawHighlight(const Xf &fx, double rad, bool hex);
+            // Systemleiste (Album, Controller, Einstellungen, Ein/Aus …) wie im HOME-Menü
+            struct DockBtn { std::string id, label, icon; Col tint; double x = 0, y = 0, r = 0, anim = 0; };
+            std::vector<DockBtn> dockBtns;
+            bool inDock = false;
+            int dockSel = 0;
+            std::map<std::string, std::string> dockImg;   // eigenes Symbolbild (sdmc:/nexus/dock/<id>.png)
+            bool dockImgScanned = false;
+            std::string DockSide() const;                 // bottom, top, left, right
+            double DockBand() const;                      // Platzbedarf quer zur Leiste
+            void LayoutDock(double dt);
+            void DrawDock();
+            bool DockPress(uint32_t b);
+            bool DockEnter(int dx, int dy);
+            void DockActivate(const std::string &id);
             void ImportKeys(bool quiet);
             void OpenCropEditor(const std::string &path, const std::string &title, double aspect, std::function<void()> done = nullptr);
             void CropInput(const plat::Input &in);

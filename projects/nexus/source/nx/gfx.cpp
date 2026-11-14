@@ -610,6 +610,59 @@ namespace nexus {
             poly({ { -0.48, -0.6 }, { -0.85, -0.6 }, { -0.78, -0.22 }, { -0.42, -0.1 } }, false);
             poly({ { 0.48, -0.6 }, { 0.85, -0.6 }, { 0.78, -0.22 }, { 0.42, -0.1 } }, false);
         }
+        else if(name == "album") {
+            // Bilderrahmen mit Berg und Sonne
+            poly({ { -0.8, -0.6 }, { 0.8, -0.6 }, { 0.8, 0.6 }, { -0.8, 0.6 }, { -0.8, -0.6 } }, false);
+            poly({ { -0.62, 0.42 }, { -0.2, -0.05 }, { 0.08, 0.22 }, { 0.3, 0.02 }, { 0.62, 0.42 } }, true);
+            this->Circle(cx + 0.38 * h, cy - 0.28 * h, 0.13 * h, c);
+        }
+        else if(name == "controller") {
+            // zwei Joy-Con nebeneinander
+            poly({ { -0.72, -0.62 }, { -0.08, -0.62 }, { -0.08, 0.62 }, { -0.72, 0.62 } }, true);
+            poly({ { 0.08, -0.62 }, { 0.72, -0.62 }, { 0.72, 0.62 }, { 0.08, 0.62 } }, true);
+            this->Circle(cx - 0.4 * h, cy - 0.25 * h, 0.12 * h, c);
+            this->Circle(cx + 0.4 * h, cy + 0.2 * h, 0.12 * h, c);
+        }
+        else if(name == "power") {
+            std::vector<std::pair<double, double>> p;
+            for(int i = 0; i <= 16; i++) { const double a = -kPi / 2 + 0.7 + i * (2 * kPi - 1.4) / 16; p.push_back({ 0.7 * std::cos(a), 0.7 * std::sin(a) + 0.08 }); }
+            poly(p, false);
+            this->Line(cx, cy - 0.85 * h, cx, cy - 0.05 * h, t, c);
+        }
+        else if(name == "user") {
+            ring(0, -0.32, 0.32);
+            std::vector<std::pair<double, double>> p;
+            for(int i = 0; i <= 12; i++) { const double a = kPi + i * kPi / 12; p.push_back({ 0.7 * std::cos(a), 0.8 + 0.62 * std::sin(a) }); }
+            poly(p, true);
+        }
+        else if(name == "mii") {
+            ring(0, 0, 0.78);
+            this->Circle(cx - 0.28 * h, cy - 0.15 * h, 0.09 * h, c);
+            this->Circle(cx + 0.28 * h, cy - 0.15 * h, 0.09 * h, c);
+            std::vector<std::pair<double, double>> p;
+            for(int i = 0; i <= 8; i++) { const double a = 0.25 * kPi + i * 0.5 * kPi / 8; p.push_back({ 0.38 * std::cos(a), 0.05 + 0.38 * std::sin(a) }); }
+            poly(p, false);
+        }
+        else if(name == "web") {
+            ring(0, 0, 0.8);
+            std::vector<std::pair<double, double>> p;
+            for(int i = 0; i < 20; i++) p.push_back({ 0.36 * std::cos(i * kPi / 10), 0.8 * std::sin(i * kPi / 10) });
+            poly(p, true);
+            this->Line(cx - 0.8 * h, cy, cx + 0.8 * h, cy, t, c);
+            this->Line(cx - 0.68 * h, cy - 0.4 * h, cx + 0.68 * h, cy - 0.4 * h, t * 0.8, c);
+            this->Line(cx - 0.68 * h, cy + 0.4 * h, cx + 0.68 * h, cy + 0.4 * h, t * 0.8, c);
+        }
+        else if(name == "search") {
+            ring(-0.15, -0.15, 0.5);
+            this->Line(cx + 0.22 * h, cy + 0.22 * h, cx + 0.75 * h, cy + 0.75 * h, t * 1.4, c);
+        }
+        else if(name == "sliders") {
+            for(int i = 0; i < 3; i++) {
+                const double y = (-0.55 + i * 0.55) * h, k = (i == 1 ? 0.3 : -0.3) * h;
+                this->Line(cx - 0.75 * h, cy + y, cx + 0.75 * h, cy + y, t, c);
+                this->Circle(cx + k, cy + y, 0.16 * h, c);
+            }
+        }
         else if(name == "lock") { poly({ { -0.6, -0.1 }, { 0.6, -0.1 }, { 0.6, 0.8 }, { -0.6, 0.8 } }, true); poly({ { -0.35, -0.1 }, { -0.35, -0.5 }, { 0, -0.8 }, { 0.35, -0.5 }, { 0.35, -0.1 } }, false); }
         else ring(0, 0, 0.6);
     }

@@ -44,6 +44,7 @@ namespace nexus {
     struct LayoutEnv {
         double topH = 60;
         double botH = 46;
+        double leftW = 0, rightW = 0;   // seitlich freigehaltener Platz (z. B. Systemleiste)
         bool crumb = false;
     };
 

@@ -304,6 +304,36 @@ const SPEC = [
   {g:"top", p:"hints.visible", l:"Tastenhinweise unten", t:"bool", d:true},
   {g:"top", p:"hints.style", l:"Hinweis-Stil", t:"enum", o:["bar","plain"], ol:["Leiste","Schwebend"], d:"bar"},
   {g:"top", p:"hints.layerLabel", l:"Ebenen-Beschriftung (Entwickler)", t:"bool", d:true},
+  {g:"dock", p:"dock.visible", l:"Systemleiste anzeigen", t:"bool", d:true},
+  {g:"dock", p:"dock.btnAlbum", l:"Knopf: Album", t:"bool", d:true},
+  {g:"dock", p:"dock.btnController", l:"Knopf: Controller", t:"bool", d:true},
+  {g:"dock", p:"dock.btnSettings", l:"Knopf: Systemeinstellungen (uLaunch)", t:"bool", d:true},
+  {g:"dock", p:"dock.btnNexus", l:"Knopf: NEXUS-Einstellungen", t:"bool", d:false},
+  {g:"dock", p:"dock.btnUser", l:"Knopf: Benutzerseite", t:"bool", d:false},
+  {g:"dock", p:"dock.btnMii", l:"Knopf: Mii-Editor", t:"bool", d:false},
+  {g:"dock", p:"dock.btnWeb", l:"Knopf: Webbrowser", t:"bool", d:false},
+  {g:"dock", p:"dock.btnHomebrew", l:"Knopf: Homebrew-Menü", t:"bool", d:false},
+  {g:"dock", p:"dock.btnSearch", l:"Knopf: Suche", t:"bool", d:false},
+  {g:"dock", p:"dock.btnPower", l:"Knopf: Standby / Ausschalten", t:"bool", d:true},
+  {g:"dock", p:"dock.position", l:"Position", t:"enum", o:["bottom", "bottomLeft", "bottomRight", "top", "left", "right"], ol:["Unten Mitte", "Unten links", "Unten rechts", "Oben", "Links (senkrecht)", "Rechts (senkrecht)"], d:"bottom"},
+  {g:"dock", p:"dock.offsetX", l:"Verschieben waagerecht", t:"num", min:-600, max:600, step:5, f:px, d:0},
+  {g:"dock", p:"dock.offsetY", l:"Verschieben senkrecht", t:"num", min:-400, max:400, step:5, f:px, d:0},
+  {g:"dock", p:"dock.reserve", l:"Platz für die Leiste freihalten (Kacheln rücken weg)", t:"bool", d:true},
+  {g:"dock", p:"dock.size", l:"Größe der Knöpfe", t:"num", min:30, max:110, step:2, f:px, d:56},
+  {g:"dock", p:"dock.gap", l:"Abstand der Knöpfe", t:"num", min:0, max:60, step:2, f:px, d:20},
+  {g:"dock", p:"dock.shape", l:"Form", t:"enum", o:["circle", "rounded", "square", "hex", "none"], ol:["Kreis (wie HOME-Menü)", "Abgerundet", "Eckig", "Sechseck", "Nur Symbol"], d:"circle"},
+  {g:"dock", p:"dock.style", l:"Stil", t:"enum", o:["filled", "glass", "outline"], ol:["Gefüllt", "Glas (durchscheinend)", "Nur Umriss"], d:"filled"},
+  {g:"dock", p:"dock.btnColor", l:"Farbe der Knöpfe", t:"color", d:"#f4f5f7"},
+  {g:"dock", p:"dock.btnOpacity", l:"Deckkraft der Knöpfe", t:"num", min:0.1, max:1, step:0.05, f:pct, d:0.95},
+  {g:"dock", p:"dock.iconColors", l:"Farbe der Symbole", t:"enum", o:["original", "accent", "custom"], ol:["Original (je Knopf eigene Farbe)", "Akzentfarbe", "Eigene Farbe"], d:"original"},
+  {g:"dock", p:"dock.iconColor", l:"Eigene Symbolfarbe", t:"color", d:"#3a3f4a"},
+  {g:"dock", p:"dock.labels", l:"Beschriftung", t:"enum", o:["focus", "always", "none"], ol:["Nur beim gewählten Knopf", "Immer", "Keine"], d:"focus"},
+  {g:"dock", p:"dock.labelColor", l:"Farbe der Beschriftung", t:"color", d:"#ffffff"},
+  {g:"dock", p:"dock.focusScale", l:"Vergrößerung bei Auswahl", t:"num", min:1, max:1.5, step:0.02, f:v=>"×"+(+v).toFixed(2), d:1.12},
+  {g:"dock", p:"dock.shadow", l:"Schatten", t:"bool", d:true},
+  {g:"dock", p:"dock.bar", l:"Leiste hinter den Knöpfen", t:"bool", d:false},
+  {g:"dock", p:"dock.barColor", l:"Farbe der Leiste", t:"color", d:"#000000"},
+  {g:"dock", p:"dock.barOpacity", l:"Deckkraft der Leiste", t:"num", min:0, max:1, step:0.05, f:pct, d:0.35},
   // Anordnung
   {g:"layout", p:"layout.mode", l:"Anordnung", t:"enum", o:MODES, ol:MODE_LABELS, d:"grid"},
   {g:"layout", p:"layout.position", l:"Position (vertikal)", t:"enum", o:["bottom","center","top"], ol:["Unten","Mitte","Oben"], d:"bottom", w:()=>!vertical()},
@@ -539,7 +569,7 @@ const SPEC = [
   {g:"lib", p:"sgdb.autoMissing", l:"Fehlende Bilder automatisch laden", t:"bool", d:false},
   {g:"lib", p:"sgdbKey", l:"", t:"str", d:"", hidden:true},
 ];
-const GROUPS = [["look","Darstellung & Schrift"],["ui","Textboxen & Schrift"],["aura","Kachel-Aura (Partikel)"],["bgfx","Hintergrund-Effekte"],["idle","Bildschirmschoner"],["launch","Startanimation"],["zoom","Zoom"],["sound","Sounds & Musik"],["auto","Automatischer Themewechsel"],["top","Kopfzeile, Symbole & Hinweise"],["layout","Anordnung der Kacheln"],["anim","Animationen"],["tiles","Kacheln (Standard)"],["hero","Fokus: Hintergrund"],["logo","Fokus: Logo"],["home","Home-Hintergrund"],["lock","Sperrbildschirm"],["profile","Profilauswahl"],["sections","Bereiche (Reihenfolge & Sichtbarkeit)"],["lib","Bibliothek & SteamGridDB"],["ra","RetroAchievements"],["sys","Themes, Backup & System"]];
+const GROUPS = [["look","Darstellung & Schrift"],["ui","Textboxen & Schrift"],["aura","Kachel-Aura (Partikel)"],["bgfx","Hintergrund-Effekte"],["idle","Bildschirmschoner"],["launch","Startanimation"],["zoom","Zoom"],["sound","Sounds & Musik"],["auto","Automatischer Themewechsel"],["top","Kopfzeile, Symbole & Hinweise"],["dock","Systemleiste (Album, Controller …)"],["layout","Anordnung der Kacheln"],["anim","Animationen"],["tiles","Kacheln (Standard)"],["hero","Fokus: Hintergrund"],["logo","Fokus: Logo"],["home","Home-Hintergrund"],["lock","Sperrbildschirm"],["profile","Profilauswahl"],["sections","Bereiche (Reihenfolge & Sichtbarkeit)"],["lib","Bibliothek & SteamGridDB"],["ra","RetroAchievements"],["sys","Themes, Backup & System"]];
 const TILE_SPEC = SPEC.filter(s=>s.g==="tiles").map(s=>({...s, p:s.p.replace("tileDefaults.","")}));
 const SECTION_IDS = Object.keys(SECTION_NAMES);
 function defaultSettings(){ const s = {}; SPEC.forEach(x=>setP(s, x.p, clone(x.d))); s.sections = SECTION_IDS.map(id=>({id, visible:id!=="almost"})); return s; }

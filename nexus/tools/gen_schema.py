@@ -19,6 +19,8 @@ def cjson(v):
 def unit(e):
     p, lab = e["path"], e["label"]
     if e["type"] != "num": return ""
+    if p in ("dock.size", "dock.gap"): return "px"
+    if p == "dock.focusScale": return "x"
     if p.endswith(("Ms", "speed", "stagger", "debounce")): return "ms"
     if e.get("max", 0) <= 1.0001 and e.get("min", 0) >= 0 and e.get("step", 1) < 1 and not p.endswith("waveFreq"): return "%"
     if p.endswith(("Spread", "tilt", "Tilt", "Angle")): return "deg"

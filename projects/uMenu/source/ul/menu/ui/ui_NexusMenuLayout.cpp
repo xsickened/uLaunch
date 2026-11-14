@@ -150,24 +150,24 @@ namespace ul::menu::ui {
 
                 std::vector<nexus::SysAction> SystemActions() override {
                     return {
-                        { "Album", []() { ShowAlbum(); }, "" },
-                        { "Controller", []() { ShowController(); }, "" },
-                        { "Benutzerseite", []() { ShowUserPage(); }, "" },
-                        { "Mii-Editor", []() { ShowMiiEdit(); }, "" },
-                        { "Webbrowser", []() { ShowWebPage(); }, "" },
+                        { "Album", []() { ShowAlbum(); }, "", "album" },
+                        { "Controller", []() { ShowController(); }, "", "controller" },
+                        { "Benutzerseite", []() { ShowUserPage(); }, "", "user" },
+                        { "Mii-Editor", []() { ShowMiiEdit(); }, "", "mii" },
+                        { "Webbrowser", []() { ShowWebPage(); }, "", "web" },
                         { "Homebrew-Menü", []() {
                             g_MenuApplication->FadeOutToNonLibraryApplet();
                             if(R_SUCCEEDED(smi::LaunchHomebrewLibraryApplet(ul::HbmenuPath, ul::HbmenuPath))) g_MenuApplication->Finalize();
                             else { g_MenuApplication->FadeIn(); g_MenuApplication->ResetFade(); }
-                        }, "" },
-                        { "Konsolen-Einstellungen (uLaunch)", []() { g_MenuApplication->LoadMenu(MenuType::Settings); }, "" },
+                        }, "", "homebrew" },
+                        { "Konsolen-Einstellungen (uLaunch)", []() { g_MenuApplication->LoadMenu(MenuType::Settings); }, "", "settings" },
                         { "Klassisches uLaunch-Menü", []() {
                             SetNexusClassicMode(true);
                             g_MenuApplication->LoadMenu(MenuType::Main);
-                        }, "NEXUS wird ausgeschaltet. Zurück im klassischen Menü: ZL gedrückt halten und ZR drücken." },
-                        { "Standby", []() { SleepSystem(); }, "" },
-                        { "Neu starten", []() { RebootSystem(); }, "Die Konsole wird neu gestartet. Ein laufendes Spiel wird beendet." },
-                        { "Ausschalten", []() { ShutdownSystem(); }, "Die Konsole wird ausgeschaltet. Ein laufendes Spiel wird beendet." }
+                        }, "NEXUS wird ausgeschaltet. Zurück im klassischen Menü: ZL gedrückt halten und ZR drücken.", "classic" },
+                        { "Standby", []() { SleepSystem(); }, "", "sleep" },
+                        { "Neu starten", []() { RebootSystem(); }, "Die Konsole wird neu gestartet. Ein laufendes Spiel wird beendet.", "reboot" },
+                        { "Ausschalten", []() { ShutdownSystem(); }, "Die Konsole wird ausgeschaltet. Ein laufendes Spiel wird beendet.", "shutdown" }
                     };
                 }
 

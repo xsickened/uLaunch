@@ -16,6 +16,7 @@ namespace nexus {
         std::string label;
         std::function<void()> act;
         std::string confirm;   // nicht leer: vorher nachfragen (Text)
+        std::string id;        // feste Kennung für die Systemleiste (album, controller, sleep, …)
     };
 
     // Schnittstelle zum Unterbau. In der Test-App (NRO) gibt es keinen Host.

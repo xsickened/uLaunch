@@ -84,16 +84,16 @@ namespace nexus {
         if(IsVertical(s)) {
             const auto mode = s.S("layout.mode");
             const auto side = mode == "arc" ? s.S("layout.arcDir") : s.S("layout.side");
-            double x0 = 60, x1 = 1220;
-            if(side == "left") { x0 = 60; x1 = 640; }
-            else if(side == "right") { x0 = 640; x1 = 1220; }
+            double x0 = 60 + env.leftW, x1 = 1220 - env.rightW;
+            if(side == "left") x1 = std::max(x0 + 200, 640.0);
+            else if(side == "right") x0 = std::min(x1 - 200, 640.0);
             return { x0, x1, env.topH + (env.crumb ? 26 : 16), ScreenH - env.botH, true, side };
         }
         const double h = s.N("layout.height") * U;
         const double tb = env.topH + (env.crumb ? 26 : 8), bb = ScreenH - env.botH;
         const auto pos = s.S("layout.position");
         const double y0 = pos == "top" ? tb : pos == "center" ? tb + (bb - tb - h) / 2 : bb - h;
-        return { 60, 1220, y0, y0 + h, false, "" };
+        return { 60 + env.leftW, 1220 - env.rightW, y0, y0 + h, false, "" };
     }
 
     void TileUnits(const Settings &s, const LItem &it, double maxH, double &w, double &h, double &ratio) {
