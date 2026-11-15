@@ -2,6 +2,15 @@
 // NEXUS HOME: Bilddekoder ohne SDL. Verkleinert schon beim Dekodieren (JPEG über die DCT-Skalierung von
 // libjpeg-turbo, PNG zeilenweise, WebP über die Skalierung von libwebp), damit auch große Fotos schnell
 // und mit wenig Speicher geladen werden. Ergebnis immer RGBA (8 Bit, nicht vormultipliziert).
+#ifndef NEXUS_HAVE_JPEG
+#define NEXUS_HAVE_JPEG 1
+#endif
+#ifndef NEXUS_HAVE_PNG
+#define NEXUS_HAVE_PNG 1
+#endif
+#ifndef NEXUS_HAVE_WEBP
+#define NEXUS_HAVE_WEBP 1
+#endif
 #include <cstddef>
 #include <cstdint>
 #include <string>

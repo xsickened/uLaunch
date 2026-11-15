@@ -6,16 +6,6 @@
 #include <cstdio>
 #include <cstring>
 
-#ifndef NEXUS_HAVE_JPEG
-#define NEXUS_HAVE_JPEG 1
-#endif
-#ifndef NEXUS_HAVE_PNG
-#define NEXUS_HAVE_PNG 1
-#endif
-#ifndef NEXUS_HAVE_WEBP
-#define NEXUS_HAVE_WEBP 1
-#endif
-
 #if NEXUS_HAVE_JPEG
 #include <jpeglib.h>
 #endif
