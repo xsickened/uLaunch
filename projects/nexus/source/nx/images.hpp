@@ -8,6 +8,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace nexus {
@@ -22,6 +23,7 @@ namespace nexus {
             // Liefert die Textur oder nullptr (dann wird das Laden angestoßen). prio: 0 = sofort, höher = später
             SDL_Texture *Get(const std::string &key, int prio = 1);
             bool Failed(const std::string &key);
+            std::string FailReason(const std::string &key);   // verständlicher Grund (leer = kein Fehler)
             void ProvideMemory(const std::string &key, std::vector<uint8_t> &&data);
             bool HasMemory(const std::string &key);
             // Im Hauptthread: fertig dekodierte Bilder als Textur hochladen
@@ -53,7 +55,8 @@ namespace nexus {
             std::map<std::string, int> pending;          // angefordert, noch nicht fertig
             std::deque<std::pair<int, std::string>> queue;
             std::vector<std::pair<std::string, SDL_Surface *>> decoded;
-            std::vector<std::string> failed;
+            std::unordered_set<std::string> failed;
+            std::unordered_map<std::string, std::string> failWhy;   // Grund, warum ein Bild nicht geladen werden konnte
             std::mutex mtx;
             std::condition_variable cv;
             Thread worker;

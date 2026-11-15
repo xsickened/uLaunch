@@ -1,6 +1,8 @@
 #include "images.hpp"
 #include "../core/store.hpp"
 #include "platform.hpp"
+#include "decode.hpp"
+#include <cstring>
 #include <SDL2/SDL_image.h>
 #include <algorithm>
 #include <cmath>
@@ -9,13 +11,6 @@
 #include <dirent.h>
 #include <set>
 #include <sys/stat.h>
-#define STB_IMAGE_STATIC
-#define STB_IMAGE_IMPLEMENTATION
-#define STBI_ONLY_PNG
-#define STBI_ONLY_JPEG
-#define STBI_ONLY_BMP
-#define STBI_ONLY_GIF
-#include "stb_image.h"
 #define STB_IMAGE_WRITE_STATIC
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
@@ -52,6 +47,7 @@ namespace nexus {
         this->used = 0;
         std::lock_guard<std::mutex> lk(this->mtx);
         this->failed.clear();
+        this->failWhy.clear();
     }
 
     void ImageCache::Invalidate(const std::string &key) {
@@ -62,18 +58,26 @@ namespace nexus {
             this->textures.erase(it);
         }
         std::lock_guard<std::mutex> lk(this->mtx);
-        this->failed.erase(std::remove(this->failed.begin(), this->failed.end(), key), this->failed.end());
+        this->failed.erase(key);
+        this->failWhy.erase(key);
     }
 
     bool ImageCache::Failed(const std::string &key) {
         std::lock_guard<std::mutex> lk(this->mtx);
-        return std::find(this->failed.begin(), this->failed.end(), key) != this->failed.end();
+        return this->failed.count(key) > 0;
     }
 
     void ImageCache::ProvideMemory(const std::string &key, std::vector<uint8_t> &&data) {
         std::lock_guard<std::mutex> lk(this->mtx);
         this->memory[key] = std::move(data);
-        this->failed.erase(std::remove(this->failed.begin(), this->failed.end(), key), this->failed.end());
+        this->failed.erase(key);
+        this->failWhy.erase(key);
+    }
+
+    std::string ImageCache::FailReason(const std::string &key) {
+        std::lock_guard<std::mutex> lk(this->mtx);
+        auto it = this->failWhy.find(key);
+        return it != this->failWhy.end() ? it->second : std::string();
     }
 
     bool ImageCache::HasMemory(const std::string &key) {
@@ -89,7 +93,7 @@ namespace nexus {
             return it->second.tex;
         }
         std::lock_guard<std::mutex> lk(this->mtx);
-        if(std::find(this->failed.begin(), this->failed.end(), key) != this->failed.end()) return nullptr;
+        if(this->failed.count(key)) return nullptr;
         this->wanted[key] = this->tick;
         auto p = this->pending.find(key);
         if(p == this->pending.end()) {
@@ -147,42 +151,65 @@ namespace nexus {
             }
             SDL_Surface *s = nullptr;
             bool cacheIt = false;
-            std::string base;
+            std::string base, why;
+            // Zwischenspeicher fürs Dekodieren: nach freiem Speicher bemessen (nie alles auf einmal)
+            const uint64_t freeMem = plat::FreeMemory();
+            const size_t memLimit = freeMem > 0 ? static_cast<size_t>(std::clamp<uint64_t>(freeMem > (40ull << 20) ? (freeMem - (40ull << 20)) / 2 : 0, 12ull << 20, 192ull << 20)) : (96u << 20);
+            auto fromDecoded = [](DecodedImage &di) -> SDL_Surface * {
+                SDL_Surface *o = SDL_CreateRGBSurfaceWithFormat(0, di.w, di.h, 32, SDL_PIXELFORMAT_RGBA32);
+                if(!o) return nullptr;
+                SDL_LockSurface(o);
+                for(int y = 0; y < di.h; y++) std::memcpy(static_cast<uint8_t *>(o->pixels) + static_cast<size_t>(y) * o->pitch, di.rgba.data() + static_cast<size_t>(y) * di.w * 4, static_cast<size_t>(di.w) * 4);
+                SDL_UnlockSurface(o);
+                std::vector<uint8_t>().swap(di.rgba);
+                return o;
+            };
             if(isMem) {
-                SDL_RWops *rw = SDL_RWFromConstMem(mem.data(), static_cast<int>(mem.size()));
-                if(rw) s = IMG_Load_RW(rw, 1);
+                DecodedImage di;
+                const DecodeStatus st = DecodeImage(mem.data(), mem.size(), this->maxEdge, memLimit, di);
+                if(st == DecodeStatus::Ok) s = fromDecoded(di);
+                else if(st == DecodeStatus::NotHandled) {
+                    SDL_RWops *rw = SDL_RWFromConstMem(mem.data(), static_cast<int>(mem.size()));
+                    if(rw) s = IMG_Load_RW(rw, 1);
+                }
+                if(!s) why = di.error.empty() ? "Format nicht lesbar" : di.error;
             }
             else if(key.rfind("mem:", 0) != 0) {
                 base = this->DiskBase(key);
                 if(!base.empty()) {
                     for(const char *ext: { ".jpg", ".png" }) {
                         struct stat st;
-                        if(stat((base + ext).c_str(), &st) == 0 && st.st_size > 0) { s = IMG_Load((base + ext).c_str()); break; }
-                    }
-                }
-                // Abmessungen vor dem Dekodieren prüfen: ein riesiges Bild darf den Speicher nicht sprengen
-                bool tooBig = false;
-                if(!s) {
-                    int iw = 0, ih = 0, ic = 0;
-                    if(stbi_info(key.c_str(), &iw, &ih, &ic) && iw > 0 && ih > 0) {
-                        const uint64_t px = static_cast<uint64_t>(iw) * ih;
-                        const uint64_t need = px * 8 + 16ull * 1024 * 1024;   // Dekodieren + RGBA-Umwandlung + Reserve
-                        const uint64_t freeMem = plat::FreeMemory();
-                        if(px > 40ull * 1000 * 1000 || (freeMem > 0 && need + 48ull * 1024 * 1024 > freeMem)) {
-                            tooBig = true;
-                            Log("Bild zu groß für den freien Speicher (%dx%d, frei %lu MB): %s", iw, ih, static_cast<unsigned long>(freeMem >> 20), key.c_str());
+                        if(stat((base + ext).c_str(), &st) == 0 && st.st_size > 0) {
+                            DecodedImage di;
+                            if(DecodeImageFile(base + ext, 0, memLimit, di) == DecodeStatus::Ok) s = fromDecoded(di);
+                            else std::remove((base + ext).c_str());   // kaputte Cache-Datei: neu erzeugen
+                            break;
                         }
                     }
                 }
-                if(!s && !tooBig) {
-                    s = IMG_Load(key.c_str());
-                    if(s && static_cast<long long>(s->w) * s->h > 2500000) Log("Großes Bild %dx%d: %s", s->w, s->h, key.c_str());
-                    if(!s) Log("Bild nicht ladbar: %s (%s)", key.c_str(), IMG_GetError());
-                    // PNG/WebP und große Bilder lohnen den Cache (Dekodieren/Verkleinern ist langsam)
-                    std::string low = key;
-                    for(auto &ch: low) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-                    const bool slowFmt = low.size() > 4 && (low.compare(low.size() - 4, 4, ".png") == 0 || low.compare(low.size() - 5, 5, ".webp") == 0);
-                    cacheIt = s && !base.empty() && (slowFmt || s->w > this->maxEdge || s->h > this->maxEdge);
+                if(!s) {
+                    // Format am Inhalt erkennen und schon beim Dekodieren verkleinern (JPEG 1/2..1/8, PNG zeilenweise, WebP skaliert)
+                    DecodedImage di;
+                    const DecodeStatus st = DecodeImageFile(key, this->maxEdge, memLimit, di);
+                    if(st == DecodeStatus::Ok) {
+                        const bool slowFmt = di.format != ImgFormat::Jpeg;
+                        const bool shrunk = di.srcW > this->maxEdge || di.srcH > this->maxEdge;
+                        if(static_cast<long long>(di.srcW) * di.srcH > 2500000) Log("Großes Bild %dx%d (%s) -> %dx%d: %s", di.srcW, di.srcH, FormatName(di.format), di.w, di.h, key.c_str());
+                        s = fromDecoded(di);
+                        // PNG/WebP/GIF und verkleinerte Bilder lohnen den Cache
+                        cacheIt = s && !base.empty() && (slowFmt || shrunk);
+                    }
+                    else if(st == DecodeStatus::NotHandled) {
+                        // seltene Formate (QOI, SVG, ICO, animiertes WebP …): SDL_image, nur bei vernünftiger Dateigröße
+                        struct stat fst;
+                        if(stat(key.c_str(), &fst) == 0 && fst.st_size > 0 && static_cast<size_t>(fst.st_size) < memLimit / 4) {
+                            s = IMG_Load(key.c_str());
+                            cacheIt = s && !base.empty();
+                        }
+                        if(!s) why = "Format nicht unterstützt";
+                    }
+                    else why = di.error;
+                    if(!s) Log("Bild nicht ladbar: %s (%s)", key.c_str(), why.c_str());
                 }
             }
             if(s && s->format && s->format->format != SDL_PIXELFORMAT_RGBA32) {
@@ -287,8 +314,9 @@ namespace nexus {
                 this->decodedBytes += static_cast<size_t>(s->h) * s->pitch;
             }
             else {
-                this->failed.push_back(key);
+                this->failed.insert(key);
                 this->pending.erase(key);
+                if(this->failWhy.size() < 500) this->failWhy[key] = why.empty() ? "nicht lesbar" : why;
             }
         }
     }
@@ -317,7 +345,8 @@ namespace nexus {
             SDL_FreeSurface(s);
             if(!t) {
                 std::lock_guard<std::mutex> lk(this->mtx);
-                this->failed.push_back(k);
+                this->failed.insert(k);
+                this->failWhy[k] = "Textur konnte nicht angelegt werden";
                 continue;
             }
             SDL_SetTextureBlendMode(t, SDL_BLENDMODE_BLEND);

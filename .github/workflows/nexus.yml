@@ -32,6 +32,12 @@ jobs:
         g++ -std=gnu++20 -O1 -Ilibs/json/single_include -Ilibs/zip/src -Iprojects/nexus/source/core nexus/tests/core_test.cpp projects/nexus/source/core/*.cpp /tmp/zip.o -o /tmp/core_test
         /tmp/core_test
 
+    - name: Bild-Tests (JPEG/PNG/WebP/GIF/BMP/TGA, Verkleinern, EXIF, CMYK, Fehlerfälle)
+      run: |
+        sudo -n apt-get install -y libjpeg-dev libpng-dev libwebp-dev
+        g++ -std=gnu++20 -O1 -Ilibs/stb -Iprojects/nexus/source/nx nexus/tests/decode_test.cpp projects/nexus/source/nx/decode.cpp -ljpeg -lpng -lwebp -o /tmp/decode_test
+        /tmp/decode_test nexus/tests/images
+
     - name: libnx master (wie uLaunch)
       run: |
         git clone --depth 1 https://github.com/switchbrew/libnx /tmp/libnx

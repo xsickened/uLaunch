@@ -2078,7 +2078,13 @@ namespace nexus {
                     const bool exists = rw.thumb.rfind("mem:", 0) == 0 || FileExists(rw.thumb);
                     SDL_Texture *t = exists ? this->img->Get(rw.thumb, 0) : nullptr;
                     if(t) this->g->Image(t, px + 8, py + 8, pw - 16, ph - 16, 1.0, false);
-                    else this->g->Text(exists && this->img->Failed(rw.thumb) ? "Bild nicht lesbar" : "Vorschau wird geladen …", 15, px + pw / 2, py + ph / 2 - 10, mc, 1);
+                    else if(exists && this->img->Failed(rw.thumb)) {
+                        // verständlicher Grund (z. B. HEIC vom iPhone)
+                        const std::string why = this->img->FailReason(rw.thumb);
+                        this->g->Text("Bild nicht lesbar", 16, px + pw / 2, py + ph / 2 - 22, mc, 1, 0, true);
+                        if(!why.empty()) this->g->Text(why, 13, px + pw / 2, py + ph / 2 + 2, WithA(mc, 0.8), 1, static_cast<int>(pw - 30));
+                    }
+                    else this->g->Text("Vorschau wird geladen …", 15, px + pw / 2, py + ph / 2 - 10, mc, 1);
                 }
                 else this->g->Text("Keine Vorschau", 15, px + pw / 2, py + ph / 2 - 10, mc, 1);
             }

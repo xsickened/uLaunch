@@ -17,7 +17,7 @@ namespace nexus {
         bool IsImageFile(const std::string &n) {
             std::string l = n;
             for(auto &c: l) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            for(const char *e: { ".jpg", ".jpeg", ".png", ".webp", ".gif" }) {
+            for(const char *e: { ".jpg", ".jpeg", ".jfif", ".png", ".webp", ".gif", ".bmp", ".tga", ".psd", ".qoi", ".heic", ".heif", ".avif", ".tif", ".tiff" }) {
                 const std::string x(e);
                 if(l.size() > x.size() && l.compare(l.size() - x.size(), x.size(), x) == 0) return true;
             }
