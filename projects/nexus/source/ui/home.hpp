@@ -230,6 +230,18 @@ namespace nexus {
             SDL_FPoint caseQuad[4] {};
             double caseQuadTime = -1;
             void DrawHighlight(const Xf &fx, double rad, bool hex);
+            // Ansichtsmodus: 3D-Hülle groß ansehen und frei drehen (auch die Rückseite)
+            struct Inspect {
+                bool on = false, closing = false, drag = false, flipping = false;
+                std::string id;
+                double t = 0, yaw = 25, pitch = 0, vy = 0, vp = 0, zoom = 1, flipTo = 0, flipV = 0, idle = 0;
+                float lx = 0, ly = 0;
+                Xf from;
+            } insp;
+            uint32_t InspectBit() const;
+            void OpenInspect();
+            void InspectInput(const plat::Input &in, double dt);
+            void DrawInspect(double dt);
             // Systemleiste (Album, Controller, Einstellungen, Ein/Aus …) wie im HOME-Menü
             struct DockBtn { std::string id, label, icon; Col tint; double x = 0, y = 0, r = 0, anim = 0; };
             std::vector<DockBtn> dockBtns;

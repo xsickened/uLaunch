@@ -461,6 +461,7 @@ const SPEC = [
   // Zoom
   {g:"zoom", p:"zoom.button", l:"Taste für Zoom", t:"enum", o:["rstick","lstick","zr","zl","y","minus","none"], ol:["Rechten Stick drücken","Linken Stick drücken","ZR (statt Suche)","ZL (statt Schnellstart)","Y (statt Favorit)","− (statt Sperren)","Keine"], d:"rstick"},
   {g:"zoom", p:"zoom.mode", l:"Verhalten", t:"enum", o:["cycle","hold"], ol:["Stufen durchschalten","Halten = näher"], d:"cycle"},
+  {g:"zoom", p:"zoom.inspectButton", l:"Taste: 3D-Hülle ansehen und drehen", t:"enum", o:["lstick", "rstick", "zr", "zl", "none"], ol:["Linken Stick drücken", "Rechten Stick drücken", "ZR", "ZL", "Keine (nur über Kachel-Optionen)"], d:"lstick"},
   {g:"zoom", p:"zoom.maxScale", l:"Größte Stufe", t:"num", min:1.1, max:2.5, step:.1, f:pct, d:1.6},
   {g:"zoom", p:"zoom.minScale", l:"Kleinste Stufe", t:"num", min:.5, max:1, step:.1, f:pct, d:1},
   {g:"zoom", p:"zoom.steps", l:"Stufen", t:"num", min:1, max:5, step:1, f:v=>String(v), d:2, w:()=>ST().zoom.mode==="cycle"},
@@ -553,7 +554,9 @@ const SPEC = [
   {g:"ra", p:"ra.notify", l:"Neue Erfolge melden", t:"bool", d:true},
   {g:"ra", p:"ra.almostPct", l:"„Fast gemeistert“ ab", t:"num", min:50, max:95, step:5, f:v=>v+" %", d:80},
   {g:"ra", p:"ra.lockRecent", l:"Letzter Erfolg auf dem Sperrbildschirm", t:"bool", d:true},
-  {g:"ra", p:"ra.mapping", l:"Spiele zuordnen", t:"enum", o:["auto","manual"], ol:["Automatisch (Titelvergleich)","Nur manuell (Spiel-ID)"], d:"auto"},
+  {g:"ra", p:"ra.mapping", l:"Spiele zuordnen", t:"enum", o:["auto","manual"], ol:["Automatisch (ROM-Prüfwert, sonst Titel)","Nur manuell (Spiel-ID)"], d:"auto"},
+  {g:"ra", p:"ra.romHash", l:"Spiele über die ROM-Datei erkennen (wie tico/RetroArch)", t:"bool", d:true},
+  {g:"ra", p:"ra.romDirs", l:"ROM-Ordner (mit ; getrennt)", t:"str", d:"sdmc:/tico/roms;sdmc:/roms"},
   {g:"ra", p:"ra.refreshMin", l:"Aktualisieren alle", t:"num", min:5, max:120, step:5, f:v=>v+" min", d:15},
   {g:"ra", p:"ra.user", l:"", t:"str", d:"", hidden:true},
   {g:"ra", p:"ra.key", l:"", t:"str", d:"", hidden:true},

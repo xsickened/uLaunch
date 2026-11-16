@@ -3280,6 +3280,32 @@
   },
   {
    "group": "zoom",
+   "path": "zoom.inspectButton",
+   "label": "Taste: 3D-Hülle ansehen und drehen",
+   "type": "enum",
+   "options": [
+    "lstick",
+    "rstick",
+    "zr",
+    "zl",
+    "none"
+   ],
+   "optionLabels": [
+    "Linken Stick drücken",
+    "Rechten Stick drücken",
+    "ZR",
+    "ZL",
+    "Keine (nur über Kachel-Optionen)"
+   ],
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "lstick",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "zoom",
    "path": "zoom.maxScale",
    "label": "Größte Stufe",
    "type": "num",
@@ -4685,13 +4711,41 @@
     "manual"
    ],
    "optionLabels": [
-    "Automatisch (Titelvergleich)",
+    "Automatisch (ROM-Prüfwert, sonst Titel)",
     "Nur manuell (Spiel-ID)"
    ],
    "min": null,
    "max": null,
    "step": null,
    "default": "auto",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "ra",
+   "path": "ra.romHash",
+   "label": "Spiele über die ROM-Datei erkennen (wie tico/RetroArch)",
+   "type": "bool",
+   "options": null,
+   "optionLabels": null,
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": true,
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "ra",
+   "path": "ra.romDirs",
+   "label": "ROM-Ordner (mit ; getrennt)",
+   "type": "str",
+   "options": null,
+   "optionLabels": null,
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "sdmc:/tico/roms;sdmc:/roms",
    "conditional": false,
    "hidden": false
   },

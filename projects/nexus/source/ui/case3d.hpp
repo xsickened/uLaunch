@@ -19,6 +19,9 @@ namespace nexus {
         double tilt = 0;            // Neigung vor/zurück (Grad)
         double camUp = 240;         // Blickhöhe der Kamera über der Bildmitte (px)
         double persp = 1;           // Stärke der Perspektive
+        // Ansichtsmodus
+        bool freeRot = false;           // ohne Begrenzung drehen (auch Rückseite)
+        SDL_Texture *backTex = nullptr; // Bild für die Rückseite (sonst das Cover)
     };
 
     // Zeichnet die Hülle in die Kachel xf; xf wird danach auf die sichtbare Vorderseite gesetzt

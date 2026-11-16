@@ -111,9 +111,10 @@ namespace nexus {
         }
         const double D = H * m.depth * std::clamp(in.depth / 12.0, 0.0, 2.5);
         // Drehung: Anordnung + Schwung + (gewählte Hülle) leichtes Wiegen in der Hand
-        double yawDeg = std::clamp(in.angle + in.lean, -75.0, 75.0);
-        double pitchDeg = std::clamp(in.tilt, -30.0, 30.0);
-        if(focused && live) {
+        // Ansichtsmodus: frei drehbar (auch die Rückseite), sonst begrenzt
+        double yawDeg = in.freeRot ? in.angle + in.lean : std::clamp(in.angle + in.lean, -75.0, 75.0);
+        double pitchDeg = std::clamp(in.tilt, in.freeRot ? -80.0 : -30.0, in.freeRot ? 80.0 : 30.0);
+        if(focused && live && !in.freeRot) {
             yawDeg += 2.2 * std::sin(in.time * 1.25);
             pitchDeg += 1.4 * std::sin(in.time * 0.9 + 1.0);
         }
@@ -213,7 +214,90 @@ namespace nexus {
         };
         const Col shellDark = Lit(m.shell, 0.7, 1);
         // Rückseite, oben, unten, offene Seite (rechts)
-        flat({ 0, 0, 1 }, { hw, -hh, hd }, { -hw, -hh, hd }, { -hw, hh, hd }, { hw, hh, hd }, shellDark);
+        // ---------------- Rückseite (bedruckte Einlage: Kopfleiste, Szenenbild, Titel, Text, Strichcode)
+        if(visible({ 0, 0, 1 }, { 0, 0, hd })) {
+            const double kBack = shade({ 0, 0, 1 }), zb = hd + 0.1, R = W * m.corner;
+            // von hinten gesehen liegt +x links: Bildkoordinate spiegeln
+            auto bu = [&](double u) { return mir < 0 ? u : 1 - u; };
+            frontRect(nullptr, -hw, -hh, hw, hh, R, hd, nullptr, [&](double, double v) { return Lit(m.shell, kBack * (1.0 - 0.1 * v), opA); }, 2, 6);
+            if(m.cart) {
+                frontRect(nullptr, -hw + W * 0.12, -hh + H * 0.1, hw - W * 0.12, hh - H * 0.3, W * 0.04, zb, nullptr, [&](double, double) { return Lit(m.shell, kBack * 0.8, opA); }, 2, 2);
+            }
+            else {
+                const double ix0 = -hw + W * m.lip, ix1 = hw - W * m.lip, iy0 = -hh + W * m.lip, iy1 = hh - W * m.lip;
+                const Col bg = m.metal ? m.shell : m.spineBody;
+                frontRect(nullptr, ix0, iy0, ix1, iy1, m.metal ? R : 0, zb, nullptr, [&](double, double) { return Lit(bg, kBack, opA); }, 2, 2);
+                double y = iy0;
+                if(m.band.a) {
+                    const double bh = (iy1 - iy0) * m.bandH;
+                    frontRect(nullptr, ix0, iy0, ix1, iy0 + bh, 0, zb + 0.05, nullptr, [&](double, double) { return Lit(m.band, kBack, opA); }, 1, 1);
+                    y += bh;
+                }
+                const double pad = W * 0.07;
+                // Szenenbild
+                SDL_Texture *bt = in.backTex ? in.backTex : tex;
+                int bw = 0, bh = 0;
+                SDL_QueryTexture(bt, nullptr, nullptr, &bw, &bh);
+                const double imgY0 = y + H * 0.04, imgY1 = imgY0 + (iy1 - imgY0) * 0.48;
+                if(bw > 0 && bh > 0) {
+                    double sx, sy, sw, sh;
+                    CoverSrc(bw, bh, (ix1 - ix0 - 2 * pad) / std::max(1.0, imgY1 - imgY0), 50, 40, 1, sx, sy, sw, sh);
+                    frontRect(bt, ix0 + pad, imgY0, ix1 - pad, imgY1, W * 0.015, zb + 0.05,
+                              [&](double u, double v) { return SDL_FPoint{ static_cast<float>((sx + bu(u) * sw) / bw), static_cast<float>((sy + v * sh) / bh) }; },
+                              [&](double, double) { return Lit(Col{ 255, 255, 255, 255 }, std::min(1.0, 0.3 + kBack), opA); }, 6, 6);
+                }
+                // Titel
+                double ty = imgY1 + H * 0.035;
+                if(!title.empty()) {
+                    int tw2 = 0, th2 = 0;
+                    SDL_Texture *tt = gfx.TextTex(title, 28, Col{ 255, 255, 255, 255 }, 0, Col{}, tw2, th2, true);
+                    if(tt && tw2 > 0 && th2 > 0) {
+                        const double h = H * 0.045, w = std::min(h * tw2 / th2, ix1 - ix0 - 2 * pad), uMax = std::min(1.0, w / (h * tw2 / th2));
+                        const double x0 = -w / 2;
+                        frontRect(tt, x0, ty, x0 + w, ty + h, 0, zb + 0.08, [&](double u, double v) { return SDL_FPoint{ static_cast<float>(bu(u) * uMax), static_cast<float>(v) }; },
+                                  [&](double, double) { return Lit(m.spineText, 1, opA); }, 4, 1);
+                        SDL_SetTextureColorMod(tt, 255, 255, 255);
+                    }
+                    ty += H * 0.07;
+                }
+                // Beschreibung (angedeutete Textzeilen)
+                const double lw[] = { 0.92, 0.86, 0.95, 0.7, 0.88, 0.6 };
+                for(int k = 0; k < 6 && ty < iy1 - H * 0.16; k++, ty += H * 0.022) {
+                    const double w = (ix1 - ix0 - 2 * pad) * lw[k];
+                    const double x0 = ix0 + pad, x1 = x0 + w;
+                    // links bündig (von hinten gesehen): Lage spiegeln
+                    const double a0 = mir < 0 ? x0 : -x1, a1 = mir < 0 ? x1 : -x0;
+                    frontRect(nullptr, a0, ty, a1, ty + std::max(0.6, H * 0.006), 0, zb + 0.08, nullptr, [&](double, double) { return WithA(Lit(m.spineText, 1, 1), opA * 0.45); }, 1, 1);
+                }
+                // unten: Altersfreigabe-Felder und Strichcode
+                const double by = iy1 - H * 0.075, bs = H * 0.05;
+                for(int k = 0; k < 2; k++) {
+                    const double x0 = ix0 + pad + k * (bs + W * 0.02);
+                    const double a0 = mir < 0 ? x0 : -(x0 + bs), a1 = mir < 0 ? x0 + bs : -x0;
+                    frontRect(nullptr, a0, by, a1, by + bs, bs * 0.15, zb + 0.08, nullptr, [&](double, double) { return Lit(Col{ 230, 230, 230, 255 }, kBack, opA); }, 1, 1);
+                }
+                const double cw = W * 0.24, cx1 = ix1 - pad, cx0 = cx1 - cw;
+                const double c0 = mir < 0 ? cx0 : -cx1, c1 = mir < 0 ? cx1 : -cx0;
+                frontRect(nullptr, c0, by, c1, by + bs, 0, zb + 0.08, nullptr, [&](double, double) { return Lit(Col{ 250, 250, 250, 255 }, kBack, opA); }, 1, 1);
+                const int bars[] = { 2, 1, 1, 3, 1, 2, 1, 1, 2, 3, 1, 1, 2, 1, 3, 1, 2, 1, 1, 2 };
+                double bx = c0 + cw * 0.06;
+                const double unit = cw * 0.88 / 52;
+                for(int k = 0; k < 20; k++) {
+                    if(k % 2 == 0) frontRect(nullptr, bx, by + bs * 0.12, bx + bars[k] * unit, by + bs * 0.8, 0, zb + 0.1, nullptr, [&](double, double) { return Col{ 20, 20, 20, static_cast<uint8_t>(255 * opA) }; }, 1, 1);
+                    bx += bars[k] * unit + unit;
+                }
+            }
+            // Glanz der Folie auch hinten
+            if(in.shine) {
+                const double c = 0.15 + 0.9 * std::sin(-yawDeg * kPi / 180.0);
+                frontRect(nullptr, -hw, -hh, hw, hh, R, zb + 0.2, nullptr, [&](double u, double v) {
+                    const double d = bu(u) + 0.45 * v - c;
+                    const double a = 0.28 * std::exp(-d * d / 0.008) + 0.06 * std::exp(-d * d / 0.06);
+                    return Col{ 255, 255, 255, static_cast<uint8_t>(std::clamp(a * m.gloss * opA, 0.0, 1.0) * 255) };
+                }, glU, glV);
+            }
+        }
+        (void)shellDark;
         flat({ 0, -1, 0 }, { -hw, -hh, zf }, { hw, -hh, zf }, { hw, -hh, hd }, { -hw, -hh, hd }, m.clear ? Col{ 30, 30, 34, 255 } : m.shell);
         flat({ 0, 1, 0 }, { -hw, hh, hd }, { hw, hh, hd }, { hw, hh, zf }, { -hw, hh, zf }, m.clear ? Col{ 30, 30, 34, 255 } : shellDark);
         if(visible({ 1, 0, 0 }, { hw, 0, 0 })) {

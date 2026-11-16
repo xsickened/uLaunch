@@ -1,4 +1,5 @@
 #include "online.hpp"
+#include "../core/romhash.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <dirent.h>
@@ -10,6 +11,7 @@ namespace nexus {
 
         constexpr char SgdbBase[] = "https://www.steamgriddb.com/api/v2";
         constexpr char RaBase[] = "https://retroachievements.org/API/";
+        constexpr char RaConnect[] = "https://retroachievements.org/dorequest.php";
         constexpr char RaCacheFile[] = "sdmc:/nexus/cache/ra.json";
         constexpr char ThumbDir[] = "sdmc:/nexus/cache/sgdb";
         constexpr char RaIndexDir[] = "sdmc:/nexus/cache/ra";
@@ -46,6 +48,8 @@ namespace nexus {
     }
 
     void Online::Shutdown() {
+        if(this->roms) this->roms->Stop();
+        if(this->romCacheDirty) this->RomSaveCache();
         this->net.Stop();
     }
 
@@ -70,6 +74,7 @@ namespace nexus {
             if(cb) cb(r);
         }
         if(this->raIndexStep) { this->raIndexStep = false; this->RaIndexNext(); }
+        this->RomTick();
         // RetroAchievements regelmäßig aktualisieren
         if(this->RaReady() && !this->ra.loading) {
             const std::time_t now = std::time(nullptr);
@@ -317,6 +322,152 @@ namespace nexus {
         }, 16 * 1024 * 1024);
     }
 
+    bool Online::RomActive() const {
+        return this->d->settings.B("ra.enabled") && this->d->settings.B("ra.romHash") && this->d->settings.S("ra.mapping") == "auto";
+    }
+
+    std::string Online::RaHow(const std::string &tid, const std::string &name) {
+        if(this->d->library.RaGameId(tid) > 0) return "Fest zugeordnet (Spiel-ID)";
+        if(this->RomActive()) {
+            auto r = this->raRom.find(tid);
+            if(r != this->raRom.end() && r->second.gid > 0) {
+                const size_t sl = r->second.file.find_last_of('/');
+                return "Erkannt über die ROM-Datei: " + (sl == std::string::npos ? r->second.file : r->second.file.substr(sl + 1));
+            }
+            if(r != this->raRom.end() && r->second.gid < 0) return "ROM-Datei wird geprüft …";
+        }
+        if(this->d->settings.S("ra.mapping") == "auto" && MatchRaGame(name, this->ra.games) > 0) return "Erkannt über den Titel";
+        return "Nicht erkannt";
+    }
+
+    void Online::RaRescanRoms() {
+        if(this->roms) this->roms->Stop();
+        this->roms.reset();
+        this->romIndexed = false;
+        this->romByNorm.clear();
+        this->romQueued.clear();
+        // nicht erkannte Prüfwerte neu fragen (vielleicht inzwischen bei RA eingetragen)
+        for(auto it = this->md5Gid.begin(); it != this->md5Gid.end();) {
+            if(it->second <= 0) { this->md5Asked.erase(it->first); it = this->md5Gid.erase(it); }
+            else ++it;
+        }
+        this->raRom.clear();
+        this->romWant.clear();
+        this->raMap.clear();
+        this->romCacheDirty = true;
+    }
+
+    void Online::RomLoadCache() {
+        this->romCacheLoaded = true;
+        std::string s;
+        if(!ReadFile(std::string(RaIndexDir) + "/romhash.json", s, 8 * 1024 * 1024)) return;
+        const json j = json::parse(s, nullptr, false);
+        if(!j.is_object()) return;
+        if(const json *f = JGet(j, "files"); f && f->is_object())
+            for(auto it = f->begin(); it != f->end() && this->romMd5.size() < 40000; ++it) if(it.value().is_string()) this->romMd5[it.key()] = it.value().get<std::string>();
+        if(const json *g = JGet(j, "games"); g && g->is_object())
+            for(auto it = g->begin(); it != g->end() && this->md5Gid.size() < 40000; ++it)
+                if(it.value().is_number_integer()) { this->md5Gid[it.key()] = it.value().get<long long>(); this->md5Asked.insert(it.key()); }
+    }
+
+    void Online::RomSaveCache() {
+        this->romCacheDirty = false;
+        json j = json::object(), f = json::object(), g = json::object();
+        for(const auto &[k, v]: this->romMd5) f[k] = v;
+        for(const auto &[k, v]: this->md5Gid) g[k] = v;
+        j["files"] = f;
+        j["games"] = g;
+        EnsureDir(CacheDir);
+        EnsureDir(RaIndexDir);
+        WriteFileAtomic(std::string(RaIndexDir) + "/romhash.json", SafeDump(j));
+    }
+
+    void Online::RomTick() {
+        if(!this->RomActive()) return;
+        if(!this->romCacheLoaded) this->RomLoadCache();
+        if(this->romWant.empty() && !(this->roms && this->roms->Started())) return;
+        if(!this->roms) this->roms = std::make_unique<RomScanner>();
+        if(!this->roms->Started()) {
+            std::vector<std::string> dirs;
+            std::string cur;
+            for(char c: this->d->settings.S("ra.romDirs") + ";") {
+                if(c == ';') {
+                    while(!cur.empty() && (cur.back() == ' ' || cur.back() == '/')) cur.pop_back();
+                    if(!cur.empty()) dirs.push_back(cur);
+                    cur.clear();
+                }
+                else if(!(cur.empty() && c == ' ')) cur += c;
+            }
+            this->roms->Start(dirs);
+        }
+        // fertige Prüfwerte übernehmen
+        std::string key, md5;
+        while(this->roms->TakeResult(key, md5)) {
+            this->romMd5[key] = md5;
+            this->romCacheDirty = true;
+        }
+        if(!this->roms->Ready()) return;
+        const auto &list = this->roms->Roms();
+        if(!this->romIndexed) {
+            for(size_t i = 0; i < list.size(); i++) this->romByNorm.emplace(list[i].norm, i);
+            this->romIndexed = true;
+        }
+        int budget = 8;   // pro Frame nur wenige Titel prüfen
+        for(auto it = this->romWant.begin(); it != this->romWant.end() && budget > 0; budget--) {
+            const std::string tid = it->first, n = NormalizeTitle(it->second);
+            std::vector<size_t> cand;
+            auto rng = this->romByNorm.equal_range(n);
+            for(auto c = rng.first; c != rng.second; ++c) cand.push_back(c->second);
+            if(cand.empty() && n.size() >= 6) {
+                // eindeutiger Präfix: „Pokemon Emerald“ <-> „Pokemon Emerald Version“
+                for(size_t i = 0; i < list.size() && cand.size() < 3; i++) {
+                    const auto &t = list[i].norm;
+                    if(t.size() >= 6 && (t.rfind(n, 0) == 0 || n.rfind(t, 0) == 0)) cand.push_back(i);
+                }
+                if(cand.size() > 1) cand.clear();
+            }
+            bool undecided = false;
+            RomMatch best;
+            best.gid = 0;
+            for(const size_t ci: cand) {
+                if(ci >= list.size()) continue;
+                const auto &rom = list[ci];
+                const std::string k = RomScanner::Key(rom);
+                auto m = this->romMd5.find(k);
+                if(m == this->romMd5.end()) {
+                    undecided = true;
+                    if(this->romQueued.insert(k).second) this->roms->Hash(rom);
+                    continue;
+                }
+                if(m->second.empty()) continue;   // System nicht über den Inhalt prüfbar (z. B. PS1)
+                auto g = this->md5Gid.find(m->second);
+                if(g == this->md5Gid.end()) {
+                    undecided = true;
+                    if(this->md5Asked.insert(m->second).second) {
+                        const std::string h = m->second;
+                        this->Request(std::string(RaConnect) + "?r=gameid&m=" + h, {}, "RA ROM-Prüfwert", "", [this, h](const NetResult &r) {
+                            if(!r.ok) { this->md5Asked.erase(h); return; }   // später erneut
+                            const long long gid = ParseRaGameIdResponse(r.body);
+                            this->md5Gid[h] = gid;
+                            this->romCacheDirty = true;
+                            if(gid > 0) this->raMap.clear();
+                        }, 64 * 1024);
+                    }
+                    continue;
+                }
+                if(g->second > 0 && best.gid <= 0) { best.gid = g->second; best.file = rom.path; }
+            }
+            if(best.gid > 0 || !undecided) {
+                this->raRom[tid] = best;   // gid 0 = keine passende ROM -> Titelvergleich
+                if(best.gid > 0) Log("RA: %s erkannt über %s (Spiel %lld)", it->second.c_str(), best.file.c_str(), best.gid);
+                it = this->romWant.erase(it);
+            }
+            else ++it;
+        }
+        const std::time_t now = std::time(nullptr);
+        if(this->romCacheDirty && now - this->romSaveAt > 10) { this->romSaveAt = now; this->RomSaveCache(); }
+    }
+
     long long Online::RaPoints() const {
         const auto type = this->d->settings.S("ra.pointsType");
         if(type == "softcore") return this->ra.profile.softcore;
@@ -331,6 +482,13 @@ namespace nexus {
     const RaGame *Online::RaGameFor(const std::string &tid, const std::string &name) {
         if(!this->d->settings.B("ra.enabled")) return nullptr;
         long long gid = this->d->library.RaGameId(tid);
+        // 1. wie tico/RetroArch: Prüfwert der passenden ROM-Datei
+        if(gid <= 0 && this->RomActive()) {
+            auto r = this->raRom.find(tid);
+            if(r == this->raRom.end()) { this->romWant[tid] = name; this->raRom[tid] = RomMatch{}; }
+            else if(r->second.gid > 0) gid = r->second.gid;
+        }
+        // 2. Titelvergleich mit den gespielten Spielen
         if(gid <= 0 && this->d->settings.S("ra.mapping") == "auto") {
             auto it = this->raMap.find(tid);
             if(it == this->raMap.end()) it = this->raMap.emplace(tid, MatchRaGame(name, this->ra.games)).first;

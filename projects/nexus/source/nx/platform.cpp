@@ -94,6 +94,8 @@ namespace nexus::plat {
         }
         // Touch: Tippen = Loslassen ohne nennenswerte Bewegung
         in.tap = false;
+        in.touching = touching;
+        in.touchX = tx; in.touchY = ty;
         if(touching) {
             const float x = tx, y = ty;
             if(!g_Touching) { g_TouchStartX = x; g_TouchStartY = y; }

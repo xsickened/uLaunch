@@ -2,6 +2,8 @@
 #include "../core/online_parse.hpp"
 #include "../core/store.hpp"
 #include "../nx/net.hpp"
+#include "../nx/romscan.hpp"
+#include <memory>
 #include <ctime>
 #include <deque>
 #include <functional>
@@ -63,6 +65,10 @@ namespace nexus {
             std::vector<RaIndexEntry> raIndexList;
             std::map<int, std::string> raConsoleNames;
             void RaEnsureIndex(bool refresh = false);
+            // Wie wurde das Spiel erkannt? (für die Anzeige)
+            std::string RaHow(const std::string &tid, const std::string &name);
+            // ROM-Ordner neu durchsuchen und alle automatischen Zuordnungen neu prüfen
+            void RaRescanRoms();
 
         private:
             Net net;
@@ -86,6 +92,21 @@ namespace nexus {
             std::vector<std::string> SgdbHeaders() const;
             std::string RaUrl(const std::string &endpoint, const std::string &extra) const;
             void RaFinishPart();
+            // ---------------- Erkennung über den ROM-Prüfwert (wie tico/RetroArch)
+            std::unique_ptr<RomScanner> roms;
+            std::unordered_map<std::string, std::string> romMd5;   // Pfad|Größe|Zeit -> MD5 ("" = nicht prüfbar)
+            std::unordered_map<std::string, long long> md5Gid;     // MD5 -> RA-Spiel (0 = unbekannt)
+            std::set<std::string> md5Asked, romQueued;
+            struct RomMatch { long long gid = -1; std::string file; };   // -1 = wird geprüft
+            std::unordered_map<std::string, RomMatch> raRom;       // Titel-ID -> Ergebnis
+            std::unordered_map<std::string, std::string> romWant;  // Titel-ID -> Name (noch zu prüfen)
+            std::unordered_multimap<std::string, size_t> romByNorm;
+            bool romCacheLoaded = false, romCacheDirty = false, romIndexed = false;
+            std::time_t romSaveAt = 0;
+            bool RomActive() const;
+            void RomTick();
+            void RomLoadCache();
+            void RomSaveCache();
             std::vector<RaConsole> raIndexTodo;
             bool raIndexStep = false, raIndexRefresh = false;
             void RaIndexNext();

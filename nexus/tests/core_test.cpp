@@ -3,6 +3,7 @@
 #include "settings.hpp"
 #include "accent.hpp"
 #include "online_parse.hpp"
+#include "romhash.hpp"
 #include "particles.hpp"
 #include "themepack.hpp"
 #include "nro.hpp"
@@ -434,6 +435,57 @@ int main() {
         CHECK(e.library.CustomName("0100000000020000").size() <= 80 && !e.library.CustomName("0100000000020000").empty());
         e.library.SetCustomName("0100000000010000", "   ");
         CHECK(e.library.CustomName("0100000000010000").empty());
+    }
+
+    // 13a. Spielerkennung über den ROM-Prüfwert (wie RetroAchievements/rcheevos)
+    {
+        CHECK(Md5Hex("", 0) == "d41d8cd98f00b204e9800998ecf8427e");
+        CHECK(Md5Hex("abc", 3) == "900150983cd24fb0d6963f7d28e17f72");
+        std::vector<uint8_t> rom(40000);
+        for(size_t i = 0; i < rom.size(); i++) rom[i] = static_cast<uint8_t>(i * 13 + 7);
+        const std::string plain = Md5Hex(rom.data(), rom.size());
+        // NES: iNES-Header zählt nicht
+        std::vector<uint8_t> nes = { 'N', 'E', 'S', 0x1a, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+        nes.insert(nes.end(), rom.begin(), rom.end());
+        CHECK(RaHashBuffer(nes.data(), nes.size(), "nes", "x.nes") == plain);
+        CHECK(RaHashBuffer(rom.data(), rom.size(), "nes", "x.nes") == plain);
+        // SNES: 512-Byte-Kopiererheader zählt nicht
+        std::vector<uint8_t> sn(8192 * 4, 0x11), snh(512, 0);
+        const std::string snPlain = Md5Hex(sn.data(), sn.size());
+        snh.insert(snh.end(), sn.begin(), sn.end());
+        CHECK(RaHashBuffer(snh.data(), snh.size(), "snes", "x.sfc") == snPlain);
+        CHECK(RaHashBuffer(sn.data(), sn.size(), "snes", "x.sfc") == snPlain);
+        // N64: z64, v64 und n64 ergeben denselben Prüfwert
+        std::vector<uint8_t> z(4096);
+        for(size_t i = 0; i < z.size(); i++) z[i] = static_cast<uint8_t>(i * 31);
+        z[0] = 0x80; z[1] = 0x37; z[2] = 0x12; z[3] = 0x40;
+        std::vector<uint8_t> v = z, n = z;
+        for(size_t i = 0; i + 1 < v.size(); i += 2) std::swap(v[i], v[i + 1]);
+        for(size_t i = 0; i + 3 < n.size(); i += 4) { std::swap(n[i], n[i + 3]); std::swap(n[i + 1], n[i + 2]); }
+        const std::string zh = RaHashBuffer(z.data(), z.size(), "n64", "x.z64");
+        CHECK(zh == Md5Hex(z.data(), z.size()));
+        CHECK(RaHashBuffer(v.data(), v.size(), "n64", "x.v64") == zh);
+        CHECK(RaHashBuffer(n.data(), n.size(), "n64", "x.n64") == zh);
+        // Arcade: Dateiname ohne Endung
+        CHECK(RaHashBuffer(nullptr, 0, "arcade", "sdmc:/roms/arcade/sf2.zip") == Md5Hex("sf2", 3));
+        // Disc-Systeme werden nicht über den Inhalt erkannt
+        CHECK(RaHashBuffer(rom.data(), rom.size(), "psx", "x.bin").empty());
+        // Datei = Puffer
+        {
+            FILE *f = std::fopen("/tmp/nexus_test/rom.nes", "wb");
+            std::fwrite(nes.data(), 1, nes.size(), f); std::fclose(f);
+            CHECK(RaHashFile("/tmp/nexus_test/rom.nes", "nes") == plain);
+            CHECK(RaHashFile("/tmp/nexus_test/fehlt.nes", "nes").empty());
+        }
+        CHECK(RaSystemFor("snes", "zip") == "snes" && RaSystemFor("SFC", "") == "snes" && RaSystemFor("irgendwas", "gba") == "gba" && RaSystemFor("x", "txt").empty());
+        CHECK(RaConsoleId("gba") == 5 && RaConsoleId("nes") == 7 && RaHashSupported("n64") && !RaHashSupported("psx"));
+        CHECK(ParseRaGameIdResponse(R"({"Success":true,"GameID":1446})") == 1446);
+        CHECK(ParseRaGameIdResponse(R"({"Success":true,"GameID":0})") == 0);
+        CHECK(ParseRaGameIdResponse(R"({"Success":false,"Error":"x"})") == 0);
+        CHECK(ParseRaGameIdResponse("kaputt") == 0);
+        CHECK(RomTitleFromFile("sdmc:/roms/gb/Legend of Zelda, The - Link's Awakening (USA, Europe) [!].gb") == "The Legend of Zelda - Link's Awakening");
+        CHECK(NormalizeTitle(RomTitleFromFile("Pokemon - Emerald Version (USA, Europe).gba")) == NormalizeTitle("Pokémon Emerald Version"));
+        CHECK(RomTitleFromFile("Super_Mario_World.sfc") == "Super Mario World");
     }
 
     // 13b. Eigene Profilbilder

@@ -18,6 +18,8 @@ namespace nexus::plat {
         uint32_t held = 0;
         bool tap = false;    // Touch losgelassen ohne Wischen
         float tapX = 0, tapY = 0;
+        bool touching = false;   // Finger liegt auf (für Ziehen, z. B. Hülle drehen)
+        float touchX = 0, touchY = 0;
     };
 
     bool Init();

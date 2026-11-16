@@ -975,19 +975,38 @@ namespace nexus {
         dl->title = "RetroAchievements · " + name;
         dl->w = 640; dl->x = this->DialogX(640); dl->y = 74; dl->shade = true;
         dl->h = ScreenH - dl->y - this->Env().botH - 8;
-        dl->rows = [this, st, id]() {
+        auto load = [this, st]() {
+            if(st->gid <= 0 || st->loading) return;
+            st->loading = true;
+            this->online.RaLoadGame(st->gid, [st](RaGame g, std::vector<RaAchievement> list, std::string err) {
+                st->loading = false;
+                st->err = err;
+                if(err.empty()) { st->game = g; st->list = std::move(list); }
+            });
+        };
+        dl->rows = [this, st, id, name, load]() {
             std::vector<Row> rows;
             const bool fixed = this->d->library.RaGameId(id) > 0;
-            if(st->gid <= 0) rows.push_back(Row{ "Diesem Titel ist kein RetroAchievements-Spiel zugeordnet.", nullptr, nullptr, nullptr });
+            // Erkennung über die ROM-Datei kann noch laufen: sobald fertig, Spiel übernehmen
+            if(st->gid <= 0) {
+                if(const RaGame *now = this->online.RaGameFor(id, name)) { st->gid = now->id; st->game = *now; load(); }
+            }
+            const std::string how = this->online.RaHow(id, name);
+            if(st->gid <= 0) {
+                rows.push_back(Row{ how == "ROM-Datei wird geprüft …" ? how : "Diesem Titel ist kein RetroAchievements-Spiel zugeordnet.", nullptr, nullptr, nullptr });
+                if(how != "ROM-Datei wird geprüft …")
+                    rows.push_back(Row{ "Tipp: ROM-Ordner unter Einstellungen → RetroAchievements prüfen (" + this->d->settings.S("ra.romDirs") + ")", nullptr, nullptr, nullptr });
+            }
             else {
                 const auto &g = st->game;
                 const int got = this->d->settings.S("ra.pointsType") == "hardcore" ? g.gotHard : g.got;
                 rows.push_back(Row{ g.title.empty() ? "Spiel " + std::to_string(st->gid) : g.title, [g]() { return g.console; }, nullptr, nullptr });
                 if(g.max > 0) rows.push_back(Row{ "Fortschritt", [got, g]() { return std::to_string(got) + " / " + std::to_string(g.max) + " · " + std::to_string(got * 100 / g.max) + " %"; }, nullptr, nullptr });
-                rows.push_back(Row{ "Zuordnung", [fixed]() { return fixed ? std::string("fest") : std::string("automatisch (Titelvergleich)"); }, nullptr, nullptr });
+                rows.push_back(Row{ how, nullptr, nullptr, nullptr });
             }
             rows.push_back(Row{ "Anderes Spiel zuordnen …", nullptr, nullptr, [this, id]() { this->OpenRaAssign(id); } });
             if(fixed) rows.push_back(Row{ "Feste Zuordnung entfernen", nullptr, nullptr, [this, id]() { this->d->library.SetRaGameId(id, 0); this->MarkDirty(); this->Pop(); this->Toast("Zuordnung entfernt."); } });
+            if(this->d->settings.B("ra.romHash")) rows.push_back(Row{ "ROM-Ordner neu durchsuchen", nullptr, nullptr, [this]() { this->online.RaRescanRoms(); this->Pop(); this->Toast("ROMs werden neu geprüft …"); } });
             if(st->gid > 0) {
                 rows.push_back(Row{ "Erfolge", nullptr, nullptr, nullptr, true });
                 if(st->loading) rows.push_back(Row{ "Lädt …", nullptr, nullptr, nullptr });
@@ -1000,14 +1019,7 @@ namespace nexus {
             return rows;
         };
         this->Push(dl);
-        if(st->gid > 0) {
-            st->loading = true;
-            this->online.RaLoadGame(st->gid, [st](RaGame g, std::vector<RaAchievement> list, std::string err) {
-                st->loading = false;
-                st->err = err;
-                if(err.empty()) { st->game = g; st->list = std::move(list); }
-            });
-        }
+        load();
     }
 
 }

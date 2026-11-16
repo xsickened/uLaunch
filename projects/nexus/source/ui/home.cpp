@@ -498,6 +498,11 @@ namespace nexus {
             return;
         }
         if(this->crop.active) { this->CropInput(in); return; }
+        if(this->insp.on) { this->InspectInput(in, this->frameDt); return; }
+        if(const uint32_t ib = this->InspectBit(); ib && ib != this->ZoomBit() && (in.down & ib) && this->screen == Screen::Main && !this->locked && this->dialogs.empty() && !this->logoMove.active && !this->inDock) {
+            this->OpenInspect();
+            return;
+        }
         if(const uint32_t zb = this->ZoomBit(); zb && this->screen == Screen::Main && !this->locked && this->dialogs.empty() && !this->logoMove.active) {
             if(this->d->settings.S("zoom.mode") == "hold") this->zoomHeld = (in.held & zb) != 0;
             else if(in.down & zb) this->CycleZoom();
@@ -840,6 +845,7 @@ namespace nexus {
             std::vector<Row> rows;
             rows.push_back(Row{ e.folder ? "Öffnen" : "Starten", nullptr, nullptr, [this]() { this->Pop(); this->Activate(); } });
             rows.push_back(Row{ "Kachel bearbeiten", nullptr, nullptr, [this, e]() { this->Pop(); this->OpenEditor(e.id); } });
+            if(!e.folder && JStr(this->Tile(e.id), "caseStyle", "none") != "none") rows.push_back(Row{ "3D-Hülle ansehen und drehen", nullptr, nullptr, [this]() { this->CloseAll(); this->OpenInspect(); } });
             rows.push_back(Row{ "Bilder wählen (Cover, Hintergrund, Logo)", nullptr, nullptr, [this, e]() { this->Pop(); this->OpenArtInfo(e.id); } });
             rows.push_back(Row{ "SteamGridDB: Bilder suchen …", nullptr, nullptr, [this, e]() { this->Pop(); this->OpenSgdbFlow(e.id, e.name, e.name); } });
             if(!e.folder && this->d->settings.B("ra.enabled")) rows.push_back(Row{ "RetroAchievements …", nullptr, nullptr, [this, e]() { this->Pop(); this->OpenRaDialog(e.id, e.name); } });
@@ -1375,6 +1381,7 @@ namespace nexus {
         if(this->idleActive) this->DrawIdle();
         this->DrawDialogs();
         if(this->crop.active) this->DrawCropEditor();
+        if(this->insp.on) this->DrawInspect(dt);
         if(this->launchFx.active) this->DrawLaunchFx();
         if(this->logoMove.active) {
             this->g->RoundRect(ScreenW / 2 - 470, ScreenH - 64, 940, 40, 20, Col{ 0, 0, 0, 200 });

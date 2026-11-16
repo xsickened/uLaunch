@@ -180,3 +180,168 @@ namespace nexus {
     }
 
 }
+
+namespace nexus {
+
+    // ------------------------------------------------------------------ Ansichtsmodus: Hülle groß ansehen und drehen
+
+    uint32_t Home::InspectBit() const {
+        const auto b = this->d->settings.S("zoom.inspectButton");
+        if(b == "lstick") return plat::BtnLStick;
+        if(b == "rstick") return plat::BtnRStick;
+        if(b == "zr") return plat::BtnZR;
+        if(b == "zl") return plat::BtnZL;
+        return 0;
+    }
+
+    void Home::OpenInspect() {
+        if(this->list.empty() || this->focus < 0 || this->focus >= static_cast<int>(this->list.size())) return;
+        const auto &e = this->list[this->focus];
+        if(e.folder || JStr(this->Tile(e.id), "caseStyle", "none") == "none") {
+            this->Toast("Nur für Kacheln als 3D-Hülle (Kachel bearbeiten → Hülle).");
+            return;
+        }
+        this->insp = Inspect{};
+        this->insp.on = true;
+        this->insp.id = e.id;
+        auto ds = this->disp.find(e.id);
+        this->insp.yaw = ds != this->disp.end() && ds->second.caseInit ? ds->second.caseA : 25;
+        this->insp.from = this->haveLastFocus ? this->lastFocusXf : Xf{};
+        this->Sfx("open");
+    }
+
+    void Home::InspectInput(const plat::Input &in, double dt) {
+        using namespace plat;
+        auto &s = this->insp;
+        if(s.closing) return;
+        dt = std::clamp(dt, 0.0, 0.1);
+        const uint32_t ib = this->InspectBit();
+        if((in.down & BtnB) || (ib && (in.down & ib)) || (in.down & BtnPlus)) { s.closing = true; this->Sfx("back"); return; }
+        bool manual = false;
+        // Steuerkreuz/Stick: drehen (mit Schwung)
+        const double ty = (in.held & BtnLeft) ? -220.0 : (in.held & BtnRight) ? 220.0 : 0.0;
+        const double tp = (in.held & BtnUp) ? -150.0 : (in.held & BtnDown) ? 150.0 : 0.0;
+        if(ty != 0) { s.vy += (ty - s.vy) * std::min(1.0, dt * 6); manual = true; }
+        if(tp != 0) { s.vp += (tp - s.vp) * std::min(1.0, dt * 6); manual = true; }
+        // Touch: ziehen = drehen, loslassen = weiterdrehen und auslaufen
+        if(in.touching) {
+            if(s.drag) {
+                const double dx = in.touchX - s.lx, dy = in.touchY - s.ly;
+                s.yaw += dx * 0.45;
+                s.pitch = std::clamp(s.pitch + dy * 0.35, -75.0, 75.0);
+                if(dt > 0) { s.vy = s.vy * 0.5 + (dx * 0.45 / dt) * 0.5; s.vp = s.vp * 0.5 + (dy * 0.35 / dt) * 0.5; }
+            }
+            s.drag = true; s.lx = in.touchX; s.ly = in.touchY;
+            manual = true;
+        }
+        else s.drag = false;
+        if(manual) { s.flipping = false; s.idle = 0; }
+        else s.idle += dt;
+        // A: umdrehen (Vorder-/Rückseite)
+        if(in.down & BtnA) {
+            s.flipping = true;
+            // vorn sichtbar -> Rückseite, sonst wieder Vorderseite (immer in Drehrichtung weiter)
+            const double r = std::remainder(s.yaw, 360.0), base = s.yaw - r;
+            s.flipTo = std::fabs(r) < 90 ? base + 180 : base + (r > 0 ? 360 : 0) + 25;
+            s.flipV = s.vy;
+            s.vp = 0;
+            this->Sfx("select");
+        }
+        // Y: zurück in die Ausgangslage
+        if(in.down & BtnY) {
+            s.flipping = true;
+            s.flipTo = s.yaw - std::remainder(s.yaw, 360.0) + 25;
+            s.pitch = s.pitch * 0.5;
+            s.zoom = 1;
+            this->Sfx("move");
+        }
+        // Zoom: ZR/R näher, ZL/L weiter weg
+        if(in.held & (BtnZR | BtnR)) s.zoom = std::min(1.7, s.zoom * (1 + dt * 1.2));
+        if(in.held & (BtnZL | BtnL)) s.zoom = std::max(0.55, s.zoom / (1 + dt * 1.2));
+        if(s.flipping) {
+            // Feder zum Ziel
+            const double k = 60, damp = 2 * std::sqrt(k);
+            s.flipV += (k * (s.flipTo - s.yaw) - damp * s.flipV) * dt;
+            s.yaw += s.flipV * dt;
+            s.pitch *= std::exp(-dt * 4);
+            if(std::fabs(s.flipTo - s.yaw) < 0.2 && std::fabs(s.flipV) < 1) { s.yaw = s.flipTo; s.flipping = false; s.vy = 0; }
+            return;
+        }
+        if(!s.drag) {
+            s.yaw += s.vy * dt;
+            s.pitch = std::clamp(s.pitch + s.vp * dt, -75.0, 75.0);
+            if(ty == 0) s.vy *= std::exp(-dt * 2.2);    // Schwung läuft aus
+            if(tp == 0) s.vp *= std::exp(-dt * 5.0);
+            // in Ruhe langsam waagerecht ausrichten
+            if(s.idle > 1.5 && tp == 0) s.pitch *= std::exp(-dt * 1.5);
+        }
+    }
+
+    void Home::DrawInspect(double dt) {
+        auto &s = this->insp;
+        const bool live = this->d->settings.B("anim.enabled") && !this->d->settings.B("anim.reduce");
+        s.t = live ? std::clamp(s.t + (s.closing ? -dt : dt) / 0.32, 0.0, 1.0) : (s.closing ? 0.0 : 1.0);
+        if(s.closing && s.t <= 0) { s.on = false; return; }
+        const double e = s.t * s.t * (3 - 2 * s.t);
+        const Entry *ent = nullptr;
+        for(const auto &x: this->list) if(x.id == s.id) { ent = &x; break; }
+        if(!ent) { s.on = false; return; }
+        const json t = this->Tile(ent->id);
+        // Abdunkeln
+        this->g->Rect(0, 0, ScreenW, ScreenH, Col{ 4, 6, 10, static_cast<uint8_t>(200 * e) });
+        // Bilder: Cover vorn, Hintergrundbild (Hero) hinten
+        const auto &a = this->Art(ent->id);
+        double posX = JNum(t, "posX", 50), posY = JNum(t, "posY", 50), zoom = 1;
+        SDL_Texture *tex = nullptr;
+        if(!a.grid.empty()) {
+            tex = this->img->Get(a.grid, 0);
+            const Crop c = this->d->library.CropOf(a.grid);
+            if(c.set) { posX = c.x; posY = c.y; zoom = c.zoom; }
+        }
+        else if(!ent->iconKey.empty()) tex = this->img->Get(ent->iconKey, 0);
+        if(!tex) return;
+        SDL_Texture *back = a.hero.empty() ? nullptr : this->img->Get(a.hero, 1);
+        // Lage: von der Kachel in die Bildmitte
+        const Xf &f = s.from;
+        const double aspect = f.h > 0 ? f.w / f.h : 0.72;
+        const double H = 470 * s.zoom, W = H * std::max(0.3, aspect);
+        Xf xf;
+        xf.cx = f.cx + (ScreenW / 2.0 - f.cx) * e;
+        xf.cy = f.cy + (ScreenH / 2.0 - 10 - f.cy) * e;
+        xf.w = (f.w * f.sc) + (W - f.w * f.sc) * e;
+        xf.h = (f.h * f.sc) + (H - f.h * f.sc) * e;
+        xf.sc = 1;
+        // weicher Bodenschatten
+        for(int k = 4; k >= 1; k--) {
+            const double sw = xf.w * (0.75 + k * 0.12), sh = 14.0 + k * 8;
+            this->g->RoundRect(xf.cx - sw / 2, xf.cy + xf.h / 2 + 18 - sh / 2, sw, sh, sh / 2, Col{ 0, 0, 0, static_cast<uint8_t>(40 * e) });
+        }
+        CaseInput in;
+        in.style = JStr(t, "caseStyle", "dvd");
+        in.fit = JBool(t, "caseFit", true);
+        in.depth = JNum(t, "caseDepth", 12);
+        in.angle = s.yaw;
+        in.tilt = s.pitch;
+        in.freeRot = true;
+        in.shine = true;
+        in.reflect = false;
+        in.shadow = false;
+        in.spineText = JBool(t, "caseSpineText", true);
+        in.spineRight = JStr(t, "caseSpine", "left") == "right";
+        in.align = 0;
+        in.camUp = JNum(t, "caseView", 240) * (1 - e);
+        in.persp = 1.1;
+        in.live = live;
+        in.time = this->time;
+        in.title = ent->name;
+        in.posX = posX; in.posY = posY; in.zoom = zoom;
+        in.backTex = back;
+        RenderCase(*this->g, tex, xf, in);
+        // Name und Bedienhinweis
+        const Col tc = WithA(Col{ 238, 242, 247, 255 }, e);
+        this->g->Text(ent->name, 26, ScreenW / 2, 34, tc, 1, 900, true);
+        this->g->RoundRect(ScreenW / 2 - 450, ScreenH - 58, 900, 38, 19, Col{ 0, 0, 0, static_cast<uint8_t>(170 * e) });
+        this->g->Text("Steuerkreuz / Stick / Touch: drehen   ·   A: umdrehen   ·   ZL/ZR: Zoom   ·   Y: zurücksetzen   ·   B: schließen", 14, ScreenW / 2, ScreenH - 48, WithA(Col{ 238, 242, 247, 255 }, e), 1, 880);
+    }
+
+}
