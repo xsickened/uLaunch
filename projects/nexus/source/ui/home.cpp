@@ -31,6 +31,7 @@ namespace nexus {
             if(id == "folders") return "Ordner";
             if(id == "recent") return "Zuletzt gespielt";
             if(id == "homebrew") return "Homebrew";
+            if(id == "achievements") return "Erfolge";
             if(id == "almost") return "Fast gemeistert";
             if(id == "settings") return "Einstellungen";
             return "?";
@@ -106,6 +107,7 @@ namespace nexus {
         e.topH = this->d->settings.B("topbar.visible") ? 60 : 14;
         e.botH = this->d->settings.B("hints.visible") ? 46 : 14;
         e.crumb = !this->openFolder.empty();
+        if(this->RaPanelActive()) e.rightW = 560;   // Platz für die Erfolgsliste
         if(this->d->settings.B("dock.visible") && this->d->settings.B("dock.reserve") && this->DockBand() > 0) {
             const auto side = this->DockSide();
             const double band = this->DockBand();
@@ -306,6 +308,20 @@ namespace nexus {
                 std::vector<std::string> ids;
                 for(const auto &[id, h]: this->hbMap) ids.push_back(id);
                 for(const auto &i: byName(ids)) appEntry(i);
+            }
+            else if(this->section == "achievements") {
+                // alle Spiele mit RetroAchievements: zuletzt bei RA gespielt zuerst, dann nach Name
+                std::vector<std::pair<std::string, std::string>> ids;
+                for(const auto &i: this->installed) {
+                    const RaGame *g = this->online.RaGameFor(i, this->DisplayName(i));
+                    if(!g) continue;
+                    ids.push_back({ g->lastDate, i });
+                }
+                std::stable_sort(ids.begin(), ids.end(), [&](const auto &a, const auto &b) {
+                    if(a.first != b.first) return a.first > b.first;
+                    return Lower(this->DisplayName(a.second)) < Lower(this->DisplayName(b.second));
+                });
+                for(const auto &[d, i]: ids) appEntry(i);
             }
             else if(this->section == "almost") {
                 // RetroAchievements: Spiele kurz vor dem Meistern, die mit dem höchsten Fortschritt zuerst
@@ -1251,7 +1267,7 @@ namespace nexus {
             using namespace plat;
             const std::string fid = (!this->list.empty() && this->focus >= 0 && this->focus < static_cast<int>(this->list.size())) ? this->list[this->focus].id : std::string();
             if(fid != this->userCaseId) { this->userCaseId = fid; this->userYawV = this->userPitchV = 0; this->userIdle = 99; }
-            const bool active = this->screen == Screen::Main && this->dialogs.empty() && !this->locked && !this->insp.on && !this->inDock;
+            const bool active = this->screen == Screen::Main && this->dialogs.empty() && !this->locked && !this->insp.on && !this->inDock && !this->RaPanelActive();
             const uint32_t h = active ? this->heldNow : 0;
             const double ty = (h & BtnRsLeft) ? -230.0 : (h & BtnRsRight) ? 230.0 : 0.0;
             const double tp = (h & BtnRsUp) ? -140.0 : (h & BtnRsDown) ? 140.0 : 0.0;
@@ -1259,6 +1275,22 @@ namespace nexus {
             if(ty != 0) this->userYawV += (ty - this->userYawV) * k; else this->userYawV *= std::exp(-dt * 2.5);
             if(tp != 0) this->userPitchV += (tp - this->userPitchV) * k; else this->userPitchV *= std::exp(-dt * 5);
             if(ty != 0 || tp != 0) this->userIdle = 0; else this->userIdle += dt;
+        }
+        // Erfolge-Tabs: neue RA-Daten oder Zuordnungen -> Liste neu aufbauen (Auswahl bleibt)
+        if(this->online.raVersion != this->raVersionSeen) {
+            this->raVersionSeen = this->online.raVersion;
+            if((this->section == "achievements" || this->section == "almost") && this->openFolder.empty() && this->searchQuery.empty()) {
+                const std::string keep = (!this->list.empty() && this->focus >= 0 && this->focus < static_cast<int>(this->list.size())) ? this->list[this->focus].id : std::string();
+                this->BuildList();
+                for(int k = 0; k < static_cast<int>(this->list.size()); k++) if(this->list[k].id == keep) { this->focus = k; break; }
+                this->layoutDirty = true;
+            }
+        }
+        // Erfolge-Tab: rechter Stick blättert die Erfolgsliste
+        if(this->RaPanelActive() && this->dialogs.empty() && !this->locked) {
+            using namespace plat;
+            if(this->heldNow & BtnRsDown) this->panelScroll += 520 * dt;
+            if(this->heldNow & BtnRsUp) this->panelScroll = std::max(0.0, this->panelScroll - 520 * dt);
         }
         {
             const auto &st = this->d->settings;
@@ -1419,6 +1451,7 @@ namespace nexus {
         this->DrawParticles(2);
         this->DrawLogo(dt);
         this->DrawTiles();
+        if(this->RaPanelActive()) this->DrawRaPanel();
         this->DrawDock();
         this->DrawTopbar();
         this->DrawHints();
@@ -2030,6 +2063,7 @@ namespace nexus {
         else if(!this->dialogs.empty()) h = this->dialogs.back()->hints.empty() ? std::vector<std::pair<std::string, std::string>>{ { "A", "Auswählen" }, { "←→", "Wert" }, { "B", "Zurück" } } : this->dialogs.back()->hints;
         else if(this->moving) h = { { "←→", "Verschieben" }, { "A", "Übernehmen" }, { "B", "Verwerfen" } };
         else if(this->inDock) h = { { "A", "Öffnen" }, { "B", "Zurück zu den Spielen" } };
+        else if(this->RaPanelActive() && !this->list.empty()) h = { { "A", "Starten" }, { "RS ↕", "Erfolge blättern" }, { "X", "Optionen" }, { "L/R", "Bereich" } };
         else {
             const bool folder = !this->list.empty() && this->list[this->focus].folder;
             const bool susp = !folder && !this->list.empty() && this->host && this->appMap.count(this->list[this->focus].id) && this->host->SuspendedTid() == this->appMap[this->list[this->focus].id].tid;

@@ -12,7 +12,7 @@ namespace nexus {
     double JNum(const json &o, const char *key, double def);
     bool JBool(const json &o, const char *key, bool def);
 
-    extern const char *const SectionIds[8];
+    extern const char *const SectionIds[9];
 
     class Settings {
         public:

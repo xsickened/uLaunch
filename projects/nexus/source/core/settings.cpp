@@ -6,7 +6,7 @@
 
 namespace nexus {
 
-    const char *const SectionIds[8] = { "start", "all", "fav", "folders", "recent", "homebrew", "almost", "settings" };
+    const char *const SectionIds[9] = { "start", "all", "fav", "folders", "recent", "homebrew", "achievements", "almost", "settings" };
     const char *const Palette[11] = { "#3ee0c8", "#ff5d73", "#ffb347", "#7c8cff", "#5fd35f", "#e86cff", "#ffffff", "#000000", "#222831", "#00a2ff", "#ffd447" };
 
     const json *JGet(const json &o, const std::string &path) {
@@ -160,7 +160,12 @@ namespace nexus {
         }
         for(const auto *id: SectionIds) {
             if(std::find(seen.begin(), seen.end(), id) == seen.end()) {
-                secs.push_back({ { "id", id }, { "visible", std::string(id) != "almost" } });
+                // neue Bereiche (nach einem Update) vor „Einstellungen“ einfügen, nicht dahinter
+                const json entry = { { "id", id }, { "visible", std::string(id) != "almost" } };
+                size_t at = secs.size();
+                for(size_t k = 0; k < secs.size(); k++) if(JStr(secs[k], "id", "") == "settings") { at = k; break; }
+                if(std::string(id) == "settings") at = secs.size();
+                secs.insert(secs.begin() + static_cast<long>(at), entry);
             }
         }
         out["sections"] = secs;

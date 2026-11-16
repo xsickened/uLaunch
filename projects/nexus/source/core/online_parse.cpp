@@ -221,6 +221,7 @@ namespace nexus {
         game.max = static_cast<int>(NumOf(JGetCI(j, "NumAchievements")));
         game.got = static_cast<int>(NumOf(JGetCI(j, "NumAwardedToUser")));
         game.gotHard = static_cast<int>(NumOf(JGetCI(j, "NumAwardedToUserHardcore")));
+        game.players = static_cast<int>(NumOf(JGetCI(j, "NumDistinctPlayers")));
         const json *ach = JGetCI(j, "Achievements");
         if(ach && ach->is_object()) {
             for(auto it = ach->begin(); it != ach->end() && list.size() < 1000; ++it) {
@@ -233,6 +234,12 @@ namespace nexus {
                 r.order = static_cast<int>(NumOf(JGetCI(a, "DisplayOrder")));
                 r.hardcore = !StrOf(JGetCI(a, "DateEarnedHardcore")).empty();
                 r.unlocked = r.hardcore || !StrOf(JGetCI(a, "DateEarned")).empty();
+                r.badge = StrOf(JGetCI(a, "BadgeName"), 24);
+                // nur Ziffern/Buchstaben (landet in Dateinamen und URLs)
+                r.badge.erase(std::remove_if(r.badge.begin(), r.badge.end(), [](char ch) { return !std::isalnum(static_cast<unsigned char>(ch)); }), r.badge.end());
+                r.type = StrOf(JGetCI(a, "type"), 20);
+                r.awarded = static_cast<int>(NumOf(JGetCI(a, "NumAwarded")));
+                r.date = StrOf(JGetCI(a, r.hardcore ? "DateEarnedHardcore" : "DateEarned"), 24);
                 if(!r.title.empty()) list.push_back(r);
             }
             std::stable_sort(list.begin(), list.end(), [](const RaAchievement &a, const RaAchievement &b) { return a.order < b.order; });

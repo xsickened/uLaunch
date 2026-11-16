@@ -31,6 +31,7 @@ namespace nexus {
         std::string title, console;
         int max = 0, got = 0, gotHard = 0;
         std::string lastDate;
+        int players = 0;   // verschiedene Spieler (für die Seltenheit der Erfolge)
     };
 
     struct RaRecent {
@@ -41,10 +42,14 @@ namespace nexus {
     };
 
     struct RaAchievement {
-        std::string title, desc;
+        std::string title, desc;   // desc = was man dafür tun muss
         int points = 0;
         bool unlocked = false, hardcore = false;
         int order = 0;
+        std::string badge;         // BadgeName (Bild: media.retroachievements.org/Badge/<badge>.png)
+        std::string type;          // progression, win_condition, missable oder leer
+        int awarded = 0;           // so viele Spieler haben ihn
+        std::string date;          // freigeschaltet am
     };
 
     std::string UrlEncode(const std::string &s);

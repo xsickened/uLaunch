@@ -222,7 +222,7 @@ Alle Bilder sind generierte Testgrafiken; SteamGridDB ist mit Offline-Testdaten 
 const U = 24, SW = 1280, SH = 720, HINT_H = 36;
 const SIZES = {S:5, M:7, L:9, XL:11};
 const RATIOS = {"1:1":1, "2:3":2/3, "3:2":1.5, "4:3":4/3, "16:9":16/9};
-const SECTION_NAMES = {start:"Startseite", all:"Alle Spiele", fav:"Favoriten", folders:"Ordner", recent:"Zuletzt gespielt", homebrew:"Homebrew", almost:"Fast gemeistert", settings:"Einstellungen"};
+const SECTION_NAMES = {start:"Startseite", all:"Alle Spiele", fav:"Favoriten", folders:"Ordner", recent:"Zuletzt gespielt", homebrew:"Homebrew", achievements:"Erfolge", almost:"Fast gemeistert", settings:"Einstellungen"};
 const PALETTE = ["#3ee0c8","#ff5d73","#ffb347","#7c8cff","#5fd35f","#e86cff","#ffffff","#000000","#222831","#00a2ff","#ffd447"];
 const FONTS = ["Segoe UI","Georgia","Verdana","Trebuchet MS","Courier New","Impact"];
 const $ = s => document.querySelector(s);
@@ -913,6 +913,7 @@ function currentList(){
     case "folders": return [...d.folders];
     case "recent": return d.apps.filter(a=>a.lastPlayed).sort((a,b)=>b.lastPlayed-a.lastPlayed).slice(0,10);
     case "homebrew": return d.apps.filter(a=>a.kind==="homebrew");
+    case "achievements": return d.apps.filter(a=>{ const p=RetroAchievements.progress(a); return p && p.total; });
     case "almost": { const th=(ST().ra.almostPct||80)/100; return d.apps.map(a=>[a,RetroAchievements.progress(a)]).filter(([a,p])=>p && p.total && p.got/p.total>=th && p.got<p.total).sort((x,y)=>y[1].got/y[1].total-x[1].got/x[1].total).map(x=>x[0]); }
   } return [];
 }

@@ -65,7 +65,7 @@ int main() {
         bool settingsVisible = false;
         for(const auto &id: s.VisibleSections()) if(id == "settings") settingsVisible = true;
         CHECK(settingsVisible);
-        CHECK(s.data["sections"].size() == 8);
+        CHECK(s.data["sections"].size() == 9);
     }
 
     // 3. Bibliothek: jeder installierte Titel genau einmal erreichbar
@@ -277,6 +277,14 @@ int main() {
         CHECK(gp.max == 3 && al.size() == 2 && al[0].title == "A" && al[0].hardcore && !al[1].unlocked);
         // Zufallsmüll darf nie abstürzen
         std::string junk;
+        // Abzeichen, Typ, Seltenheit, Datum
+        CHECK(ParseRaGameProgress(R"({"ID":1,"Title":"T","NumDistinctPlayers":200,"Achievements":{"1":{"Title":"Boss","Description":"Besiege den Endgegner","Points":25,"BadgeName":"12345","type":"win_condition","NumAwarded":50,"DateEarned":"2026-11-16 10:00:00"},"2":{"Title":"X","BadgeName":"../evil","type":"missable"}}})", gp, al));
+        CHECK(gp.players == 200 && al.size() == 2);
+        CHECK(al[0].badge == "12345" || al[1].badge == "12345");
+        for(const auto &a: al) {
+            if(a.title == "Boss") CHECK(a.type == "win_condition" && a.awarded == 50 && a.unlocked && a.date.rfind("2026-11-16", 0) == 0 && a.desc == "Besiege den Endgegner");
+            if(a.title == "X") CHECK(a.badge == "evil" && !a.unlocked && a.type == "missable");
+        }
         for(int i = 0; i < 3000; i++) { junk += static_cast<char>((i * 7919) % 256); if(i % 50 == 0) { ParseSgdbGames(junk, games, err); ParseRaCompletion(junk, rg); ParseRaRecent(junk, rr); ParseRaGameProgress(junk, gp, al); NormalizeTitle(junk); } }
     }
 

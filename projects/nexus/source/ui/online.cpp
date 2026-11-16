@@ -134,6 +134,21 @@ namespace nexus {
         return std::string(ThumbDir) + "/" + std::to_string(im.id) + ImageExt("", im.thumb);
     }
 
+    std::string Online::RaBadge(const std::string &badge, bool locked) {
+        if(badge.empty() || badge.size() > 24) return "";
+        const std::string dir = std::string(RaIndexDir) + "/badges";
+        const std::string name = badge + (locked ? "_lock" : "") + ".png";
+        const std::string p = dir + "/" + name;
+        if(FileExists(p)) return p;
+        if(this->thumbsRequested.count(p) || this->thumbsRequested.size() > 3000) return "";
+        this->thumbsRequested.insert(p);
+        EnsureDir(CacheDir);
+        EnsureDir(RaIndexDir);
+        EnsureDir(dir);
+        this->Download("https://media.retroachievements.org/Badge/" + name, p, nullptr, 512 * 1024);
+        return "";
+    }
+
     bool Online::EnsureThumb(const SgdbImage &im) {
         const auto p = this->ThumbPath(im);
         if(FileExists(p)) return true;
@@ -217,7 +232,7 @@ namespace nexus {
         });
         this->Request(this->RaUrl("API_GetUserCompletionProgress", "&c=500"), {}, "RA Fortschritt", "", [this](const NetResult &r) {
             std::vector<RaGame> g;
-            if(r.ok && ParseRaCompletion(r.body, g)) { this->ra.games = g; this->raMap.clear(); }
+            if(r.ok && ParseRaCompletion(r.body, g)) { this->ra.games = g; this->raMap.clear(); this->raVersion++; }
             else this->raNextOk = false;
             this->RaFinishPart();
         }, 8 * 1024 * 1024);
@@ -459,6 +474,7 @@ namespace nexus {
             }
             if(best.gid > 0 || !undecided) {
                 this->raRom[tid] = best;   // gid 0 = keine passende ROM -> Titelvergleich
+                if(best.gid > 0) this->raVersion++;
                 if(best.gid > 0) Log("RA: %s erkannt über %s (Spiel %lld)", it->second.c_str(), best.file.c_str(), best.gid);
                 it = this->romWant.erase(it);
             }

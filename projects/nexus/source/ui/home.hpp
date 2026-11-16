@@ -225,6 +225,14 @@ namespace nexus {
             void OpenRaSearch(const std::string &id, const std::string &term);
             void OpenRaPreview(const std::string &id, long long gid, const std::string &hint);
             void OpenRaLinks();
+            // Erfolge-Tab: Liste aller Erfolge des gewählten Spiels neben den Kacheln
+            struct RaDetail { bool loading = false; std::string err; RaGame game; std::vector<RaAchievement> list; double at = -1e9; };
+            std::unordered_map<long long, RaDetail> raDetail;
+            long long panelGid = 0;
+            int raVersionSeen = 0;
+            double panelScroll = 0, panelScrollV = 0;
+            bool RaPanelActive() const;
+            void DrawRaPanel();
             // Profilbild: eigenes Bild (mit Ausschnitt) vor dem Bild der Konsole
             SDL_Texture *UserTex(const UserInfo &u, Crop &crop);
             void DrawUserPic(const UserInfo &u, const Xf &xf, double rad, double alpha);

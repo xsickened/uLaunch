@@ -1087,3 +1087,152 @@ namespace nexus {
     }
 
 }
+
+namespace nexus {
+
+    // ------------------------------------------------------------------ Erfolge-Tab: Erfolgsliste des gewählten Spiels
+
+    bool Home::RaPanelActive() const {
+        return this->screen == Screen::Main && this->openFolder.empty() && this->searchQuery.empty() && this->d->settings.B("ra.enabled") &&
+               (this->section == "achievements" || this->section == "almost") && this->d->settings.S("layout.mode") != "list";
+    }
+
+    void Home::DrawRaPanel() {
+        const auto &s = this->d->settings;
+        const LayoutEnv env = this->Env();
+        const double pw = env.rightW - 24, px = ScreenW - env.rightW + 4, py = env.topH + 6, ph = ScreenH - env.botH - py - 6;
+        const Col bg = this->UiCol();
+        this->g->RoundRect(px, py, pw, ph, 16, WithA(Col{ static_cast<uint8_t>(bg.r * 0.6), static_cast<uint8_t>(bg.g * 0.6), static_cast<uint8_t>(bg.b * 0.6), 255 }, 0.82));
+        const Col tc = this->TextCol(), mc = this->MutedCol(), gold{ 255, 212, 71, 255 };
+        if(!this->online.RaReady()) {
+            this->g->Text("RetroAchievements einrichten:", 16, px + 20, py + 24, tc, 0, static_cast<int>(pw - 40), true);
+            this->g->Text("Einstellungen → RetroAchievements → Benutzername und Web-API-Key", 14, px + 20, py + 50, mc, 0, static_cast<int>(pw - 40));
+            return;
+        }
+        if(this->list.empty() || this->focus < 0 || this->focus >= static_cast<int>(this->list.size())) {
+            this->g->Text(this->section == "almost" ? "Kein Spiel kurz vor dem Meistern." : "Noch keine Spiele mit RetroAchievements.", 16, px + 20, py + 24, tc, 0, static_cast<int>(pw - 40), true);
+            this->g->Text("Spiele verknüpfen: Einstellungen → RetroAchievements", 14, px + 20, py + 50, mc, 0, static_cast<int>(pw - 40));
+            return;
+        }
+        const auto &e = this->list[this->focus];
+        const RaGame *rg = this->online.RaGameFor(e.id, e.name);
+        const long long gid = rg ? rg->id : this->d->library.RaGameId(e.id);
+        if(gid <= 0) {
+            this->g->Text(e.name, 18, px + 20, py + 22, tc, 0, static_cast<int>(pw - 40), true);
+            this->g->Text("Nicht mit RetroAchievements verknüpft (X → RetroAchievements).", 14, px + 20, py + 50, mc, 0, static_cast<int>(pw - 40));
+            return;
+        }
+        if(gid != this->panelGid) { this->panelGid = gid; this->panelScroll = 0; }
+        auto &det = this->raDetail[gid];
+        // laden (und nach 2 Minuten erneuern, z. B. nach dem Spielen)
+        if(!det.loading && this->time - det.at > 120) {
+            det.loading = true;
+            det.at = this->time;
+            this->online.RaLoadGame(gid, [this, gid](RaGame g, std::vector<RaAchievement> list, std::string err) {
+                auto &d = this->raDetail[gid];
+                d.loading = false;
+                d.err = err;
+                if(err.empty()) { d.game = g; d.list = std::move(list); }
+            });
+        }
+        const RaGame &g = det.game.id ? det.game : (rg ? *rg : det.game);
+        // Kopf: Titel, System, Fortschritt
+        double y = py + 16;
+        this->g->Text(g.title.empty() ? e.name : g.title, 19, px + 20, y, tc, 0, static_cast<int>(pw - 40), true);
+        y += 26;
+        const bool hardOnly = s.S("ra.countMode") == "hardcore";
+        int got = 0, max = static_cast<int>(det.list.size());
+        long long pts = 0, ptsGot = 0;
+        for(const auto &a: det.list) {
+            pts += a.points;
+            const bool ok = hardOnly ? a.hardcore : a.unlocked;
+            if(ok) { got++; ptsGot += a.points; }
+        }
+        if(det.list.empty() && rg) { got = hardOnly ? rg->gotHard : rg->got; max = rg->max; }
+        this->g->Text(g.console.empty() ? std::string("RetroAchievements") : g.console, 13, px + 20, y, mc, 0, static_cast<int>(pw - 40));
+        y += 22;
+        const double bw = pw - 40, pr = max > 0 ? static_cast<double>(got) / max : 0;
+        this->g->RoundRect(px + 20, y, bw, 8, 4, WithA(tc, 0.15));
+        if(pr > 0) this->g->RoundRect(px + 20, y, std::max(8.0, bw * pr), 8, 4, got >= max && max > 0 ? gold : this->Accent());
+        y += 14;
+        std::string sum = std::to_string(got) + " / " + std::to_string(max) + " Erfolge";
+        if(pts > 0) sum += "  ·  " + std::to_string(ptsGot) + " / " + std::to_string(pts) + " Punkte";
+        if(max > 0 && got >= max) sum += "  ·  gemeistert";
+        this->g->Text(sum, 13, px + 20, y, mc, 0, static_cast<int>(bw));
+        y += 26;
+        if(det.loading && det.list.empty()) { this->g->Text("Lade Erfolge …", 15, px + 20, y + 10, mc); return; }
+        if(!det.err.empty() && det.list.empty()) { this->g->Text(det.err, 14, px + 20, y + 10, mc, 0, static_cast<int>(bw)); return; }
+        // Liste: erst noch offen (was zu tun ist), dann freigeschaltet
+        struct Item { const RaAchievement *a; bool header; std::string label; };
+        std::vector<Item> items;
+        int open = 0;
+        for(const auto &a: det.list) if(!(hardOnly ? a.hardcore : a.unlocked)) open++;
+        if(open > 0) items.push_back({ nullptr, true, "Noch offen (" + std::to_string(open) + ")" });
+        for(const auto &a: det.list) if(!(hardOnly ? a.hardcore : a.unlocked)) items.push_back({ &a, false, "" });
+        if(got > 0) items.push_back({ nullptr, true, "Freigeschaltet (" + std::to_string(got) + ")" });
+        for(const auto &a: det.list) if(hardOnly ? a.hardcore : a.unlocked) items.push_back({ &a, false, "" });
+        const double listY0 = y, listY1 = py + ph - 10, rowH = 68, headH = 30;
+        // Blättern (rechter Stick), weich
+        double total = 0;
+        for(const auto &it: items) total += it.header ? headH : rowH;
+        const double maxScroll = std::max(0.0, total - (listY1 - listY0));
+        this->panelScroll = std::clamp(this->panelScroll, 0.0, maxScroll);
+        this->panelScrollV += (this->panelScroll - this->panelScrollV) * std::min(1.0, this->frameDt * 12);
+        double cy = listY0 - this->panelScrollV;
+        const size_t maxChars = static_cast<size_t>(std::max(20.0, (bw - 130) / (13 * 0.52)));
+        for(const auto &it: items) {
+            const double h = it.header ? headH : rowH;
+            if(cy + h < listY0 - 2) { cy += h; continue; }
+            if(cy > listY1) break;
+            const double fade = std::clamp(std::min(cy + h - listY0, listY1 - cy) / 24.0, 0.0, 1.0);   // weich ein-/ausblenden am Rand
+            if(it.header) {
+                this->g->Text(it.label, 14, px + 20, cy + 8, WithA(this->Accent(), fade), 0, 0, true);
+                cy += h;
+                continue;
+            }
+            const RaAchievement &a = *it.a;
+            const bool ok = hardOnly ? a.hardcore : a.unlocked;
+            // Abzeichen
+            const double bx = px + 20, by = cy + 6, bs = 52;
+            const std::string bp = this->online.RaBadge(a.badge, !ok);
+            SDL_Texture *bt = bp.empty() ? nullptr : this->img->Get(bp, 2);
+            Xf bxf; bxf.cx = bx + bs / 2; bxf.cy = by + bs / 2; bxf.w = bxf.h = bs;
+            if(bt) this->g->ShapeTex(bt, bxf, 8, false, fade, true, 50, 50);
+            else {
+                this->g->Shape(bxf, 8, false, WithA(tc, 0.12 * fade));
+                this->g->Icon(ok ? "trophy" : "lock", bxf.cx, bxf.cy, 22, WithA(ok ? gold : mc, fade), true);
+            }
+            if(ok) this->g->Icon("trophy", bx + bs - 4, by + bs - 4, 14, WithA(gold, fade), true);
+            // Titel, Beschreibung (was zu tun ist), Punkte
+            const double tx = bx + bs + 14, tw = bw - bs - 14 - 70;
+            this->g->Text(a.title, 15, tx, cy + 6, WithA(ok ? tc : WithA(tc, 0.95), fade), 0, static_cast<int>(tw), true);
+            std::string d1 = a.desc, d2;
+            if(d1.size() > maxChars) {
+                size_t cut = d1.rfind(' ', maxChars);
+                if(cut == std::string::npos || cut < maxChars / 2) cut = maxChars;
+                d2 = d1.substr(cut + (d1[cut] == ' ' ? 1 : 0));
+                d1 = d1.substr(0, cut);
+            }
+            this->g->Text(d1, 13, tx, cy + 27, WithA(mc, fade), 0, static_cast<int>(tw));
+            if(!d2.empty()) this->g->Text(d2, 13, tx, cy + 44, WithA(mc, fade), 0, static_cast<int>(tw));
+            this->g->Text(std::to_string(a.points) + " P.", 14, px + pw - 20, cy + 6, WithA(ok ? gold : tc, fade), 2, 0, true);
+            std::string tag = a.type == "progression" ? "Fortschritt" : a.type == "win_condition" ? "Sieg" : a.type == "missable" ? "verpassbar" : "";
+            if(g.players > 0 && a.awarded >= 0) {
+                const double rar = 100.0 * a.awarded / g.players;
+                char b[24];
+                std::snprintf(b, sizeof(b), "%s%.1f %%", tag.empty() ? "" : " · ", rar);
+                tag += b;
+            }
+            if(ok && !a.date.empty()) tag = a.date.substr(0, 10);
+            if(!tag.empty()) this->g->Text(tag, 12, px + pw - 20, cy + 27, WithA(a.type == "missable" && !ok ? Col{ 255, 140, 90, 255 } : mc, fade), 2);
+            cy += h;
+        }
+        // Bildlaufleiste
+        if(maxScroll > 0) {
+            const double trackH = listY1 - listY0, thumbH = std::max(30.0, trackH * (listY1 - listY0) / total);
+            const double ty = listY0 + (trackH - thumbH) * (this->panelScrollV / maxScroll);
+            this->g->RoundRect(px + pw - 8, ty, 4, thumbH, 2, WithA(tc, 0.35));
+        }
+    }
+
+}

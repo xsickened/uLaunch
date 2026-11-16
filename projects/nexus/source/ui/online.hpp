@@ -67,6 +67,9 @@ namespace nexus {
             void RaEnsureIndex(bool refresh = false);
             // Wie wurde das Spiel erkannt? (für die Anzeige)
             std::string RaHow(const std::string &tid, const std::string &name);
+            // Abzeichen-Bild eines Erfolgs (lädt einmal herunter); leer = noch nicht da
+            std::string RaBadge(const std::string &badge, bool locked);
+            int raVersion = 0;   // steigt, wenn neue RA-Daten/Zuordnungen da sind
             // ROM-Ordner neu durchsuchen und alle automatischen Zuordnungen neu prüfen
             void RaRescanRoms();
 
