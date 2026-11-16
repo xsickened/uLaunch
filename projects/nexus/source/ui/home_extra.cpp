@@ -816,7 +816,7 @@ namespace nexus {
         if(!s.B("ra.enabled") || !s.B("ra.showTileBadge") || w < 70) return;
         const RaGame *g = this->online.RaGameFor(e.id, e.name);
         if(!g || g->max <= 0) return;
-        const int got = s.S("ra.pointsType") == "hardcore" ? g->gotHard : g->got;
+        const int got = s.S("ra.countMode") == "hardcore" ? g->gotHard : g->got;
         const double pct = std::clamp(static_cast<double>(got) / g->max, 0.0, 1.0);
         const bool master = got >= g->max;
         const Col gold{ 255, 212, 71, 255 };
@@ -844,7 +844,7 @@ namespace nexus {
         if(!s.B("ra.enabled") || !s.B("ra.showUnderLogo")) return;
         const RaGame *g = this->online.RaGameFor(e.id, e.name);
         if(!g || g->max <= 0) return;
-        const int got = s.S("ra.pointsType") == "hardcore" ? g->gotHard : g->got;
+        const int got = s.S("ra.countMode") == "hardcore" ? g->gotHard : g->got;
         const double pct = std::clamp(static_cast<double>(got) / g->max, 0.0, 1.0);
         const bool master = got >= g->max;
         const Col gold{ 255, 212, 71, 255 };
@@ -973,7 +973,7 @@ namespace nexus {
             long long pts = 0;
             for(const auto &a: st->list) pts += a.points;
             rows.push_back(Row{ "Erfolge", [this, st, pts, g]() {
-                const int got = this->d->settings.S("ra.pointsType") == "hardcore" ? g.gotHard : g.got;
+                const int got = this->d->settings.S("ra.countMode") == "hardcore" ? g.gotHard : g.got;
                 return std::to_string(st->list.size()) + " (" + std::to_string(pts) + " Punkte) · davon " + std::to_string(got) + " erhalten";
             }, nullptr, nullptr });
             if(!st->list.empty()) rows.push_back(Row{ "Beispiele", nullptr, nullptr, nullptr, true });
@@ -1063,7 +1063,7 @@ namespace nexus {
             }
             else {
                 const auto &g = st->game;
-                const int got = this->d->settings.S("ra.pointsType") == "hardcore" ? g.gotHard : g.got;
+                const int got = this->d->settings.S("ra.countMode") == "hardcore" ? g.gotHard : g.got;
                 rows.push_back(Row{ g.title.empty() ? "Spiel " + std::to_string(st->gid) : g.title, [g]() { return g.console; }, nullptr, nullptr });
                 if(g.max > 0) rows.push_back(Row{ "Fortschritt", [got, g]() { return std::to_string(got) + " / " + std::to_string(g.max) + " · " + std::to_string(got * 100 / g.max) + " %"; }, nullptr, nullptr });
                 rows.push_back(Row{ how, nullptr, nullptr, nullptr });

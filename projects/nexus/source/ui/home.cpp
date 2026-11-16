@@ -310,7 +310,7 @@ namespace nexus {
             else if(this->section == "almost") {
                 // RetroAchievements: Spiele kurz vor dem Meistern, die mit dem höchsten Fortschritt zuerst
                 const double th = this->d->settings.N("ra.almostPct") / 100.0;
-                const bool hard = this->d->settings.S("ra.pointsType") == "hardcore";
+                const bool hard = this->d->settings.S("ra.countMode") == "hardcore";
                 std::vector<std::pair<double, std::string>> ids;
                 for(const auto &i: this->installed) {
                     const RaGame *g = this->online.RaGameFor(i, this->DisplayName(i));

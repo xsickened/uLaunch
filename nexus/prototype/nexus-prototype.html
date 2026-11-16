@@ -554,6 +554,7 @@ const SPEC = [
   {g:"ra", p:"ra.showUnderLogo", l:"Fortschritt unter dem Logo", t:"bool", d:true},
   {g:"ra", p:"ra.topbar", l:"In der Kopfzeile", t:"enum", o:["points","count","both","none"], ol:["Pokalpunkte","Anzahl Pokale","Punkte + Anzahl","Aus"], d:"both"},
   {g:"ra", p:"ra.pointsType", l:"Punkteart", t:"enum", o:["hardcore","softcore","retro"], ol:["Hardcore-Punkte","Softcore-Punkte","RetroPoints (gewichtet)"], d:"hardcore", w:()=>["points","both"].includes(S.data.settings.ra.topbar)},
+  {g:"ra", p:"ra.countMode", l:"Freigeschaltete Erfolge zählen", t:"enum", o:["all", "hardcore"], ol:["Alle (Softcore und Hardcore, z. B. tico mit Spielständen)", "Nur Hardcore"], d:"all"},
   {g:"ra", p:"ra.topbarIcon", l:"Pokal-Symbol in der Kopfzeile", t:"bool", d:true, w:()=>S.data.settings.ra.topbar!=="none"},
   {g:"ra", p:"ra.topbarName", l:"Benutzername in der Kopfzeile", t:"bool", d:false, w:()=>S.data.settings.ra.topbar!=="none"},
   {g:"ra", p:"ra.notify", l:"Neue Erfolge melden", t:"bool", d:true},

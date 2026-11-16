@@ -476,7 +476,7 @@ namespace nexus {
     }
 
     long long Online::RaTrophies() const {
-        return this->d->settings.S("ra.pointsType") == "hardcore" ? this->ra.trophiesHard : this->ra.trophies;
+        return this->d->settings.S("ra.countMode") == "hardcore" ? this->ra.trophiesHard : this->ra.trophies;
     }
 
     const RaGame *Online::RaGameFor(const std::string &tid, const std::string &name) {

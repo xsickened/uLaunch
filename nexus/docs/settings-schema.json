@@ -4745,6 +4745,26 @@
   },
   {
    "group": "ra",
+   "path": "ra.countMode",
+   "label": "Freigeschaltete Erfolge zählen",
+   "type": "enum",
+   "options": [
+    "all",
+    "hardcore"
+   ],
+   "optionLabels": [
+    "Alle (Softcore und Hardcore, z. B. tico mit Spielständen)",
+    "Nur Hardcore"
+   ],
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "all",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "ra",
    "path": "ra.topbarIcon",
    "label": "Pokal-Symbol in der Kopfzeile",
    "type": "bool",

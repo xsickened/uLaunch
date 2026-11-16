@@ -284,6 +284,7 @@ inline const std::vector<SchemaEntry> &Schema() {
         {"ra", "ra.showUnderLogo", "Fortschritt unter dem Logo", SType::Bool, {}, {}, 0.0, 0.0, 0.0, json(true), false, ""},
         {"ra", "ra.topbar", "In der Kopfzeile", SType::Enum, {"points", "count", "both", "none"}, {"Pokalpunkte", "Anzahl Pokale", "Punkte + Anzahl", "Aus"}, 0.0, 0.0, 0.0, json(std::string("both")), false, ""},
         {"ra", "ra.pointsType", "Punkteart", SType::Enum, {"hardcore", "softcore", "retro"}, {"Hardcore-Punkte", "Softcore-Punkte", "RetroPoints (gewichtet)"}, 0.0, 0.0, 0.0, json(std::string("hardcore")), false, ""},
+        {"ra", "ra.countMode", "Freigeschaltete Erfolge zählen", SType::Enum, {"all", "hardcore"}, {"Alle (Softcore und Hardcore, z. B. tico mit Spielständen)", "Nur Hardcore"}, 0.0, 0.0, 0.0, json(std::string("all")), false, ""},
         {"ra", "ra.topbarIcon", "Pokal-Symbol in der Kopfzeile", SType::Bool, {}, {}, 0.0, 0.0, 0.0, json(true), false, ""},
         {"ra", "ra.topbarName", "Benutzername in der Kopfzeile", SType::Bool, {}, {}, 0.0, 0.0, 0.0, json(false), false, ""},
         {"ra", "ra.notify", "Neue Erfolge melden", SType::Bool, {}, {}, 0.0, 0.0, 0.0, json(true), false, ""},
