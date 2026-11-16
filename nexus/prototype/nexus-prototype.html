@@ -367,6 +367,8 @@ const SPEC = [
   {g:"anim", p:"anim.stagger", l:"Versatz zwischen Kacheln", t:"num", min:0, max:120, step:10, f:ms, d:30},
   {g:"anim", p:"anim.idle", l:"Leerlauf-Animation", t:"enum", o:["none","float","breathe","sway"], ol:["Keine","Schweben","Atmen","Wiegen"], d:"none"},
   {g:"anim", p:"anim.idleFocusOnly", l:"Leerlauf nur für Fokus-Kachel", t:"bool", d:true},
+  {g:"anim", p:"anim.scrollFx", l:"Scroll-Animation", t:"enum", o:["none", "tilt", "bounce", "depth", "shrink", "fade", "stretch", "wave", "flip"], ol:["Nur gleiten", "Neigen in Bewegungsrichtung", "Nachfedern", "Zurücktreten (Tiefe)", "Verkleinern", "Ausblenden", "Strecken (Tempo)", "Welle", "Karten kippen"], d:"none"},
+  {g:"anim", p:"anim.scrollStrength", l:"Stärke der Scroll-Animation", t:"num", min:0.2, max:2, step:0.1, f:v=>"×"+(+v).toFixed(1), d:1},
   {g:"anim", p:"anim.ringWidth", l:"Breite der Hervorhebung (0 = aus)", t:"num", min:0, max:10, step:.5, f:px, d:3.5},
   {g:"anim", p:"anim.highlight", l:"Auswahlhervorhebung", t:"enum", o:["ring", "glow", "brackets", "underline", "spotlight", "outline", "none"], ol:["Rahmen", "Leuchten (Aura)", "Ecken", "Balken darunter", "Lichtkegel", "Rahmen + Leuchten", "Keine"], d:"ring"},
   {g:"anim", p:"anim.highlightColor", l:"Farbe der Hervorhebung", t:"enum", o:["accent", "white", "gold", "custom"], ol:["Akzentfarbe", "Weiß", "Gold", "Eigene Farbe"], d:"accent"},
@@ -452,6 +454,9 @@ const SPEC = [
   {g:"auto", p:"auto.nightTheme", l:"", t:"str", d:"", hidden:true},
   // Startanimation
   {g:"launch", p:"launch.anim", l:"Animation beim Starten", t:"enum", o:["zoom","fade","slideLeft","slideRight","slideUp","slideDown","spin","flip","iris","none"], ol:["Cover zoomt auf","Ausblenden","Nach links schieben","Nach rechts schieben","Nach oben schieben","Nach unten schieben","Drehen","Umdrehen (3D)","Kreisblende","Keine"], d:"zoom"},
+  {g:"launch", p:"launch.caseAnim", l:"Animation bei 3D-Hüllen", t:"enum", o:["caseSpin", "caseFlip", "caseInsert", "caseZoom", "normal"], ol:["Hülle fliegt heran und dreht sich", "Hülle zeigt Rück- und Vorderseite", "Hülle wird eingelegt (kippt und gleitet weg)", "Kamera fliegt in das Cover", "Wie bei normalen Kacheln"], d:"caseSpin"},
+  {g:"launch", p:"launch.boot", l:"Boot-Bildschirm (Hintergrundbild + Logo) bis das Spiel startet", t:"bool", d:true},
+  {g:"launch", p:"launch.bootIndicator", l:"Ladeanzeige im Boot-Bildschirm", t:"enum", o:["dots", "ring", "bar", "none"], ol:["Punkte", "Ring", "Balken", "Keine"], d:"dots"},
   {g:"launch", p:"launch.durationMs", l:"Dauer", t:"num", min:150, max:2000, step:50, f:ms, d:550, w:()=>ST().launch.anim!=="none"},
   {g:"launch", p:"launch.easing", l:"Verlauf", t:"enum", o:["inOut","in","out","linear","back"], ol:["Weich","Beschleunigen","Abbremsen","Gleichmäßig","Mit Schwung"], d:"inOut", w:()=>ST().launch.anim!=="none"},
   {g:"launch", p:"launch.spinTurns", l:"Umdrehungen", t:"num", min:.5, max:3, step:.5, f:v=>String(v).replace(".",","), d:1, w:()=>ST().launch.anim==="spin"},

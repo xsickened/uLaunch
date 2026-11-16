@@ -64,6 +64,9 @@ namespace nexus {
             void Quad(const SDL_FPoint p[4], const Col c[4]);
             // Freies Dreiecksnetz (z. B. perspektivisch projizierte 3D-Flächen), tex darf nullptr sein
             void Mesh(SDL_Texture *tex, const std::vector<SDL_Vertex> &v, const std::vector<int> &idx);
+            // Kamera: Bildschirm = (ox, oy) + Punkt * scale. SetView(1, 0, 0) schaltet aus.
+            void SetView(double scale, double ox, double oy);
+            bool ViewOn() const { return this->viewOn; }
 
             // Partikel: eingebaute Formen als weiße Sprites (Farbe über die Eckpunkte), gebündelt gezeichnet
             struct Sprite { float x, y, size, rot; Col c; };
@@ -94,7 +97,11 @@ namespace nexus {
             std::unordered_map<std::string, TextEntry> textCache;
             uint64_t frame = 0;
             size_t textBytes = 0;   // Speicher aller Schrift-Texturen
-            std::vector<SDL_Vertex> vbuf;
+            std::vector<SDL_Vertex> vbuf, vview;
+            bool viewOn = false;
+            double viewS = 1, viewOx = 0, viewOy = 0;
+            int Geo(SDL_Texture *tex, const SDL_Vertex *v, int n, const int *idx, int ni);
+            void Copy(SDL_Texture *t, const SDL_Rect *src, SDL_Rect dst);
             double curZoom = 1.0;
             std::unordered_map<std::string, SDL_Texture *> sprites;
             std::vector<int> ibuf;

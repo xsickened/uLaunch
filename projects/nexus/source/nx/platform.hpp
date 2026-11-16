@@ -10,7 +10,9 @@ namespace nexus::plat {
         BtnL = 1u << 4, BtnR = 1u << 5, BtnZL = 1u << 6, BtnZR = 1u << 7,
         BtnPlus = 1u << 8, BtnMinus = 1u << 9,
         BtnLeft = 1u << 10, BtnRight = 1u << 11, BtnUp = 1u << 12, BtnDown = 1u << 13,
-        BtnLStick = 1u << 14, BtnRStick = 1u << 15
+        BtnLStick = 1u << 14, BtnRStick = 1u << 15,
+        // rechter Stick als Richtungen (navigiert nicht, dreht z. B. die 3D-Hülle)
+        BtnRsLeft = 1u << 16, BtnRsRight = 1u << 17, BtnRsUp = 1u << 18, BtnRsDown = 1u << 19
     };
 
     struct Input {

@@ -24,10 +24,15 @@ namespace nexus::plat {
             if(b & HidNpadButton_ZR) o |= BtnZR;
             if(b & HidNpadButton_Plus) o |= BtnPlus;
             if(b & HidNpadButton_Minus) o |= BtnMinus;
-            if(b & HidNpadButton_AnyLeft) o |= BtnLeft;
-            if(b & HidNpadButton_AnyRight) o |= BtnRight;
-            if(b & HidNpadButton_AnyUp) o |= BtnUp;
-            if(b & HidNpadButton_AnyDown) o |= BtnDown;
+            // Navigation: Steuerkreuz und linker Stick; der rechte Stick bekommt eigene Bits
+            if(b & (HidNpadButton_Left | HidNpadButton_StickLLeft)) o |= BtnLeft;
+            if(b & (HidNpadButton_Right | HidNpadButton_StickLRight)) o |= BtnRight;
+            if(b & (HidNpadButton_Up | HidNpadButton_StickLUp)) o |= BtnUp;
+            if(b & (HidNpadButton_Down | HidNpadButton_StickLDown)) o |= BtnDown;
+            if(b & HidNpadButton_StickRLeft) o |= BtnRsLeft;
+            if(b & HidNpadButton_StickRRight) o |= BtnRsRight;
+            if(b & HidNpadButton_StickRUp) o |= BtnRsUp;
+            if(b & HidNpadButton_StickRDown) o |= BtnRsDown;
             if(b & HidNpadButton_StickL) o |= BtnLStick;
             if(b & HidNpadButton_StickR) o |= BtnRStick;
             return o;

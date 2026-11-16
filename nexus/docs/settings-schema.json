@@ -1782,6 +1782,54 @@
   },
   {
    "group": "anim",
+   "path": "anim.scrollFx",
+   "label": "Scroll-Animation",
+   "type": "enum",
+   "options": [
+    "none",
+    "tilt",
+    "bounce",
+    "depth",
+    "shrink",
+    "fade",
+    "stretch",
+    "wave",
+    "flip"
+   ],
+   "optionLabels": [
+    "Nur gleiten",
+    "Neigen in Bewegungsrichtung",
+    "Nachfedern",
+    "Zurücktreten (Tiefe)",
+    "Verkleinern",
+    "Ausblenden",
+    "Strecken (Tempo)",
+    "Welle",
+    "Karten kippen"
+   ],
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "none",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "anim",
+   "path": "anim.scrollStrength",
+   "label": "Stärke der Scroll-Animation",
+   "type": "num",
+   "options": null,
+   "optionLabels": null,
+   "min": 0.2,
+   "max": 2,
+   "step": 0.1,
+   "default": 1,
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "anim",
    "path": "anim.ringWidth",
    "label": "Breite der Hervorhebung (0 = aus)",
    "type": "num",
@@ -3117,6 +3165,70 @@
    "max": null,
    "step": null,
    "default": "zoom",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "launch",
+   "path": "launch.caseAnim",
+   "label": "Animation bei 3D-Hüllen",
+   "type": "enum",
+   "options": [
+    "caseSpin",
+    "caseFlip",
+    "caseInsert",
+    "caseZoom",
+    "normal"
+   ],
+   "optionLabels": [
+    "Hülle fliegt heran und dreht sich",
+    "Hülle zeigt Rück- und Vorderseite",
+    "Hülle wird eingelegt (kippt und gleitet weg)",
+    "Kamera fliegt in das Cover",
+    "Wie bei normalen Kacheln"
+   ],
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "caseSpin",
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "launch",
+   "path": "launch.boot",
+   "label": "Boot-Bildschirm (Hintergrundbild + Logo) bis das Spiel startet",
+   "type": "bool",
+   "options": null,
+   "optionLabels": null,
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": true,
+   "conditional": false,
+   "hidden": false
+  },
+  {
+   "group": "launch",
+   "path": "launch.bootIndicator",
+   "label": "Ladeanzeige im Boot-Bildschirm",
+   "type": "enum",
+   "options": [
+    "dots",
+    "ring",
+    "bar",
+    "none"
+   ],
+   "optionLabels": [
+    "Punkte",
+    "Ring",
+    "Balken",
+    "Keine"
+   ],
+   "min": null,
+   "max": null,
+   "step": null,
+   "default": "dots",
    "conditional": false,
    "hidden": false
   },

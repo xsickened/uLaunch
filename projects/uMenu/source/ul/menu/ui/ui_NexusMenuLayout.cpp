@@ -60,15 +60,14 @@ namespace ul::menu::ui {
                 }
 
                 uint32_t Launch(uint64_t tid) override {
-                    g_MenuApplication->FadeOutToNonLibraryApplet();
+                    // Kein Abblenden auf Schwarz: NEXUS zeigt schon den Boot-Bildschirm (Hero + Logo),
+                    // der bis zur Übernahme durch das Spiel stehen bleibt
                     const auto rc = smi::LaunchApplication(tid);
                     if(R_SUCCEEDED(rc)) {
                         // uSystem beendet uMenu jetzt selbst (wie im Original-uLaunch)
                         g_MenuApplication->Finalize();
                         return 0;
                     }
-                    g_MenuApplication->FadeIn();
-                    g_MenuApplication->ResetFade();
                     return rc;
                 }
 

@@ -68,6 +68,7 @@ namespace nexus {
         double caseV = 0;    // Drehgeschwindigkeit (Feder)
         double lean = 0, leanV = 0;   // Neigung durch den Schwung beim Scrollen (Grad)
         double lift = 0, liftV = 0;   // gewählte Hülle kommt nach vorn (Tiefe in px)
+        double pitch = 0, pitchV = 0; // vom Benutzer gekippt (rechter Stick, Grad)
         bool caseInit = false;
         bool init = false;
     };
@@ -222,6 +223,8 @@ namespace nexus {
             void OpenRaDialog(const std::string &id, const std::string &name);
             void OpenRaAssign(const std::string &id);
             void OpenRaSearch(const std::string &id, const std::string &term);
+            void OpenRaPreview(const std::string &id, long long gid, const std::string &hint);
+            void OpenRaLinks();
             // Profilbild: eigenes Bild (mit Ausschnitt) vor dem Bild der Konsole
             SDL_Texture *UserTex(const UserInfo &u, Crop &crop);
             void DrawUserPic(const UserInfo &u, const Xf &xf, double rad, double alpha);
@@ -301,13 +304,29 @@ namespace nexus {
             void Sfx(const char *ev);
             // 3D-Hüllen, Startanimation, Zoom
             void DrawCase(const std::string &style, const json &t, SDL_Texture *tex, Xf &xf, const Disp &ds, double op, double rad, bool cover, double posX, double posY, double zoom, const std::string &title, bool focused);
-            struct LaunchFx { bool active = false; double t = 0; std::string id, name; std::function<void()> go; Xf from; bool haveFrom = false; } launchFx;
+            struct LaunchFx {
+                bool active = false, haveFrom = false;
+                bool boot = false, launched = false;   // Boot-Bildschirm steht, Spiel wurde gestartet
+                double t = 0, bootT = 0, yaw0 = 0, pitch0 = 0;
+                std::string id, name, caseAnim;          // caseAnim leer = normale Animation
+                std::function<void()> go;
+                Xf from;
+            } launchFx;
+            double LaunchTotal() const;
+            void DrawCaseLaunch(double u);
+            void DrawBootScreen(double alpha);
             Xf lastFocusXf;
             bool haveLastFocus = false;
             void StartLaunchFx(const std::string &id, const std::string &name, std::function<void()> go);
             void DrawLaunchFx();
             void RealLaunch(uint64_t tid, const std::string &id, const std::string &name);
             double zoomTarget = -1;
+            // Kamera-Zoom auf die Kachelleiste (verändert nicht das Layout)
+            double camZoom = 1, camPivX = 640, camPivY = 360, camOx = 0, camOy = 0;
+            bool camInit = false;
+            // rechter Stick: gewählte 3D-Hülle direkt im Home-Menü drehen
+            double userYawV = 0, userPitchV = 0, userIdle = 99;   // Drehgeschwindigkeit, Zeit seit dem letzten Drehen
+            std::string userCaseId;                               // Kachel, die gerade von Hand gedreht wird
             bool zoomHeld = false;
             uint32_t ZoomBit() const;
             void CycleZoom();

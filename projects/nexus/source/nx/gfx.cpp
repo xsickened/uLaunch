@@ -114,7 +114,7 @@ namespace nexus {
             this->ibuf.push_back(1 + i);
             this->ibuf.push_back(1 + (i + 1) % n);
         }
-        SDL_RenderGeometry(this->r, tex, this->vbuf.data(), static_cast<int>(this->vbuf.size()), this->ibuf.data(), static_cast<int>(this->ibuf.size()));
+        this->Geo(tex, this->vbuf.data(), static_cast<int>(this->vbuf.size()), this->ibuf.data(), static_cast<int>(this->ibuf.size()));
     }
 
     void Gfx::Rect(double x, double y, double w, double h, Col c) {
@@ -129,7 +129,7 @@ namespace nexus {
             { { X + W, Y + H }, b, { 0, 0 } }, { { X, Y + H }, b, { 0, 0 } }
         };
         const int idx[6] = { 0, 1, 2, 0, 2, 3 };
-        SDL_RenderGeometry(this->r, nullptr, v, 4, idx, 6);
+        this->Geo(nullptr, v, 4, idx, 6);
     }
 
     void Gfx::GradH(double x, double y, double w, double h, Col left, Col right) {
@@ -140,7 +140,7 @@ namespace nexus {
             { { X + W, Y + H }, b, { 0, 0 } }, { { X, Y + H }, a, { 0, 0 } }
         };
         const int idx[6] = { 0, 1, 2, 0, 2, 3 };
-        SDL_RenderGeometry(this->r, nullptr, v, 4, idx, 6);
+        this->Geo(nullptr, v, 4, idx, 6);
     }
 
     void Gfx::ShapePoints(const Xf &xf, double rad, bool hex, double grow, std::vector<SDL_FPoint> &pts, std::vector<SDL_FPoint> *uv, bool cover, double texW, double texH, double posX, double posY) {
@@ -235,7 +235,7 @@ namespace nexus {
             const int a = 2 * i, b = 2 * i + 1, c2 = 2 * ((i + 1) % n), d = 2 * ((i + 1) % n) + 1;
             this->ibuf.insert(this->ibuf.end(), { a, b, c2, b, d, c2 });
         }
-        SDL_RenderGeometry(this->r, nullptr, this->vbuf.data(), static_cast<int>(this->vbuf.size()), this->ibuf.data(), static_cast<int>(this->ibuf.size()));
+        this->Geo(nullptr, this->vbuf.data(), static_cast<int>(this->vbuf.size()), this->ibuf.data(), static_cast<int>(this->ibuf.size()));
     }
 
     void Gfx::ShapeRingFn(const Xf &xf, double rad, bool hex, double t, const ColFn &fn, double alpha) {
@@ -256,7 +256,7 @@ namespace nexus {
             const int a = 2 * i, b = 2 * i + 1, c2 = 2 * ((i + 1) % n), d = 2 * ((i + 1) % n) + 1;
             this->ibuf.insert(this->ibuf.end(), { a, b, c2, b, d, c2 });
         }
-        SDL_RenderGeometry(this->r, nullptr, this->vbuf.data(), static_cast<int>(this->vbuf.size()), this->ibuf.data(), static_cast<int>(this->ibuf.size()));
+        this->Geo(nullptr, this->vbuf.data(), static_cast<int>(this->vbuf.size()), this->ibuf.data(), static_cast<int>(this->ibuf.size()));
     }
 
     void Gfx::RectFn(double x, double y, double w, double h, const ColFn &fn, double alpha, int segs) {
@@ -276,7 +276,7 @@ namespace nexus {
             const int a = 2 * i;
             this->ibuf.insert(this->ibuf.end(), { a, a + 1, a + 2, a + 1, a + 3, a + 2 });
         }
-        SDL_RenderGeometry(this->r, nullptr, this->vbuf.data(), static_cast<int>(this->vbuf.size()), this->ibuf.data(), static_cast<int>(this->ibuf.size()));
+        this->Geo(nullptr, this->vbuf.data(), static_cast<int>(this->vbuf.size()), this->ibuf.data(), static_cast<int>(this->ibuf.size()));
     }
 
     int Gfx::TextFn(const std::string &s, int size, double x, double y, const ColFn &fn, double alpha, int align, bool bold, int maxW) {
@@ -305,7 +305,7 @@ namespace nexus {
             const int a = 2 * i;
             this->ibuf.insert(this->ibuf.end(), { a, a + 1, a + 2, a + 1, a + 3, a + 2 });
         }
-        SDL_RenderGeometry(this->r, t, this->vbuf.data(), static_cast<int>(this->vbuf.size()), this->ibuf.data(), static_cast<int>(this->ibuf.size()));
+        this->Geo(t, this->vbuf.data(), static_cast<int>(this->vbuf.size()), this->ibuf.data(), static_cast<int>(this->ibuf.size()));
         return w;
     }
 
@@ -313,12 +313,38 @@ namespace nexus {
         SDL_Vertex v[4];
         for(int i = 0; i < 4; i++) v[i] = SDL_Vertex{ p[i], SC(c[i]), { 0, 0 } };
         const int idx[6] = { 0, 1, 2, 0, 2, 3 };
-        SDL_RenderGeometry(this->r, nullptr, v, 4, idx, 6);
+        this->Geo(nullptr, v, 4, idx, 6);
+    }
+
+    // Alle Zeichenbefehle laufen hierüber: optional mit Kamera (Zoom auf die Kachelleiste)
+    int Gfx::Geo(SDL_Texture *tex, const SDL_Vertex *v, int n, const int *idx, int ni) {
+        if(!this->viewOn) return SDL_RenderGeometry(this->r, tex, v, n, idx, ni);
+        this->vview.assign(v, v + n);
+        for(auto &x: this->vview) {
+            x.position.x = static_cast<float>(this->viewOx + x.position.x * this->viewS);
+            x.position.y = static_cast<float>(this->viewOy + x.position.y * this->viewS);
+        }
+        return SDL_RenderGeometry(this->r, tex, this->vview.data(), n, idx, ni);
+    }
+
+    void Gfx::Copy(SDL_Texture *t, const SDL_Rect *src, SDL_Rect dst) {
+        if(this->viewOn) {
+            dst.x = static_cast<int>(std::lround(this->viewOx + dst.x * this->viewS));
+            dst.y = static_cast<int>(std::lround(this->viewOy + dst.y * this->viewS));
+            dst.w = static_cast<int>(std::lround(dst.w * this->viewS));
+            dst.h = static_cast<int>(std::lround(dst.h * this->viewS));
+        }
+        SDL_RenderCopy(this->r, t, src, &dst);
+    }
+
+    void Gfx::SetView(double scale, double ox, double oy) {
+        this->viewOn = std::fabs(scale - 1) > 1e-4 || std::fabs(ox) > 0.01 || std::fabs(oy) > 0.01;
+        this->viewS = scale; this->viewOx = ox; this->viewOy = oy;
     }
 
     void Gfx::Mesh(SDL_Texture *tex, const std::vector<SDL_Vertex> &v, const std::vector<int> &idx) {
         if(v.empty() || idx.empty()) return;
-        SDL_RenderGeometry(this->r, tex, v.data(), static_cast<int>(v.size()), idx.data(), static_cast<int>(idx.size()));
+        this->Geo(tex, v.data(), static_cast<int>(v.size()), idx.data(), static_cast<int>(idx.size()));
     }
 
     void Gfx::ImageEx(SDL_Texture *tex, double x, double y, double w, double h, double alpha, double zoom, double posX, double posY, const std::function<double(double, double)> &fade, Col tint, bool flipV) {
@@ -347,7 +373,7 @@ namespace nexus {
                 this->ibuf.insert(this->ibuf.end(), { a, b, c2, b, d, c2 });
             }
         }
-        SDL_RenderGeometry(this->r, tex, this->vbuf.data(), static_cast<int>(this->vbuf.size()), this->ibuf.data(), static_cast<int>(this->ibuf.size()));
+        this->Geo(tex, this->vbuf.data(), static_cast<int>(this->vbuf.size()), this->ibuf.data(), static_cast<int>(this->ibuf.size()));
     }
 
     SDL_Texture *Gfx::ParticleSprite(const std::string &shape) {
@@ -433,7 +459,7 @@ namespace nexus {
         SDL_BlendMode old = SDL_BLENDMODE_BLEND;
         SDL_GetTextureBlendMode(tex, &old);
         SDL_SetTextureBlendMode(tex, additive ? SDL_BLENDMODE_ADD : SDL_BLENDMODE_BLEND);
-        SDL_RenderGeometry(this->r, tex, this->vbuf.data(), static_cast<int>(this->vbuf.size()), this->ibuf.data(), static_cast<int>(this->ibuf.size()));
+        this->Geo(tex, this->vbuf.data(), static_cast<int>(this->vbuf.size()), this->ibuf.data(), static_cast<int>(this->ibuf.size()));
         SDL_SetTextureBlendMode(tex, old);
     }
 
@@ -466,7 +492,7 @@ namespace nexus {
             { { static_cast<float>(x1 - nx), static_cast<float>(y1 - ny) }, col, { 0, 0 } }
         };
         const int idx[6] = { 0, 1, 2, 0, 2, 3 };
-        SDL_RenderGeometry(this->r, nullptr, v, 4, idx, 6);
+        this->Geo(nullptr, v, 4, idx, 6);
     }
 
     void Gfx::Image(SDL_Texture *tex, double x, double y, double w, double h, double alpha, bool cover, Col tint) {
@@ -551,7 +577,7 @@ namespace nexus {
         else if(align == 2) dx = x - drawW;
         SDL_SetTextureAlphaMod(t, c.a);
         SDL_Rect dst{ static_cast<int>(std::lround(dx)), static_cast<int>(std::lround(y)), drawW, h };
-        SDL_RenderCopy(this->r, t, &src, &dst);
+        this->Copy(t, &src, dst);
         return drawW;
     }
 
@@ -692,7 +718,7 @@ namespace nexus {
         SDL_Texture *t = this->TextTex(label, static_cast<int>(s * 0.6), fg, 0, Col{}, w2, h2, true);
         if(t) {
             SDL_Rect dst{ static_cast<int>(cx - w2 / 2.0), static_cast<int>(cy - h2 / 2.0), w2, h2 };
-            SDL_RenderCopy(this->r, t, nullptr, &dst);
+            this->Copy(t, nullptr, dst);
         }
     }
 

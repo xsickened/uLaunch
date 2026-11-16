@@ -69,6 +69,8 @@ namespace nexus {
         this->img->SetDiskCache(std::string(CacheDir) + "/img");
         EnsureDir(std::string(ArtDir) + "/backgrounds");
         EnsureDir("sdmc:/nexus/avatars");
+        // früher hat die Zoomtaste die Kachelgröße verstellt (und gespeichert): jetzt ist der Zoom eine Kamera
+        if(std::fabs(this->d->settings.N("zoom.levelScale") - 1.0) > 0.001) { this->d->settings.Set("zoom.levelScale", json(1.0)); this->layoutDirty = true; }
         this->accentP = AccentFrom(this->d->settings);
         this->ImportKeys(true);
         {
@@ -724,6 +726,8 @@ namespace nexus {
             const auto &db = this->dockBtns[i];
             if(std::hypot(x - db.x, y - db.y) <= db.r * 1.1) { this->inDock = true; this->dockSel = static_cast<int>(i); this->DockActivate(db.id); return; }
         }
+        // Kamera-Zoom: Berührung in Kachel-Koordinaten umrechnen
+        if(this->camZoom > 1.001) { x = static_cast<float>((x - this->camOx) / this->camZoom); y = static_cast<float>((y - this->camOy) / this->camZoom); }
         // Kacheln von oben nach unten prüfen (gedrehte Rechtecke)
         int best = -1, bestZ = -100000;
         for(size_t i = 0; i < this->list.size(); i++) {
@@ -1218,6 +1222,7 @@ namespace nexus {
                 if(gid == "ra") for(auto &rw: this->RaRows()) rows.push_back(rw);
                 if(gid == "lock") rows.push_back(Row{ "Sperrbildschirm jetzt anzeigen (−)", nullptr, nullptr, [this]() { this->CloseAll(); this->locked = true; this->unlocking = false; } });
                 if(gid == "profile" && this->host) rows.push_back(Row{ "Profil wechseln (zur Profilauswahl)", nullptr, nullptr, [this]() { this->CloseAll(); this->Save(); this->host->Logoff(); } });
+                if(gid == "ra") rows.push_back(Row{ "Spiele mit RetroAchievements verknüpfen …", nullptr, nullptr, [this]() { this->OpenRaLinks(); } });
                 if(gid == "profile" && !this->users.empty()) {
                     rows.push_back(Row{ "Eigene Profilbilder", nullptr, nullptr, nullptr, true });
                     for(const auto &u: this->users) {
@@ -1241,6 +1246,20 @@ namespace nexus {
         this->g->fontScale = this->d->settings.N("ui.fontScale");
         this->g->paint = this->AccentFn(0, 0, ScreenW, ScreenH);
         this->online.Tick();
+        // rechter Stick: gewählte 3D-Hülle drehen (mit Schwung, läuft aus)
+        {
+            using namespace plat;
+            const std::string fid = (!this->list.empty() && this->focus >= 0 && this->focus < static_cast<int>(this->list.size())) ? this->list[this->focus].id : std::string();
+            if(fid != this->userCaseId) { this->userCaseId = fid; this->userYawV = this->userPitchV = 0; this->userIdle = 99; }
+            const bool active = this->screen == Screen::Main && this->dialogs.empty() && !this->locked && !this->insp.on && !this->inDock;
+            const uint32_t h = active ? this->heldNow : 0;
+            const double ty = (h & BtnRsLeft) ? -230.0 : (h & BtnRsRight) ? 230.0 : 0.0;
+            const double tp = (h & BtnRsUp) ? -140.0 : (h & BtnRsDown) ? 140.0 : 0.0;
+            const double k = std::min(1.0, dt * 6);
+            if(ty != 0) this->userYawV += (ty - this->userYawV) * k; else this->userYawV *= std::exp(-dt * 2.5);
+            if(tp != 0) this->userPitchV += (tp - this->userPitchV) * k; else this->userPitchV *= std::exp(-dt * 5);
+            if(ty != 0 || tp != 0) this->userIdle = 0; else this->userIdle += dt;
+        }
         {
             const auto &st = this->d->settings;
             this->auraC = AuraFrom(st);
@@ -1263,13 +1282,21 @@ namespace nexus {
             this->UpdateGameColor(dt);
             this->UpdateZoom(dt);
             if(this->launchFx.active) {
-                this->launchFx.t += dt;
-                const double total = (st.S("launch.anim") == "none" ? 0.0 : (st.N("launch.durationMs") + st.N("launch.holdMs")) / 1000.0);
-                if(this->launchFx.t >= total) {
-                    this->launchFx.active = false;
-                    auto go = std::move(this->launchFx.go);
-                    this->launchFx.go = nullptr;
-                    if(go) go();
+                auto &L = this->launchFx;
+                if(!L.boot) {
+                    L.t += dt;
+                    if(L.t >= this->LaunchTotal()) { L.boot = true; L.bootT = 0; }
+                }
+                else {
+                    L.bootT += dt;
+                    // erst starten, wenn der Boot-Bildschirm sicher angezeigt wurde (sonst blitzt das Menü auf)
+                    if(!L.launched && L.bootT >= 0.06) {
+                        L.launched = true;
+                        auto go = std::move(L.go);
+                        L.go = nullptr;
+                        if(go) go();
+                    }
+                    if(L.launched && L.bootT > 25) L.active = false;   // Sicherheitsnetz
                 }
             }
             this->UpdateAutoTheme(dt);
@@ -1315,6 +1342,8 @@ namespace nexus {
         const auto easing = s.S("anim.easing");
         const auto fx = s.S("anim.focus");
         const bool spring = easing == "spring" || easing == "bounce";
+        const bool bounceFx = this->d->settings.B("anim.enabled") && !this->d->settings.B("anim.reduce") && this->d->settings.S("anim.scrollFx") == "bounce";
+        const double scrollStrB = std::clamp(this->d->settings.N("anim.scrollStrength"), 0.2, 3.0);
         const double zeta = easing == "bounce" ? 0.35 : 0.55;
         const double tau = std::max(0.001, speed / (easing == "snappy" ? 6.0 : easing == "linear" ? 2.5 : 3.5));
         const double omega = speed > 0 ? 2 * kPi / (speed * 1.6) : 0;
@@ -1337,9 +1366,18 @@ namespace nexus {
                 // Hüllen-Physik: Drehung als Feder, Neigung durch den Schwung, gewählte Hülle kommt nach vorn
                 const double leanT = JBool(t, "caseSway", true) ? std::clamp(-ds.vx * 0.011, -16.0, 16.0) : 0.0;
                 const double liftT = foc ? -55.0 * it.sc : 0.0;
-                if(!ds.caseInit || speed <= 0) { ds.caseA = ta; ds.caseV = 0; ds.lean = 0; ds.leanV = 0; ds.lift = liftT; ds.liftV = 0; ds.caseInit = true; }
+                // von Hand gedreht (rechter Stick): Lage halten, nach 4 s ohne Eingabe oder beim Weitergehen zurückfedern
+                const bool byHand = foc && this->list[i].id == this->userCaseId && this->userIdle < 4;
+                if(byHand) {
+                    ds.caseA += this->userYawV * dt;
+                    ds.pitch = std::clamp(ds.pitch + this->userPitchV * dt, -70.0, 70.0);
+                    ds.caseV = 0; ds.pitchV = 0;
+                }
+                else if(std::fabs(ds.caseA - ta) > 180) ds.caseA = ta + std::remainder(ds.caseA - ta, 360.0);   // kürzester Weg zurück
+                if(!byHand) SmoothDamp(ds.pitch, ds.pitchV, 0.0, 0.25, dt);
+                if(!ds.caseInit || speed <= 0) { if(!byHand) ds.caseA = ta; ds.caseV = 0; ds.lean = 0; ds.leanV = 0; ds.lift = liftT; ds.liftV = 0; ds.caseInit = true; }
                 else {
-                    SmoothDamp(ds.caseA, ds.caseV, ta, std::max(0.08, speed * 0.9), dt);
+                    if(!byHand) SmoothDamp(ds.caseA, ds.caseV, ta, std::max(0.08, speed * 0.9), dt);
                     SmoothDamp(ds.lean, ds.leanV, leanT, 0.16, dt);
                     SmoothDamp(ds.lift, ds.liftV, liftT, std::max(0.08, speed * 0.8), dt);
                 }
@@ -1349,7 +1387,14 @@ namespace nexus {
             Ch chans[] = { { ds.x, ds.vx, it.x }, { ds.y, ds.vy, ty }, { ds.w, ds.vw, it.w }, { ds.h, ds.vh, it.h }, { ds.rot, ds.vrot, trot }, { ds.squash, ds.vsq, tsq }, { ds.sc, ds.vsc, tsc }, { ds.op, ds.vop, it.op } };
             for(auto &c: chans) {
                 if(speed <= 0) { c.v = c.t; c.vel = 0; continue; }
-                if(spring && &c.v != &ds.op) {
+                if(bounceFx && (&c.v == &ds.x || &c.v == &ds.y)) {
+                    // Nachfedern: leicht überschwingende Feder für die Lage
+                    const double w0 = 15.0 / std::max(0.3, std::sqrt(scrollStrB)), z0 = std::clamp(0.55 - 0.15 * scrollStrB, 0.2, 0.6);
+                    const double acc = w0 * w0 * (c.t - c.v) - 2 * z0 * w0 * c.vel;
+                    c.vel += acc * dt;
+                    c.v += c.vel * dt;
+                }
+                else if(spring && &c.v != &ds.op) {
                     const double acc = omega * omega * (c.t - c.v) - 2 * zeta * omega * c.vel;
                     c.vel += acc * dt;
                     c.v += c.vel * dt;
@@ -1591,6 +1636,8 @@ namespace nexus {
         const auto fx = s.S("anim.focus");
         const auto idle = (s.B("anim.enabled") && !s.B("anim.reduce")) ? s.S("anim.idle") : std::string("none");
         const bool idleFocusOnly = s.B("anim.idleFocusOnly");
+        // Kamera auf die Kachelleiste (Zoomtaste): alles bis zur Hervorhebung wird vergrößert gezeichnet
+        if(this->camZoom > 1.001) this->g->SetView(this->camZoom, this->camOx, this->camOy);
         const bool isList = s.S("layout.mode") == "list";
         std::vector<int> order;
         for(int i = 0; i < static_cast<int>(this->list.size()) && i < static_cast<int>(this->lay.items.size()); i++) order.push_back(i);
@@ -1605,13 +1652,16 @@ namespace nexus {
         this->auraRects.clear();
         const double dimOthers = s.N("anim.dimOthers");
         const bool titleOnFocus = s.B("anim.titleOnFocus");
+        const bool liveFx = s.B("anim.enabled") && !s.B("anim.reduce");
+        const std::string scrollFx = liveFx ? s.S("anim.scrollFx") : std::string("none");
+        const double scrollStr = std::clamp(s.N("anim.scrollStrength"), 0.0, 3.0);
         for(const int i: order) {
             const auto &e = this->list[i];
             auto dit = this->disp.find(e.id);
             if(dit == this->disp.end()) continue;
             const Disp &ds = dit->second;
             const json t = this->Tile(e.id);
-            const double op = ds.op * JNum(t, "opacity", 1);
+            double op = ds.op * JNum(t, "opacity", 1);
             if(op < 0.02 || ds.x > ScreenW + 50 || ds.x + ds.w * ds.sc < -50 || ds.y > ScreenH + 50 || ds.y + ds.h * ds.sc < -50) continue;
             Xf xf;
             xf.cx = ds.x + ds.w / 2; xf.cy = ds.y + ds.h / 2; xf.w = ds.w; xf.h = ds.h;
@@ -1624,6 +1674,18 @@ namespace nexus {
                 else if(idle == "sway") xf.rot += std::sin(ph * 0.8);
             }
             if(foc && fx == "wobble" && this->wobbleT < 0.5) xf.rot += std::sin(this->wobbleT * 25) * 3 * (1 - this->wobbleT / 0.5);
+            // Scroll-Animation: hängt von der Geschwindigkeit der Kachel ab (in Ruhe unsichtbar)
+            if(scrollFx != "none" && scrollFx != "bounce") {
+                const double m = std::clamp(std::hypot(ds.vx, ds.vy) / 1400.0 * scrollStr, 0.0, 1.0);
+                const double mx = std::clamp(std::fabs(ds.vx) / 1400.0 * scrollStr, 0.0, 1.0);
+                if(scrollFx == "tilt") xf.rot += std::clamp(-ds.vx * 0.010 * scrollStr, -14.0, 14.0);
+                else if(scrollFx == "depth") { xf.sc *= 1 - 0.14 * m; op *= 1 - 0.3 * m; }
+                else if(scrollFx == "shrink") xf.sc *= 1 - 0.22 * m;
+                else if(scrollFx == "fade") op *= 1 - 0.6 * m;
+                else if(scrollFx == "stretch") { xf.w *= 1 + 0.22 * mx; xf.h *= 1 - 0.08 * mx; }
+                else if(scrollFx == "wave") xf.cy += std::sin(this->time * 7 + i * 0.8) * 14 * m;
+                else if(scrollFx == "flip") xf.squash *= 1 - 0.65 * m;
+            }
             const double rad = JNum(t, "radius", 10);
             const bool hex = i < static_cast<int>(this->lay.items.size()) && this->lay.items[i].hex;
             if(isList) {
@@ -1726,6 +1788,7 @@ namespace nexus {
         // Ebene 5: Auswahlhervorhebung (eigene Ebene, nicht Teil der Kachel)
         if(haveFocus && !this->inDock) this->DrawHighlight(focusXf, focusRad, focusHex);
         this->DrawParticles(1);
+        this->g->SetView(1, 0, 0);
         if(!this->searchQuery.empty() && this->openFolder.empty()) {
             this->g->Text("Suche: „" + this->searchQuery + "“ · " + std::to_string(this->list.size()) + " Treffer   ·   B = Suche beenden   ·   ZR = neu suchen", 14, 60, this->Env().topH, this->MutedCol());
         }
@@ -2248,6 +2311,7 @@ namespace nexus {
         const uint32_t rc = this->host ? this->host->Launch(tid) : plat::LaunchApplication(tid);
         Log("Start Ergebnis 0x%X", rc);
         if(rc != 0) {
+            this->launchFx.active = false;   // Boot-Bildschirm weg, zurück ins Menü
             char buf[160];
             std::snprintf(buf, sizeof(buf), "%s konnte nicht gestartet werden (Fehler 0x%X).", name.c_str(), rc);
             this->Toast(buf);
